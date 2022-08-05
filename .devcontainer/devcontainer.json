@@ -1,0 +1,21 @@
+{
+    "name": "JAX-IPU-Python3-Devcontainer",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "forwardPorts": [
+        3000,
+        6006
+    ],
+    "runArgs": [
+        "--gpus",
+        "all"
+    ],
+    "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-vscode.cpptools-extension-pack",
+        "xaver.clang-format"
+    ]
+}

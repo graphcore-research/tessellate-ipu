@@ -1,15 +1,12 @@
-# JAX IPU addons
+# JAX IPU **research** addons
 
-JAX IPU addons is gathering code useful for running JAX on the IPU. Features developed in this repository can fall in several categories:
-* Modifications of standard JAX (and FLAX, etc) examples to run fast on the IPU.
-* IPU bug fixes: JAX pure Python fix, specific to the IPU, which can patched outside core JAX;
-* IPU specific features, like  code outlining, pipelining, ...
+JAX IPU **research** addons: JAX custom primitives and methods maintained by Graphcore research team.
 
 ## Installation
 
-As a pure Python repo, JAX IPU addons can be directly installed using `pip`:
+As a pure Python repo, JAX IPU research can be directly installed using `pip`:
 ```bash
-pip install git+ssh://git@github.com/graphcore/jax-ipu-addons.git@main
+pip install git+ssh://git@github.com/graphcore/jax-ipu-research.git@main
 ```
 NOTE: `main` can be replaced by any tag (`v0.1`, ...) or commit hash in order to install a specific version.
 
@@ -17,7 +14,7 @@ NOTE: `main` can be replaced by any tag (`v0.1`, ...) or commit hash in order to
 
 To complete!
 ```python
-import jax_ipu_addons
+import jax_ipu_research
 ```
 
 ## Development

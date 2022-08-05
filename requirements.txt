@@ -1,4 +1,5 @@
 cppimport
 jax >= 0.2.12
+jax_ipu_addons @ git+ssh://git@github.com/graphcore/jax-ipu-addons.git@6916c0fd9f54ba70ac8203befb706a2d49557ee5
 numpy
 pybind11==2.6.2

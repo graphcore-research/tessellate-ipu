@@ -5,7 +5,7 @@ import sys
 
 import setuptools
 
-PACKAGE_NAME = "jax_ipu_addons"
+PACKAGE_NAME = "jax_ipu_research"
 repository_dir = os.path.dirname(__file__)
 
 try:
@@ -27,7 +27,7 @@ with open(os.path.join(repository_dir, "test-requirements.txt")) as f:
   test_requirements = f.readlines()
 
 # C++ source to include in the package.
-# Enable users to build their own custom primitives just using `pip install jax_ipu_addons`
+# Enable users to build their own custom primitives just using `pip install jax_ipu_research`
 cpp_extensions = [".hpp", ".cpp"]
 package_data_cpp = [
     glob.glob(f"{PACKAGE_NAME}/**/*{ext}", recursive=True)
@@ -40,7 +40,7 @@ setuptools.setup(
     name=PACKAGE_NAME,
     author="Graphcore",
     version=__version__,
-    description="JAX IPU addons.",
+    description="JAX IPU research addons.",
     long_description=long_description,
     packages=setuptools.find_packages(),
     long_description_content_type="text/markdown",
