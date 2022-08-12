@@ -1,6 +1,9 @@
 // cppimport
 // NOTE: comment necessary for automatic JIT compilation of the module!
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+#define FMT_HEADER_ONLY
+#include <fmt/format.h>
+
 #include <ipu_custom_primitive.hpp>
 
 // Standard tile index used.
@@ -57,7 +60,9 @@ class TilePutShardedPrimitive : public TilePutBase {
     const auto tile_array = extractTileArray(attributes);
     if (input.shape()[0] != tile_array.size()) {
       throw poputil::poplibs_error(
-          "IPU tile put sharding: inconsistent input shape and tiles array.");
+          fmt::format("IPU tile put sharding: inconsistent input size {} and "
+                      "tiles length {}.",
+                      input.shape()[0], tile_array.size()));
     }
 
     // Create output tensor, with proper tile mapping.
