@@ -1,2 +1,4 @@
 *.ipynb filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
+# External libraries files.
+jax_ipu_research/external/json/json.hpp filter=lfs diff=lfs merge=lfs -text
