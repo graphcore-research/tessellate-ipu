@@ -23,7 +23,7 @@ class IpuTileUnaryPrimitiveTests(chex.TestCase):
         )
 
     def test__ipu_unary_primitive_translation__proper_data_structure(self):
-        tile_map_p = ipu_unary_primitive_translation(lax.cos_p, [4, 5, 6], [ShapedArray([10, 12], np.float16)], {})
+        tile_map_p = ipu_unary_primitive_translation(lax.cos_p, (4, 5, 6), [ShapedArray([10, 12], np.float16)], {})
         assert isinstance(tile_map_p, IpuTileMapEquation)
         assert tile_map_p.vname == "popops::UnaryOp1D<popops::expr::UnaryOpType::COS,half>"
         assert tile_map_p.pname == "cos"

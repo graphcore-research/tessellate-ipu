@@ -64,7 +64,7 @@ class TileShardedArray:
         if isinstance(key, int):
             # Integer get converted into slicing, for consistency.
             key = slice(key, key + 1)
-        return TileShardedArray(self.array[key], self.tiles[key])
+        return TileShardedArray(array=self.array[key], tiles=self.tiles[key])  # type:ignore
 
 
 def tile_put_sharded(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShardedArray:
@@ -76,10 +76,10 @@ def tile_put_sharded(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShardedA
     Returns:
         Tile sharded array.
     """
-    return TileShardedArray(array=tile_put_sharded_prim(array, tiles), tiles=tiles)
+    return TileShardedArray(array=tile_put_sharded_prim(array, tiles), tiles=tiles)  # type:ignore
 
 
-def tile_put_replicated(array: DeviceArray, tiles: Tuple[int, ...]):
+def tile_put_replicated(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShardedArray:
     """Replicate a JAX array over tiles on the first axis.
 
     Args:
@@ -88,4 +88,4 @@ def tile_put_replicated(array: DeviceArray, tiles: Tuple[int, ...]):
     Returns:
         Tile sharded array.
     """
-    return TileShardedArray(array=tile_put_replicated_prim(array, tiles), tiles=tiles)
+    return TileShardedArray(array=tile_put_replicated_prim(array, tiles), tiles=tiles)  # type:ignore

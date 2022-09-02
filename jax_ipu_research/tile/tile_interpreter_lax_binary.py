@@ -13,7 +13,7 @@ from .tile_interpreter_primitives import (
     make_ipu_vertex_io_info,
 )
 
-_binary_primitive_to_vertex_basename: Dict[Primitive, str] = {
+_binary_primitive_to_vertex_basename: Dict[Primitive, Tuple[str, Any]] = {
     lax.add_p: ("ADD", None),
     lax.atan2_p: ("ATAN2", None),
     lax.div_p: ("DIVIDE", None),

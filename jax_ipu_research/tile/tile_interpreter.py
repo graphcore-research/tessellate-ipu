@@ -4,7 +4,7 @@
 In particular, we need a registry mapping JAX primitives to IPU vertex (and additionally support custom IPU vertex).
 """
 from copy import copy
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from jax.core import Primitive
 from jax.interpreters.xla import ShapedArray
@@ -12,7 +12,9 @@ from jax.interpreters.xla import ShapedArray
 from .tile_array import TileShardedArray
 from .tile_interpreter_primitives import IpuTileMapEquation, tile_map_equation_call
 
-IpuVertexTranslation = Callable[[Primitive, Tuple[int, ...], List[ShapedArray], List[ShapedArray]], IpuTileMapEquation]
+IpuVertexTranslation = Callable[
+    [Primitive, Tuple[int, ...], List[ShapedArray], Optional[Dict[str, Any]]], IpuTileMapEquation
+]
 """Ipu vertex translation: callable translating a JAX primitive (with inputs/outputs) into a full
 vertex info data structure.
 """
@@ -54,8 +56,8 @@ def tile_map_primitive(
     )
     # Convert back to TileShardedArray.
     if not primitive.multiple_results:
-        return TileShardedArray(outputs, tiles)
-    return [TileShardedArray(v, tiles) for v in outputs]
+        return TileShardedArray(outputs, tiles)  # type:ignore
+    return [TileShardedArray(v, tiles) for v in outputs]  # type:ignore
 
 
 def register_ipu_tile_primitive(primitive: Primitive, translation: IpuVertexTranslation):

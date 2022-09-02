@@ -9,7 +9,7 @@ from jax.interpreters.xla import ShapedArray
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
 from jax_ipu_addons.utils import xla_shape_to_aval
 
-from . import tile_array_primitives_impl
+from . import tile_array_primitives_impl  # type:ignore
 
 TilePutShardedPrimitive = tile_array_primitives_impl.TilePutShardedPrimitive
 TilePutReplicatedPrimitive = tile_array_primitives_impl.TilePutReplicatedPrimitive
