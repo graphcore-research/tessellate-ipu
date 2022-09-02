@@ -34,6 +34,7 @@ class TileShardedArrayTests(chex.TestCase):
 
 @pytest.mark.parametrize("backend", ["ipu"])
 def test__tile_put_sharded__ipu_jitting(backend):
+    # TODO: more complex 3 x 64 x 64 array examples.
     input = np.asarray([1, 2, 3], np.float32)
     tiles = (3, 4, 5)
     output = jax.jit(tile_put_sharded, static_argnums=1, backend=backend)(input, tiles)
@@ -41,6 +42,7 @@ def test__tile_put_sharded__ipu_jitting(backend):
     assert isinstance(output, TileShardedArray)
     assert output.tiles == tiles
     assert output.aval.shape == input.shape
+    assert output.tile_aval.shape == ()
     npt.assert_array_equal(output.array, input)
 
 

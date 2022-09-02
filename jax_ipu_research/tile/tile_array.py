@@ -1,5 +1,5 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-from typing import Tuple, Union
+from typing import Any, Tuple, Union
 
 import chex
 import numpy as np
@@ -38,10 +38,20 @@ class TileShardedArray:
             )
 
     @property
+    def dtype(self) -> Any:
+        return self.array.dtype
+
+    @property
     def aval(self) -> ShapedArray:
         if isinstance(self.array, np.ndarray):
             return ShapedArray(self.array.shape, self.array.dtype)
         return self.array.aval
+
+    @property
+    def tile_aval(self) -> ShapedArray:
+        """Abstract val, at the tile level."""
+        aval = self.aval
+        return ShapedArray(aval.shape[1:], aval.dtype)
 
     @property
     def device_array(self) -> DeviceArray:

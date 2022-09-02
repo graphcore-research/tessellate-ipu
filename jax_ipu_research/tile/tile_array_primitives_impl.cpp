@@ -5,9 +5,9 @@
 #include <fmt/format.h>
 
 #include <ipu_custom_primitive.hpp>
+#include "tile_array_utils.hpp"
 
-// Standard tile index used.
-using TileIndexType = int32_t;
+using namespace ipu;
 
 /**
  * @brief Base class for tile put primitives, with common features.
@@ -66,10 +66,9 @@ class TilePutShardedPrimitive : public TilePutBase {
     }
 
     // Create output tensor, with proper tile mapping.
-    auto output = graph.addVariable(input.elementType(), input.shape());
-    for (size_t idx = 0; idx < tile_array.size(); idx++) {
-      graph.setTileMapping(output[idx], tile_array[idx]);
-    }
+    // TODO: link to Slack discussion on VarRegion contiguity.
+    auto output = createShardedVariable(graph, input.elementType(),
+                                        input[0].shape(), tile_array);
     // Copy data tensor into the output.
     auto prog = poplar::program::Copy(input, output);
     outputs.push_back(output);
@@ -78,7 +77,7 @@ class TilePutShardedPrimitive : public TilePutBase {
 };
 
 /**
- * @brief IPU tile put sharded primitive: sharding an array over tiles on
+ * @brief IPU tile put replicated primitive: replicating an array over tiles on
  * the first axis.
  */
 class TilePutReplicatedPrimitive : public TilePutBase {
@@ -110,11 +109,8 @@ class TilePutReplicatedPrimitive : public TilePutBase {
     const auto tile_array = extractTileArray(attributes);
     // Create output tensor, with proper tile mapping.
     auto input_broadcasted = input.expand({0}).broadcast(tile_array.size(), 0);
-    auto output =
-        graph.addVariable(input.elementType(), input_broadcasted.shape());
-    for (size_t idx = 0; idx < tile_array.size(); idx++) {
-      graph.setTileMapping(output[idx], tile_array[idx]);
-    }
+    auto output = createShardedVariable(graph, input.elementType(),
+                                        input.shape(), tile_array);
     // Copy data tensor into the output.
     auto prog = poplar::program::Copy(input_broadcasted, output);
     outputs.push_back(output);

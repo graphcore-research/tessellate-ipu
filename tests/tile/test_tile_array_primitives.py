@@ -1,10 +1,9 @@
 import chex
-from absl.testing import parameterized
-import numpy.testing as npt
-import pytest
-
 import jax
 import numpy as np
+import numpy.testing as npt
+import pytest
+from absl.testing import parameterized
 
 from jax_ipu_research.tile.tile_array_primitives import tile_put_replicated_prim, tile_put_sharded_prim
 

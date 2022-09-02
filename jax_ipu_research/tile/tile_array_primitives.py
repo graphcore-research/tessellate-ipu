@@ -20,7 +20,7 @@ tile_put_replicated_prim_p = core.Primitive("tile_put_replicated")
 
 def make_tiles_raw_attributes(tiles: Tuple[int, ...]) -> str:
     """Make raw attributes corresponding to a collection of tiles."""
-    raw_attributes = np.asarray(tiles, np.int32).tobytes().decode()
+    raw_attributes = np.asarray(tiles, np.int32).tobytes().decode(errors="ignore")
     return raw_attributes
 
 
@@ -46,10 +46,12 @@ def tile_put_sharded_prim_xla_translation_default(ctx, xc, tiles):
 
 def tile_put_sharded_prim_xla_translation_ipu(ctx, xc, tiles):
     """`tile_put_sharded_prim` IPU backend XLA translation, as a custom primitive."""
+    # TODO: Check the IPU tile out of the memory (roughly)
     inputs = [xc]
     # Passing the tiles collections as a raw attributes to the C++ implementation.
     raw_attributes = make_tiles_raw_attributes(tiles)
     outputs_aval = [xla_shape_to_aval(ctx.get_shape(xc))]
+    # TODO: Add Github permanent link to C++.
     outputs = ipu_xla_custom_primitive_call(
         TilePutShardedPrimitive, ctx, inputs, outputs_aval, attributes=raw_attributes
     )
