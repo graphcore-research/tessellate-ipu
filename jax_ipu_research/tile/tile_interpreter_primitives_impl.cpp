@@ -128,6 +128,11 @@ struct TileMapEquation {
   std::vector<VertexAttributeU32> attributes_u32;
   std::vector<VertexAttributeF32> attributes_f32;
 
+  /** (Optional) IPU gp vertex (absolute) filename. */
+  std::string gp_filename;
+  /** Vertex performance estimate (optional). */
+  uint64_t perf_estimate = 0;
+
   /**
    * @brief Allocate output (or use existing input) tensors.
    * @param graph Poplar graph.
@@ -186,6 +191,9 @@ struct TileMapEquation {
       // Add vertex on the tile.
       auto v = graph.addVertex(cs, this->vname);
       graph.setTileMapping(v, tile);
+      if (perf_estimate > 0) {
+        graph.setPerfEstimate(v, perf_estimate);
+      }
       // Map/connect vertex input tensors.
       for (size_t k = 0; k < inputs.size(); ++k) {
         graph.connect(v[inputs_info[k].name], inputs[k][tidx].flatten());
@@ -230,7 +238,7 @@ struct TileMapEquation {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
                                    inputs_info, outputs_info, attributes_u32,
-                                   attributes_f32)
+                                   attributes_f32, gp_filename, perf_estimate)
 
 }  // namespace ipu
 
@@ -241,12 +249,13 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
 class TileMapEquationCall : public jax::ipu::PrimitiveInterface {
  public:
   static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
+    std::cerr << "NUM INPUTS: " << num_inputs << std::endl;
     // TODO. check InOut tensors for aliasing.
     return jax::ipu::PrimitiveMetadata{.num_inputs = num_inputs,
-                                       .is_elementwise = true,
+                                       .is_elementwise = false,
                                        .is_stateless = true,
                                        .is_hashable = true,
-                                       .input_to_output_tensor_aliasing = {{}},
+                                       .input_to_output_tensor_aliasing = {},
                                        .allocating_indices = {}};
   }
 
@@ -320,13 +329,16 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
                           const std::vector<VertexIOInfo>&,
                           const std::vector<VertexIOInfo>&,
                           const std::vector<VertexAttributeU32>&,
-                          const std::vector<VertexAttributeF32>&>(),
+                          const std::vector<VertexAttributeF32>&,
+                          const std::string&, uint64_t>(),
            pybind11::arg("pname"), pybind11::arg("vname"),
            pybind11::arg("tiles"),
            pybind11::arg("inputs_info") = std::vector<VertexIOInfo>(),
            pybind11::arg("outputs_info") = std::vector<VertexIOInfo>(),
            pybind11::arg("attributes_u32") = std::vector<VertexAttributeU32>(),
-           pybind11::arg("attributes_f32") = std::vector<VertexAttributeF32>())
+           pybind11::arg("attributes_f32") = std::vector<VertexAttributeF32>(),
+           pybind11::arg("gp_filename") = "",
+           pybind11::arg("perf_estimate") = 0)
       .def("to_json_str",
            [](const TileMapEquation& v) { return to_json_str(v); })
       .def_static("from_json_str",
@@ -339,7 +351,9 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("inputs_info", &TileMapEquation::inputs_info)
       .def_readwrite("outputs_info", &TileMapEquation::outputs_info)
       .def_readwrite("attributes_u32", &TileMapEquation::attributes_u32)
-      .def_readwrite("attributes_f32", &TileMapEquation::attributes_f32);
+      .def_readwrite("attributes_f32", &TileMapEquation::attributes_f32)
+      .def_readwrite("gp_filename", &TileMapEquation::gp_filename)
+      .def_readwrite("perf_estimate", &TileMapEquation::perf_estimate);
 
   pybind11::class_<TileMapEquationCall>(m, "TileMapEquationCall")
       .def_static("metadata", &TileMapEquationCall::metadata,

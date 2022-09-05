@@ -1,5 +1,7 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-from typing import Any, List, Tuple
+import os
+from copy import copy
+from typing import Any, Dict, List, Optional, Tuple
 
 import cppimport.import_hook  # noqa: F401
 import numpy as np
@@ -63,34 +65,48 @@ def make_ipu_vertex_io_info(name: str, iotype: IpuVertexIOType, aval: ShapedArra
     return IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type)
 
 
+def get_tile_map_ipu_arguments(**kwargs) -> Tuple[str, Tuple[int, ...], str]:
+    """Get the tile map arguments: primitive name, tiles and eqn."""
+    return kwargs["pname"], kwargs["tiles"], kwargs["tile_map_eqn_json"]
+
+
+def get_primitive_arguments(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Get the tile map arguments: primitive name, tiles and eqn."""
+    params = copy(params)
+    params.pop("pname", None)
+    params.pop("tiles", None)
+    params.pop("tile_map_eqn_json", None)
+    return params
+
+
 tile_map_equation_call_p = core.Primitive("tile_map_equation_call")
 
 
-def tile_map_equation_call(inputs, pname: str, tiles: Tuple[int, ...], tile_eqn_info: str):
-    return tile_map_equation_call_p.bind(*inputs, pname=pname, tiles=tiles, tile_eqn_info=tile_eqn_info)
+def tile_map_equation_call(inputs, pname: str, tiles: Tuple[int, ...], tile_map_eqn_json: str, **kwargs):
+    return tile_map_equation_call_p.bind(
+        *inputs, pname=pname, tiles=tiles, tile_map_eqn_json=tile_map_eqn_json, **kwargs
+    )
 
 
 def tile_map_equation_call_impl(*args, **params):
     from .tile_interpreter import get_ipu_tile_primitive_translation
 
-    pname = params["pname"]
+    pname, _, _ = get_tile_map_ipu_arguments(**params)
     primitive, _ = get_ipu_tile_primitive_translation(pname)
     # TODO: should use `vmap` for proper mapping.
-    outputs = primitive.bind(*args)
+    outputs = primitive.bind(*args, **get_primitive_arguments(params))
     return outputs
 
 
 def tile_map_equation_call_abstract_eval(*args, **params) -> List[ShapedArray]:
     from .tile_interpreter import get_ipu_tile_primitive_translation
 
-    pname = params["pname"]
-    tiles = params["tiles"]
+    pname, tiles, _ = get_tile_map_ipu_arguments(**params)
     primitive, _ = get_ipu_tile_primitive_translation(pname)
     num_tiles = len(tiles)
-
     # Abstract eval at the tile level.
     tile_args = [ShapedArray(v.shape[1:], v.dtype) for v in args]
-    tile_outputs = primitive.abstract_eval(*tile_args)
+    tile_outputs = primitive.abstract_eval(*tile_args, **get_primitive_arguments(params))
     # Re-construct sharded abtract output
     if not primitive.multiple_results:
         tile_outputs = [tile_outputs]
@@ -109,21 +125,21 @@ def tile_map_equation_call_xla_translation_ipu(ctx, *xla_args, **params):
     """`tile_map_equation_call` IPU backend XLA translation, as a custom primitive."""
     from .tile_interpreter import get_ipu_tile_primitive_translation
 
-    pname = params["pname"]
-    tiles = params["tiles"]
+    pname, tiles, tile_map_eqn_json = get_tile_map_ipu_arguments(**params)
     primitive, _ = get_ipu_tile_primitive_translation(pname)
     num_tiles = len(tiles)
-
     # Tile map equation (serialized as json).
-    tile_eqn_info_str = params["tile_eqn_info"]
-    tile_map_eqn = IpuTileMapEquation.from_json_str(tile_eqn_info_str)
+    tile_map_eqn = IpuTileMapEquation.from_json_str(tile_map_eqn_json)
     # Outputs (sharded) abstract values.
     outputs_aval = [
         ShapedArray((num_tiles, *v.shape), from_ipu_type_to_numpy_dtype(v.dtype)) for v in tile_map_eqn.outputs_info
     ]
-    # TODO: Add Github permanent link to C++.
+    # Load optional vertex compiled file (or cpp)
+    ipu_gp_filename: Optional[str] = None
+    if len(tile_map_eqn.gp_filename) > 0:
+        ipu_gp_filename = os.path.abspath(tile_map_eqn.gp_filename)
     outputs = ipu_xla_custom_primitive_call(
-        TileMapEquationCall, ctx, xla_args, outputs_aval, attributes=tile_eqn_info_str
+        TileMapEquationCall, ctx, xla_args, outputs_aval, attributes=tile_map_eqn_json, ipu_gp_filename=ipu_gp_filename
     )
     if not primitive.multiple_results:
         outputs = outputs[0]

@@ -3,7 +3,6 @@
 
 In particular, we need a registry mapping JAX primitives to IPU vertex (and additionally support custom IPU vertex).
 """
-from copy import copy
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from jax.core import Primitive
@@ -27,32 +26,44 @@ The registry is indexed by the primitive name.
 
 
 def tile_map_primitive(
-    primitive: Primitive, inputs: List[TileShardedArray], attributes: Dict[str, Any] = None
+    primitive: Primitive,
+    inputs: List[TileShardedArray],
+    attributes: Dict[str, Any] = None,
+    tiles: Optional[Tuple[int, ...]] = None,
 ) -> List[TileShardedArray]:
     """Map a JAX primitive over tiles.
 
     Args:
         primitive: JAX primitive to map.
         inputs: List of input sharded arrays.
-        attributes: Attributes to pass.
+        attributes: Attributes to pass to the JAX primitive (and translation rule).
+        tiles: Optional tile mapping, provided when there is no input.
     Returns:
         List of output sharded arrays.
     """
-    if len(inputs) == 0 or primitive is None:
-        return copy(inputs)
+    if primitive is None:
+        # No primitive: by default a no-op.
+        return inputs
     if primitive.name not in _ipu_tile_primitive_registry:
         raise KeyError(f"The JAX primitive `{primitive}` is not supported for tile mapping on the IPU.")
+    if not all([isinstance(v, TileShardedArray) for v in inputs]):
+        raise TypeError("Tile map inputs must be `TileShardedArray` instances.")
 
     # TODO: check tile mapping consistency.
-    tiles = inputs[0].tiles
+    tiles = tiles or inputs[0].tiles
+    attributes = attributes or {}
 
     # Get the IPU tile map equation corresponding.
     _, ipu_prim_translation = _ipu_tile_primitive_registry[primitive.name]
     tile_map_eqn: IpuTileMapEquation = ipu_prim_translation(primitive, tiles, [v.tile_aval for v in inputs], attributes)
-    tile_map_eqn_str: str = tile_map_eqn.to_json_str()
+    tile_map_eqn_json: str = tile_map_eqn.to_json_str()
     # Call JAX tile custom primitive, dispatching properly the equation call.
     outputs = tile_map_equation_call(
-        [v.device_array for v in inputs], pname=primitive.name, tiles=tiles, tile_eqn_info=tile_map_eqn_str
+        [v.device_array for v in inputs],
+        pname=primitive.name,
+        tiles=tiles,
+        tile_map_eqn_json=tile_map_eqn_json,
+        **attributes,
     )
     # Convert back to TileShardedArray.
     if not primitive.multiple_results:
