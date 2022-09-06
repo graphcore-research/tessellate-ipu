@@ -54,14 +54,18 @@ def custom_arange_tile_translation_ipu(
 
     ipu_dtype = from_numpy_dtype_to_ipu_type(outdtype)
     vertex_name = f"CustomArangeVertex<{ipu_dtype.name.lower()}>"
+    # Translation rule to IPU vertex
     ipu_prim_info = IpuTileMapEquation(
         vname=vertex_name,
         pname=p.name,
         tiles=tiles,
+        # IO vertex infos.
         inputs_info=[],
         outputs_info=[make_ipu_vertex_io_info("out", IpuVertexIOType.Out, outaval)],
+        # Additional attributes to pass to the vertex
         attributes_u32=[],
         attributes_f32=[],
+        # Optional GP filename and perf. estimate.
         gp_filename=gp_filename,
         perf_estimate=outshape[0] + 5,
     )

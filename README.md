@@ -10,6 +10,16 @@ pip install git+ssh://git@github.com/graphcore/jax-ipu-research.git@main
 ```
 NOTE: `main` can be replaced by any tag (`v0.1`, ...) or commit hash in order to install a specific version.
 
+## What's in there?
+
+The repository contains various pieces of IPU JAX research code, some specific to projects, some more generic:
+
+* [Tile API](jax_ipu_research/tile/README.md): basic API on how to directly call IPU vertex in JAX;
+* [Popops](...): how to build `popops` expression directly from JAX;
+* [DFT](...): code specific to DFT project;
+
+Despite being research code, we still aim at having decent unit test coverage to allow others to reuse it.
+
 ## Example
 
 To complete!
