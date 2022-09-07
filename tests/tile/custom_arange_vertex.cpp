@@ -12,13 +12,14 @@ using namespace poplar;
 template<typename T>
 class CustomArangeVertex : public Vertex {
  public:
-  // using T = float;
-  Output<Vector<T, poplar::VectorLayout::SPAN>> out;
+  // Testing 2d tensor IO supported.
+  Vector<Input<Vector<T>>, poplar::VectorLayout::ONE_PTR> scales; // (2, size)
+  Output<Vector<T, poplar::VectorLayout::SPAN>> out;  // (size, )
 
   bool compute() {
     const auto outsize = out.size();
     for (std::size_t idx = 0; idx < outsize; ++idx) {
-      out[idx] = T(idx);
+      out[idx] = T(idx) * scales[0][idx] * scales[1][idx];
     }
     return true;
   }

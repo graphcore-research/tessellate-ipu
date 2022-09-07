@@ -51,18 +51,19 @@ def from_ipu_type_to_numpy_dtype(v: IpuType) -> Any:
     return _ipu_type_to_numpy_dtype[v]
 
 
-def make_ipu_vertex_io_info(name: str, iotype: IpuVertexIOType, aval: ShapedArray) -> IpuVertexIOInfo:
+def make_ipu_vertex_io_info(name: str, iotype: IpuVertexIOType, aval: ShapedArray, rank: int = 1) -> IpuVertexIOInfo:
     """Make IPU vertex IO info.
 
     Args:
         name: IO field name.
         iotype: IO type.
         aval: Shaped array.
+        rank: Vertex IO tensor rank (1 or 2 supported).
     Returns:
         IPU vertex IO info.
     """
     ipu_type = from_numpy_dtype_to_ipu_type(aval.dtype)
-    return IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type)
+    return IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type, rank=rank)
 
 
 def get_tile_map_ipu_arguments(**kwargs) -> Tuple[str, Tuple[int, ...], str]:

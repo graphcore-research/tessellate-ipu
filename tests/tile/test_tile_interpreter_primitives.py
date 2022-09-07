@@ -29,10 +29,10 @@ class IpuTileEquationBaseTests(chex.TestCase):
 
     def test__ipu_vertex_io_info__to_json_str__proper_representation(self):
         ioinfo = IpuVertexIOInfo(name="in0", iotype=IpuVertexIOType.InOut, shape=[1, 2, 3], dtype=IpuType.FLOAT)
-        assert ioinfo.to_json_str() == '{"aval":{"dtype":12,"shape":[1,2,3]},"iotype":2,"name":"in0"}'
+        assert ioinfo.to_json_str() == '{"aval":{"dtype":12,"shape":[1,2,3]},"iotype":2,"name":"in0","rank":1}'
 
     def test__ipu_vertex_io_info__from_json_str__proper_representation(self):
-        ioinfo = IpuVertexIOInfo.from_json_str('{"aval":{"dtype":12,"shape":[1,2,3]},"iotype":2,"name":"in0"}')
+        ioinfo = IpuVertexIOInfo.from_json_str('{"aval":{"dtype":12,"shape":[1,2,3]},"iotype":2,"name":"in0","rank":1}')
         assert ioinfo.name == "in0"
         assert ioinfo.iotype == IpuVertexIOType.InOut
         assert ioinfo.shape == [1, 2, 3]

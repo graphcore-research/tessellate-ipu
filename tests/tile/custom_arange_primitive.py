@@ -16,15 +16,16 @@ from jax_ipu_research.tile import (
 custom_arange_p = core.Primitive("custom_arange")
 
 
-def custom_arange(size: int, dtype: Any):
+def custom_arange(scales, size: int, dtype: Any):
     return custom_arange_p.bind(size=size, dtype=dtype)
 
 
-def custom_arange_numpy_impl(size: int, dtype: Any):
-    return np.arange(size).astype(dtype)
+def custom_arange_numpy_impl(scales, size: int, dtype: Any):
+    # Artificial complexity to test a 2D input array!
+    return np.arange(size).astype(dtype) * scales[0] * scales[1]
 
 
-def custom_arange_abstract_eval(size: int, dtype: Any):
+def custom_arange_abstract_eval(scales, size: int, dtype: Any):
     return core.ShapedArray((size,), dtype)
 
 
@@ -44,7 +45,7 @@ def custom_arange_tile_translation_ipu(
     Returns:
         IPU tile map primitive structure.
     """
-    assert len(inavals) == 0
+    assert len(inavals) == 1
     assert attributes is not None
     # Output shape.
     outshape = (attributes["size"],)
@@ -60,7 +61,7 @@ def custom_arange_tile_translation_ipu(
         pname=p.name,
         tiles=tiles,
         # IO vertex infos.
-        inputs_info=[],
+        inputs_info=[make_ipu_vertex_io_info("scales", IpuVertexIOType.In, inavals[0], rank=2)],
         outputs_info=[make_ipu_vertex_io_info("out", IpuVertexIOType.Out, outaval)],
         # Additional attributes to pass to the vertex
         attributes_u32=[],

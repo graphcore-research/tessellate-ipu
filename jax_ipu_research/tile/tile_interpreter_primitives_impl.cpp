@@ -42,12 +42,29 @@ struct VertexIOInfo {
   VertexIOType iotype;
   /** IO tensor aval. */
   ShapedArray aval;
+  /** IO tensor rank. 1 (by default) or 2 supported. */
+  uint8_t rank = 1;
+
+  /**
+   * @brief Reshape a tensor to the proper rank for vertex connection.
+   */
+  poplar::Tensor connectReshape(const poplar::Tensor& t) const {
+    if (rank == 1) {
+      // Rank 1: flatten the IO tensor.
+      return t.flatten();
+    } else if (rank == 2) {
+      // Assume already of rank 2. Poplar will check.
+      return t;
+    }
+    throw poputil::poplibs_error("IPU IO vertex tensor must of rank 1 or 2.");
+  }
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VertexIOInfo, name, iotype, aval)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VertexIOInfo, name, iotype, aval, rank)
 
 bool operator==(const VertexIOInfo& lhs, const VertexIOInfo& rhs) {
   return lhs.name == rhs.name && lhs.iotype == rhs.iotype &&
-         lhs.aval.shape == rhs.aval.shape && lhs.aval.dtype == rhs.aval.dtype;
+         lhs.aval.shape == rhs.aval.shape && lhs.aval.dtype == rhs.aval.dtype &&
+         lhs.rank == rhs.rank;
 }
 
 /**
@@ -196,13 +213,15 @@ struct TileMapEquation {
       }
       // Map/connect vertex input tensors.
       for (size_t k = 0; k < inputs.size(); ++k) {
-        graph.connect(v[inputs_info[k].name], inputs[k][tidx].flatten());
+        const auto& info = inputs_info[k];
+        graph.connect(v[info.name], info.connectReshape(inputs[k][tidx]));
       }
       // Map/connect vertex output tensors.
       for (size_t k = 0; k < outputs.size(); ++k) {
         // InOut tensors already mapped. Just need to connect pure output.
         if (outputs_info[k].iotype == VertexIOType::Out) {
-          graph.connect(v[outputs_info[k].name], outputs[k][tidx].flatten());
+          const auto& info = outputs_info[k];
+          graph.connect(v[info.name], info.connectReshape(outputs[k][tidx]));
         }
       }
       // Map vertex attributes.
@@ -249,7 +268,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
 class TileMapEquationCall : public jax::ipu::PrimitiveInterface {
  public:
   static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
-    std::cerr << "NUM INPUTS: " << num_inputs << std::endl;
     // TODO. check InOut tensors for aliasing.
     return jax::ipu::PrimitiveMetadata{.num_inputs = num_inputs,
                                        .is_elementwise = false,
@@ -301,14 +319,15 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
 
   pybind11::class_<VertexIOInfo>(m, "IpuVertexIOInfo")
       .def(pybind11::init<>())
-      .def(pybind11::init<const std::string&, VertexIOType,
-                          const ShapedArray&>(),
+      .def(pybind11::init<const std::string&, VertexIOType, const ShapedArray&,
+                          uint8_t>(),
            pybind11::arg("name"), pybind11::arg("iotype"),
-           pybind11::arg("aval"))
+           pybind11::arg("aval"), pybind11::arg("rank") = 1)
       .def(pybind11::init<const std::string&, VertexIOType, const ShapeType&,
-                          IpuType>(),
+                          IpuType, uint8_t>(),
            pybind11::arg("name"), pybind11::arg("iotype"),
-           pybind11::arg("shape"), pybind11::arg("dtype"))
+           pybind11::arg("shape"), pybind11::arg("dtype"),
+           pybind11::arg("rank") = 1)
       .def(pybind11::self == pybind11::self)
       .def("to_json_str", [](const VertexIOInfo& v) { return to_json_str(v); })
       .def_static(
@@ -317,6 +336,7 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("name", &VertexIOInfo::name)
       .def_readwrite("iotype", &VertexIOInfo::iotype)
       .def_readwrite("aval", &VertexIOInfo::aval)
+      .def_readwrite("rank", &VertexIOInfo::rank)
       .def_property_readonly("shape",
                              [](const VertexIOInfo& v) { return v.aval.shape; })
       .def_property_readonly(
