@@ -21,14 +21,14 @@ class TilePutShardedPrimTests(chex.TestCase, parameterized.TestCase):
 
     def test__tile_put_sharded_prim__no_jitting(self):
         input = np.asarray([1, 2, 3], np.float32)
-        tiles = (3, 4, 5)
+        tiles = (3, 4, 1471)
         output = tile_put_sharded_prim(input, tiles)
         assert output is input
 
     @parameterized.parameters(["cpu", "ipu"])
     def test__tile_put_sharded_prim__device_jitting(self, backend):
         input = np.asarray([1, 2, 3], np.float32)
-        tiles = (3, 4, 5)
+        tiles = (3, 4, 1471)
         output = jax.jit(tile_put_sharded_prim, static_argnums=1, backend=backend)(input, tiles)
         assert output.shape == input.shape
         npt.assert_array_equal(output, input)
@@ -36,7 +36,7 @@ class TilePutShardedPrimTests(chex.TestCase, parameterized.TestCase):
 
 def test__tile_put_replicated_prim__no_jitting():
     input = np.asarray([[1, 2]], np.float32)
-    tiles = (3, 4, 5)
+    tiles = (3, 4, 1471)
     output = tile_put_replicated_prim(input, tiles)
     assert output.shape == (len(tiles), *input.shape)
     npt.assert_array_equal(output, np.stack([input for _ in range(len(tiles))]))
@@ -45,7 +45,7 @@ def test__tile_put_replicated_prim__no_jitting():
 @pytest.mark.parametrize("backend", ["ipu"])
 def test__tile_put_replicated_prim__device_jitting(backend):
     input = np.asarray([[1, 2]], np.float32)
-    tiles = (3, 4, 5)
+    tiles = (3, 4, 1471)
     output = jax.jit(tile_put_replicated_prim, static_argnums=1, backend=backend)(input, tiles)
     assert output.shape == (len(tiles), *input.shape)
     npt.assert_array_equal(output, tile_put_replicated_prim(input, tiles))

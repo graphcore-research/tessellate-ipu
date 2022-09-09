@@ -1,5 +1,6 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 from typing import Tuple
+import json
 
 import cppimport.import_hook  # noqa: F401
 import numpy as np
@@ -19,9 +20,9 @@ tile_put_replicated_prim_p = core.Primitive("tile_put_replicated")
 
 
 def make_tiles_raw_attributes(tiles: Tuple[int, ...]) -> str:
-    """Make raw attributes corresponding to a collection of tiles."""
-    raw_attributes = np.asarray(tiles, np.int32).tobytes().decode(errors="ignore")
-    return raw_attributes
+    """Make raw JSON attributes corresponding to a collection of tiles."""
+    tiles_json = json.dumps(tuple(tiles))
+    return tiles_json
 
 
 def tile_put_sharded_prim(x, tiles):

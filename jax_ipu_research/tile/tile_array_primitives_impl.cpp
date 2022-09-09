@@ -15,17 +15,11 @@ using namespace ipu;
 class TilePutBase : public jax::ipu::PrimitiveInterface {
  public:
   /**
-   * @brief Extract (and copy) the tile array from raw attributes.
+   * @brief Extract (and copy) the tile array from raw JSON attributes.
    */
   static std::vector<TileIndexType> extractTileArray(
       const std::string& attributes) {
-    const size_t tile_array_size = attributes.size() / sizeof(TileIndexType);
-    const TileIndexType* ptr_tile_array =
-        reinterpret_cast<const TileIndexType*>(attributes.data());
-    std::vector<TileIndexType> tile_array;
-    std::copy(ptr_tile_array, ptr_tile_array + tile_array_size,
-              std::back_inserter(tile_array));
-    return tile_array;
+    return ipu::from_json_str<std::vector<TileIndexType>>(attributes);
   }
 };
 
