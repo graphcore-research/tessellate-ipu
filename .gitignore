@@ -132,3 +132,6 @@ dmypy.json
 
 # IDEs
 .vscode
+
+# Sub-modules
+examples/ipu_path_trace/light

@@ -1,6 +1,6 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-from typing import Tuple
 import json
+from typing import Tuple
 
 import cppimport.import_hook  # noqa: F401
 import numpy as np

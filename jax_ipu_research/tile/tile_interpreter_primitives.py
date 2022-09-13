@@ -1,7 +1,7 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import os
 from copy import copy
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import cppimport.import_hook  # noqa: F401
 import numpy as np
@@ -20,6 +20,9 @@ from .tile_interpreter_primitives_impl import (
 
 _numpy_dtype_to_ipu_type = {
     np.dtype(np.bool_): IpuType.BOOL,
+    np.dtype(np.uint8): IpuType.UNSIGNED_CHAR,
+    np.dtype(np.uint16): IpuType.UNSIGNED_SHORT,
+    np.dtype(np.uint32): IpuType.UNSIGNED_INT,
     np.dtype(np.int8): IpuType.CHAR,
     np.dtype(np.int16): IpuType.SHORT,
     np.dtype(np.int32): IpuType.INT,
@@ -31,6 +34,9 @@ _numpy_dtype_to_ipu_type = {
 
 _ipu_type_to_numpy_dtype = {
     IpuType.BOOL: np.dtype(np.bool_),
+    IpuType.UNSIGNED_CHAR: np.dtype(np.uint8),
+    IpuType.UNSIGNED_SHORT: np.dtype(np.uint16),
+    IpuType.UNSIGNED_INT: np.dtype(np.uint32),
     IpuType.CHAR: np.dtype(np.int8),
     IpuType.SHORT: np.dtype(np.int16),
     IpuType.INT: np.dtype(np.int32),
@@ -64,6 +70,50 @@ def make_ipu_vertex_io_info(name: str, iotype: IpuVertexIOType, aval: ShapedArra
     """
     ipu_type = from_numpy_dtype_to_ipu_type(aval.dtype)
     return IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type, rank=rank)
+
+
+def make_ipu_vertex_inputs(
+    inavals: Dict[str, ShapedArray], inout_names: Set[str] = set(), rank2_names: Set[str] = set()
+) -> List[IpuVertexIOInfo]:
+    """Build a collection of IPU vertex input infos.
+
+    Args:
+        inavals: Named collection of input avals.
+        inout_names: Name of tensors with InOut status.
+        rank2_names: Name of tensors of rank 2.
+    Returns:
+        List of IPU vertex IO info.
+    """
+
+    def _get_iotype(name: str):
+        return IpuVertexIOType.InOut if name in inout_names else IpuVertexIOType.In
+
+    def _get_rank(name: str):
+        return 2 if name in rank2_names else 1
+
+    return [make_ipu_vertex_io_info(name, _get_iotype(name), aval, _get_rank(name)) for name, aval in inavals.items()]
+
+
+def make_ipu_vertex_outputs(
+    outavals: Dict[str, ShapedArray], inout_names: Set[str] = set(), rank2_names: Set[str] = set()
+) -> List[IpuVertexIOInfo]:
+    """Build a collection of IPU vertex output infos.
+
+    Args:
+        inavals: Named collection of output avals.
+        inout_names: Name of tensors with InOut status.
+        rank2_names: Name of tensors of rank 2.
+    Returns:
+        List of IPU vertex IO info.
+    """
+
+    def _get_iotype(name: str):
+        return IpuVertexIOType.InOut if name in inout_names else IpuVertexIOType.Out
+
+    def _get_rank(name: str):
+        return 2 if name in rank2_names else 1
+
+    return [make_ipu_vertex_io_info(name, _get_iotype(name), aval, _get_rank(name)) for name, aval in outavals.items()]
 
 
 def get_tile_map_ipu_arguments(**kwargs) -> Tuple[str, Tuple[int, ...], str]:

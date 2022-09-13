@@ -1,8 +1,15 @@
 import chex
 import numpy as np
 from jax.core import ShapedArray
+from absl.testing import parameterized
 
-from jax_ipu_research.tile.tile_interpreter_primitives import make_ipu_vertex_io_info
+from jax_ipu_research.tile.tile_interpreter_primitives import (
+    make_ipu_vertex_io_info,
+    make_ipu_vertex_inputs,
+    make_ipu_vertex_outputs,
+    from_numpy_dtype_to_ipu_type,
+    from_ipu_type_to_numpy_dtype,
+)
 from jax_ipu_research.tile.tile_interpreter_primitives_impl import (
     IpuTileMapEquation,
     IpuType,
@@ -12,7 +19,7 @@ from jax_ipu_research.tile.tile_interpreter_primitives_impl import (
 )
 
 
-class IpuTileEquationBaseTests(chex.TestCase):
+class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
     def test__ipu_vertex_io_info__init__proper_fields(self):
         ioinfo = IpuVertexIOInfo(name="in0", iotype=IpuVertexIOType.Out, shape=[1, 2, 3], dtype=IpuType.FLOAT)
         assert ioinfo.name == "in0"
@@ -55,3 +62,25 @@ class IpuTileEquationBaseTests(chex.TestCase):
         assert info.iotype == IpuVertexIOType.InOut
         assert info.shape == [1, 2, 3]
         assert info.dtype == IpuType.HALF
+
+    def test__make_ipu_vertex_inputs__proper_results(self):
+        inavals = {"in0": ShapedArray((3, 2), np.float16), "in1": ShapedArray((5,), np.uint8)}
+        infos = make_ipu_vertex_inputs(inavals, {"in0"}, {"in1"})
+        assert len(infos) == 2
+        assert [v.dtype for v in infos] == [IpuType.HALF, IpuType.UNSIGNED_CHAR]
+        assert [v.iotype for v in infos] == [IpuVertexIOType.InOut, IpuVertexIOType.In]
+        assert [v.rank for v in infos] == [1, 2]
+
+    def test__make_ipu_vertex_ouputs__proper_results(self):
+        inavals = {"in0": ShapedArray((3, 2), np.float16), "in1": ShapedArray((5,), np.uint8)}
+        infos = make_ipu_vertex_outputs(inavals, {"in0"}, {"in1"})
+        assert len(infos) == 2
+        assert [v.dtype for v in infos] == [IpuType.HALF, IpuType.UNSIGNED_CHAR]
+        assert [v.iotype for v in infos] == [IpuVertexIOType.InOut, IpuVertexIOType.Out]
+        assert [v.rank for v in infos] == [1, 2]
+
+    @parameterized.parameters([np.float32, np.float16, np.int8, np.int16, np.int32, np.uint8, np.uint16, np.uint32])
+    def test__from_numpy_dtype_to_ipu_type__proper_round_trip(self, in_dtype):
+        ipu_type = from_numpy_dtype_to_ipu_type(in_dtype)
+        out_dtype = from_ipu_type_to_numpy_dtype(ipu_type)
+        assert out_dtype == in_dtype
