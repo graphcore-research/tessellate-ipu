@@ -12,3 +12,9 @@ from .tile_interpreter_primitives import (
     make_ipu_vertex_io_info,
     make_ipu_vertex_outputs,
 )
+from .tile_interpreter_random import (
+    ipu_get_hw_seeds_tmap,
+    ipu_random_normal_tmap,
+    ipu_random_uniform_tmap,
+    ipu_set_hw_seeds_tmap,
+)

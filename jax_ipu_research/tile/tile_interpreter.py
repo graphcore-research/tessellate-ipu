@@ -3,7 +3,7 @@
 
 In particular, we need a registry mapping JAX primitives to IPU vertex (and additionally support custom IPU vertex).
 """
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from jax.core import Primitive
 from jax.interpreters.xla import ShapedArray
@@ -30,7 +30,7 @@ def tile_map_primitive(
     inputs: List[TileShardedArray],
     attributes: Dict[str, Any] = None,
     tiles: Optional[Tuple[int, ...]] = None,
-) -> List[TileShardedArray]:
+) -> Union[TileShardedArray, List[TileShardedArray]]:
     """Map a JAX primitive over tiles.
 
     Args:

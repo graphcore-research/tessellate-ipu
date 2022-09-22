@@ -42,6 +42,10 @@ class TileShardedArray:
         return self.array.dtype
 
     @property
+    def shape(self) -> Tuple[int, ...]:
+        return self.array.shape
+
+    @property
     def aval(self) -> ShapedArray:
         if isinstance(self.array, np.ndarray):
             return ShapedArray(self.array.shape, self.array.dtype)
@@ -56,6 +60,10 @@ class TileShardedArray:
     @property
     def device_array(self) -> DeviceArray:
         return self.array
+
+    def __array__(self, dtype: Any = None):
+        # Force converting to Numpy array.
+        return np.asarray(self.array, dtype=dtype)
 
     def __getitem__(self, key: Union[int, slice]) -> "TileShardedArray":
         """Slice over the tile axis."""

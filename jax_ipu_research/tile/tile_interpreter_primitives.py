@@ -13,6 +13,8 @@ from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_prim
 from .tile_interpreter_primitives_impl import (
     IpuTileMapEquation,
     IpuType,
+    IpuVertexAttributeF32,
+    IpuVertexAttributeU32,
     IpuVertexIOInfo,
     IpuVertexIOType,
     TileMapEquationCall,
@@ -114,6 +116,41 @@ def make_ipu_vertex_outputs(
         return 2 if name in rank2_names else 1
 
     return [make_ipu_vertex_io_info(name, _get_iotype(name), aval, _get_rank(name)) for name, aval in outavals.items()]
+
+
+def make_ipu_vertex_name_templated(name: str, *dtypes: Any) -> str:
+    """Make templated vertex name, e.g. `Uniform<float>`.
+
+    Args:
+        name: Basename of the vertex.
+        dtypes: Dtypes to use in templated name.
+    Returns:
+        Full templated vertex name.
+    """
+    dtype_names = [from_numpy_dtype_to_ipu_type(d).name.lower() for d in dtypes]
+    dtype_name_concat = ",".join(dtype_names)
+    fullname = f"{name}<{dtype_name_concat}>"
+    return fullname
+
+
+def make_ipu_vertex_attributes(**kwargs) -> Tuple[List[IpuVertexAttributeU32], List[IpuVertexAttributeF32]]:
+    """Make IPU vertex attributes, uint32 or floating.
+
+    Args:
+        kwargs: Named attributes.
+    Returns:
+        Int32 and floating attributes.
+    """
+    attrs_u32: List[IpuVertexAttributeU32] = []
+    attrs_f32: List[IpuVertexAttributeF32] = []
+    for k, v in kwargs.items():
+        if isinstance(v, (int, np.int32)):
+            attrs_u32.append(IpuVertexAttributeU32(k, v))
+        elif isinstance(v, (float, np.float32, np.float64)):
+            attrs_f32.append(IpuVertexAttributeF32(k, v))
+        else:
+            raise TypeError(f"Unknown IPU vertex attribute type {k}: {v} with type {type(v)}.")
+    return attrs_u32, attrs_f32
 
 
 def get_tile_map_ipu_arguments(**kwargs) -> Tuple[str, Tuple[int, ...], str]:

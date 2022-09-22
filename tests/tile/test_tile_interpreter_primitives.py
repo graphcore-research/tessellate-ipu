@@ -1,19 +1,22 @@
 import chex
 import numpy as np
-from jax.core import ShapedArray
 from absl.testing import parameterized
+from jax.core import ShapedArray
 
 from jax_ipu_research.tile.tile_interpreter_primitives import (
-    make_ipu_vertex_io_info,
-    make_ipu_vertex_inputs,
-    make_ipu_vertex_outputs,
-    from_numpy_dtype_to_ipu_type,
     from_ipu_type_to_numpy_dtype,
+    from_numpy_dtype_to_ipu_type,
+    make_ipu_vertex_inputs,
+    make_ipu_vertex_io_info,
+    make_ipu_vertex_outputs,
+    make_ipu_vertex_name_templated,
+    make_ipu_vertex_attributes,
 )
 from jax_ipu_research.tile.tile_interpreter_primitives_impl import (
     IpuTileMapEquation,
     IpuType,
     IpuVertexAttributeF32,
+    IpuVertexAttributeU32,
     IpuVertexIOInfo,
     IpuVertexIOType,
 )
@@ -84,3 +87,12 @@ class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
         ipu_type = from_numpy_dtype_to_ipu_type(in_dtype)
         out_dtype = from_ipu_type_to_numpy_dtype(ipu_type)
         assert out_dtype == in_dtype
+
+    def test__make_ipu_vertex_name_templated__proper_fullname(self):
+        vname = make_ipu_vertex_name_templated("MyVertex", np.float32, np.int32)
+        assert vname == "MyVertex<float,int>"
+
+    def test__make_ipu_vertex_attributes__proper_list_attributes(self):
+        attrs_u32, attrs_f32 = make_ipu_vertex_attributes(k1=2, k2=3.0)
+        assert attrs_u32[0] == IpuVertexAttributeU32("k1", 2)
+        assert attrs_f32[0] == IpuVertexAttributeF32("k2", 3.0)
