@@ -1,10 +1,9 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 from typing import Any, Dict, List, Tuple
 
+import jax
 import numpy as np
 from jax.core import Primitive, ShapedArray
-
-from jax_ipu_research.utils import get_ipu_config
 
 from .tile_array import TileShardedArray
 from .tile_interpreter import register_ipu_tile_primitive, tile_map_primitive
@@ -23,10 +22,14 @@ Equivalent to Poplar APIs `getHwSeeds` and `setHwSeeds`
 ipu_set_hw_seeds_p = Primitive("ipu_set_hw_seeds")
 
 
+def get_ipu_num_worker_contexts() -> int:
+    """Get the IPU `num_worker_contexts` property."""
+    return jax.devices("ipu")[0].num_worker_contexts
+
+
 def ipu_set_hw_seeds_abstract_eval(seeds: ShapedArray) -> ShapedArray:
     # Poplar tensor: poplar::UNSIGNED_INT, {numTiles, numWorkerContexts, 4}
-    cfg = get_ipu_config()
-    assert seeds.shape[0] == cfg.num_worker_contexts
+    assert seeds.shape[0] == get_ipu_num_worker_contexts()
     assert seeds.shape[1] == 4
     assert seeds.dtype == np.uint32
     return seeds
@@ -39,7 +42,6 @@ def ipu_set_hw_seeds_translation_ipu(
     attributes: Dict[str, Any] = None,
 ) -> IpuTileMapEquation:
     assert len(inavals) == 1
-    cfg = get_ipu_config()
     inavals_dict = {"seeds": inavals[0]}
     inout_names = {"seeds"}
     # Translation rule to IPU vertex.
@@ -50,7 +52,7 @@ def ipu_set_hw_seeds_translation_ipu(
         inputs_info=make_ipu_vertex_inputs(inavals_dict, inout_names=inout_names),
         outputs_info=make_ipu_vertex_outputs(inavals_dict, inout_names=inout_names),
         # Optional GP filename and perf. estimate.
-        perf_estimate=14 + 10 * cfg.num_worker_contexts,
+        perf_estimate=14 + 10 * get_ipu_num_worker_contexts(),
     )
     return ipu_prim_info
 
@@ -69,8 +71,7 @@ ipu_get_hw_seeds_p = Primitive("ipu_get_hw_seeds")
 
 def ipu_get_hw_seeds_abstract_eval() -> ShapedArray:
     # Poplar tensor: poplar::UNSIGNED_INT, {numTiles, numWorkerContexts, 4}
-    cfg = get_ipu_config()
-    return ShapedArray((cfg.num_worker_contexts, 4), np.uint32)
+    return ShapedArray((get_ipu_num_worker_contexts(), 4), np.uint32)
 
 
 def ipu_get_hw_seeds_translation_ipu(
@@ -79,7 +80,6 @@ def ipu_get_hw_seeds_translation_ipu(
     inavals: List[ShapedArray],
     attributes: Dict[str, Any] = None,
 ) -> IpuTileMapEquation:
-    cfg = get_ipu_config()
     outavals_dict = {"seeds": ipu_get_hw_seeds_abstract_eval()}
     # Translation rule to IPU vertex.
     ipu_prim_info = IpuTileMapEquation(
@@ -89,7 +89,7 @@ def ipu_get_hw_seeds_translation_ipu(
         inputs_info=[],
         outputs_info=make_ipu_vertex_outputs(outavals_dict),
         # Optional GP filename and perf. estimate.
-        perf_estimate=14 + 7 * cfg.num_worker_contexts,
+        perf_estimate=14 + 7 * get_ipu_num_worker_contexts(),
     )
     return ipu_prim_info
 

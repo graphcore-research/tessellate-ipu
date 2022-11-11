@@ -9,6 +9,9 @@ from jax_ipu_research.tile.tile_array_primitives import tile_put_replicated_prim
 
 
 class TilePutShardedPrimTests(chex.TestCase, parameterized.TestCase):
+    def setUp(self):
+        self.num_tiles = jax.devices("ipu")[0].num_tiles
+
     @chex.variants(with_jit=True, without_jit=True)
     def test__tile_put_sharded_prim__invalid_number_tiles(self):
         @self.variant
@@ -21,22 +24,23 @@ class TilePutShardedPrimTests(chex.TestCase, parameterized.TestCase):
 
     def test__tile_put_sharded_prim__no_jitting(self):
         input = np.asarray([1, 2, 3], np.float32)
-        tiles = (3, 4, 1471)
+        tiles = (3, 4, self.num_tiles - 1)
         output = tile_put_sharded_prim(input, tiles)
         assert output is input
 
     @parameterized.parameters(["cpu", "ipu"])
     def test__tile_put_sharded_prim__device_jitting(self, backend):
         input = np.asarray([1, 2, 3], np.float32)
-        tiles = (3, 4, 1471)
+        tiles = (3, 4, self.num_tiles - 1)
         output = jax.jit(tile_put_sharded_prim, static_argnums=1, backend=backend)(input, tiles)
         assert output.shape == input.shape
         npt.assert_array_equal(output, input)
 
 
 def test__tile_put_replicated_prim__no_jitting():
+    num_tiles = jax.devices("ipu")[0].num_tiles
     input = np.asarray([[1, 2]], np.float32)
-    tiles = (3, 4, 1471)
+    tiles = (3, 4, num_tiles - 1)
     output = tile_put_replicated_prim(input, tiles)
     assert output.shape == (len(tiles), *input.shape)
     npt.assert_array_equal(output, np.stack([input for _ in range(len(tiles))]))
@@ -44,8 +48,9 @@ def test__tile_put_replicated_prim__no_jitting():
 
 @pytest.mark.parametrize("backend", ["ipu"])
 def test__tile_put_replicated_prim__device_jitting(backend):
+    num_tiles = jax.devices("ipu")[0].num_tiles
     input = np.asarray([[1, 2]], np.float32)
-    tiles = (3, 4, 1471)
+    tiles = (3, 4, num_tiles - 1)
     output = jax.jit(tile_put_replicated_prim, static_argnums=1, backend=backend)(input, tiles)
     assert output.shape == (len(tiles), *input.shape)
     npt.assert_array_equal(output, tile_put_replicated_prim(input, tiles))

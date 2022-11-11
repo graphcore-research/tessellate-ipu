@@ -195,6 +195,9 @@ def tile_map_equation_call_abstract_eval(*args, **params) -> List[ShapedArray]:
     # Abstract eval at the tile level.
     tile_args = [ShapedArray(v.shape[1:], v.dtype) for v in args]
     tile_outputs = primitive.abstract_eval(*tile_args, **get_primitive_arguments(params))
+    # TODO: investigate what the second return value in `abstract_eval`?
+    if isinstance(tile_outputs, tuple) and isinstance(tile_outputs[-1], set):
+        tile_outputs = tile_outputs[0]
     # Re-construct sharded abtract output
     if not primitive.multiple_results:
         tile_outputs = [tile_outputs]

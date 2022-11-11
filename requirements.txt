@@ -1,7 +1,8 @@
-chex == 0.0.8
+chex
 cppimport
-jax >= 0.2.12
-jax_ipu_addons @ git+ssh://git@github.com/graphcore/jax-ipu-addons.git@v0.1
-jaxlib
+jax >= 0.3.16
+jax_ipu_addons
+# jax_ipu_addons @ git+ssh://git@github.com/CHINA-ENGINEERING-GCCN/jax-ipu-addons.git@main
+jaxlib >= 0.3.15
 numpy
 pybind11 == 2.6.2

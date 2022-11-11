@@ -46,7 +46,7 @@ setuptools.setup(
     license="Graphcore copyright",
     test_suite="tests",
     tests_require=test_requirements,
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     install_requires=requirements,
     extras_require={"test": test_requirements},
     package_data={PACKAGE_NAME: ["py.typed"] + package_data_cpp},

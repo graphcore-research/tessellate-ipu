@@ -6,11 +6,11 @@ from jax.core import ShapedArray
 from jax_ipu_research.tile.tile_interpreter_primitives import (
     from_ipu_type_to_numpy_dtype,
     from_numpy_dtype_to_ipu_type,
+    make_ipu_vertex_attributes,
     make_ipu_vertex_inputs,
     make_ipu_vertex_io_info,
-    make_ipu_vertex_outputs,
     make_ipu_vertex_name_templated,
-    make_ipu_vertex_attributes,
+    make_ipu_vertex_outputs,
 )
 from jax_ipu_research.tile.tile_interpreter_primitives_impl import (
     IpuTileMapEquation,

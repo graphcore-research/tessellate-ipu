@@ -1,9 +1,9 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-from jax_ipu_research.utils import IpuConfig, get_ipu_config
+import jax
+
+from jax_ipu_research.utils import IpuTargetType, is_ipu_model
 
 
-def test__get_ipu_config__proper_device():
-    cfg = get_ipu_config()
-    assert isinstance(cfg, IpuConfig)
-    assert (cfg.num_tiles == 4 and cfg.is_model) or (cfg.num_tiles == 1472 and not cfg.is_model)
-    assert cfg.num_worker_contexts == 6
+def test__is_ipu_model__proper_result():
+    d = jax.devices("ipu")[0]
+    assert is_ipu_model(d) == (d.target_type == IpuTargetType.IPU_MODEL)

@@ -1,1 +1,1 @@
-from .ipu_device import IpuConfig, get_ipu_config
+from .ipu_device import IpuDevice, IpuTargetType, is_ipu_model
