@@ -1,0 +1,90 @@
+# Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+from typing import Any, Dict, List, Tuple
+
+from jax.core import Primitive, ShapedArray
+from jax.lax import reduce_and_p, reduce_max_p, reduce_min_p, reduce_or_p, reduce_prod_p, reduce_sum_p
+from numpy.typing import DTypeLike
+
+from .tile_interpreter import register_ipu_tile_primitive
+from .tile_interpreter_primitives import (
+    IpuTileMapEquation,
+    IpuVertexIOType,
+    from_numpy_dtype_to_ipu_type,
+    make_ipu_vertex_attributes,
+    make_ipu_vertex_io_info,
+)
+
+_reduce_primitive_to_basename: Dict[Primitive, str] = {
+    reduce_sum_p: "ReduceAdd",
+    reduce_max_p: "ReduceMax",
+    reduce_min_p: "ReduceMin",
+    reduce_prod_p: "ReduceMul",
+    reduce_or_p: "ReduceOr",
+    reduce_and_p: "ReduceAnd",
+}
+
+
+def make_continuous_reduce_vertex_fullname(
+    reduce_p: Primitive, partial_dtype: DTypeLike, out_dtype: DTypeLike, is_update: bool = False
+) -> str:
+    """Generate a (continous) popops reduce vertex name.
+
+    Args:
+        reduce_p: Reduce primitive.
+        partial_dtype: Dtype used for partials.
+        out_dtype: Output dtype.
+        is_update: Updating the output tensor inplace.
+    Returns:
+        Full popops continuous reduce vertex name.
+    """
+    basename = _reduce_primitive_to_basename[reduce_p]
+    partial_dtype_ipu = from_numpy_dtype_to_ipu_type(partial_dtype).name.lower()
+    out_dtype_ipu = from_numpy_dtype_to_ipu_type(out_dtype).name.lower()
+    is_update_str = str(is_update).lower()
+    return f"popops::ContinuousReduce<popops::{basename},{partial_dtype_ipu},{out_dtype_ipu},{is_update_str}>"
+
+
+def ipu_reduce_primitive_translation(
+    p: Primitive,
+    tiles: Tuple[int, ...],
+    inavals: List[ShapedArray],
+    attributes: Dict[str, Any] = None,
+) -> IpuTileMapEquation:
+    """IPU unary primitive translation rule to IPU vertex.
+
+    Args:
+        p: JAX primitive.
+        tiles: Collection of tiles.
+        inavals: Input shaped arrays.
+        attributes: (unused) attributes.
+    Returns:
+        IPU tile map primitive structure.
+    """
+    assert len(inavals) == 1
+    assert attributes is not None
+    inaval = inavals[0]
+    # TODO: understand convention between axes/axis/dimensions!
+    axes = attributes["axes"]
+    # Only supporting full reduce for now.
+    if axes != tuple(range(inaval.ndim)):
+        raise NotImplementedError(f"IPU tile mapped `{p.name}` not supporting partial reduction.")
+    outaval = p.abstract_eval(*inavals, axes=axes)[0]
+
+    # TODO: supporting partial reduce (i.e. last dimensions only).
+    attrs_u32, attrs_f32 = make_ipu_vertex_attributes(numOutputsM1=1, numPartials=inaval.size)
+    vname = make_continuous_reduce_vertex_fullname(p, inaval.dtype, inaval.dtype, False)
+    ipu_prim_info = IpuTileMapEquation(
+        vname=vname,
+        pname=p.name,
+        tiles=tiles,
+        inputs_info=[make_ipu_vertex_io_info("partials", IpuVertexIOType.In, inaval)],
+        outputs_info=[make_ipu_vertex_io_info("out", IpuVertexIOType.Out, outaval)],
+        attributes_u32=attrs_u32,
+        attributes_f32=attrs_f32,
+    )
+    return ipu_prim_info
+
+
+# Register all supported JAX reduce ops.
+for p in _reduce_primitive_to_basename.keys():
+    register_ipu_tile_primitive(p, ipu_reduce_primitive_translation)
