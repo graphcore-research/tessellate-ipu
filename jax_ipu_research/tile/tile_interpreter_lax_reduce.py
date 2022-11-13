@@ -1,6 +1,7 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
 from jax.core import Primitive, ShapedArray
 from jax.lax import reduce_and_p, reduce_max_p, reduce_min_p, reduce_or_p, reduce_prod_p, reduce_sum_p
 from numpy.typing import DTypeLike
@@ -64,14 +65,21 @@ def ipu_reduce_primitive_translation(
     assert attributes is not None
     inaval = inavals[0]
     # TODO: understand convention between axes/axis/dimensions!
-    axes = attributes["axes"]
-    # Only supporting full reduce for now.
-    if axes != tuple(range(inaval.ndim)):
-        raise NotImplementedError(f"IPU tile mapped `{p.name}` not supporting partial reduction.")
+    axes = tuple(sorted(attributes["axes"]))
+    assert len(axes) > 0
+    first_axis = axes[0]
+    # Only supporting reduction on the last axes for now (i.e. no striding).
+    if axes != tuple(range(axes[0], inaval.ndim)):
+        raise NotImplementedError(
+            f"IPU tile mapped `{p.name}` only supporting (partial or full) reduction on the last axes."
+        )
     outaval = p.abstract_eval(*inavals, axes=axes)[0]
 
     # TODO: supporting partial reduce (i.e. last dimensions only).
-    attrs_u32, attrs_f32 = make_ipu_vertex_attributes(numOutputsM1=1, numPartials=inaval.size)
+
+    attrs_u32, attrs_f32 = make_ipu_vertex_attributes(
+        numOutputsM1=np.prod(inaval.shape[:first_axis]), numPartials=np.prod(inaval.shape[first_axis:])
+    )
     vname = make_continuous_reduce_vertex_fullname(p, inaval.dtype, inaval.dtype, False)
     ipu_prim_info = IpuTileMapEquation(
         vname=vname,

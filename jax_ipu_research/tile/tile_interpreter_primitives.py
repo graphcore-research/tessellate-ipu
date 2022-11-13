@@ -144,8 +144,8 @@ def make_ipu_vertex_attributes(**kwargs) -> Tuple[List[IpuVertexAttributeU32], L
     attrs_u32: List[IpuVertexAttributeU32] = []
     attrs_f32: List[IpuVertexAttributeF32] = []
     for k, v in kwargs.items():
-        if isinstance(v, (int, np.int32)):
-            attrs_u32.append(IpuVertexAttributeU32(k, v))
+        if isinstance(v, (int, np.int32, np.int64)):
+            attrs_u32.append(IpuVertexAttributeU32(k, int(v)))
         elif isinstance(v, (float, np.float32, np.float64)):
             attrs_f32.append(IpuVertexAttributeF32(k, v))
         else:
