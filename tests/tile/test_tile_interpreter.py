@@ -16,7 +16,7 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
         tiles = (3, 4, 5)
         inshape = (len(tiles), 2)
         input = tile_put_sharded(np.random.randn(*inshape), tiles)
-        outputs = tile_map_primitive(None, [input])
+        outputs = tile_map_primitive(None, input)
         assert outputs[0] is input
 
     @parameterized.parameters([np.float32, np.float16, np.int32])
@@ -25,7 +25,7 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
         inshape = (len(tiles), 7, 9)
         input = np.random.randn(*inshape).astype(dtype)
         input = tile_put_sharded(input, tiles)
-        output = tile_map_primitive(lax.abs_p, [input])
+        output = tile_map_primitive(lax.abs_p, input)
 
         assert isinstance(output, TileShardedArray)
         assert output.tiles == tiles
@@ -41,7 +41,7 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
         @partial(jax.jit, backend="ipu")
         def compute_fn(array):
             input = tile_put_sharded(array, tiles)
-            output = tile_map_primitive(lax.abs_p, [input])
+            output = tile_map_primitive(lax.abs_p, input)
             return output
 
         output = compute_fn(input)
@@ -61,7 +61,7 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
         def compute_fn(in0, in1):
             input0 = tile_put_sharded(in0, tiles)
             input1 = tile_put_sharded(in1, tiles)
-            output = tile_map_primitive(lax.add_p, [input0, input1])
+            output = tile_map_primitive(lax.add_p, input0, input1)
             return output
 
         output = compute_fn(input0, input1)
@@ -94,9 +94,7 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
         @partial(jax.jit, backend="ipu")
         def compute_fn(scales):
             scales = tile_put_sharded(scales, tiles)
-            output = tile_map_primitive(
-                custom_arange_p, [scales], attributes={"size": size, "dtype": dtype}, tiles=tiles
-            )
+            output = tile_map_primitive(custom_arange_p, scales, size=size, dtype=dtype, tiles=tiles)
             return output
 
         output = compute_fn(scales)

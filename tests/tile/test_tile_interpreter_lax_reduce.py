@@ -26,11 +26,10 @@ class IpuTilePrimitivesLaxReduce(chex.TestCase, parameterized.TestCase):
         size = 100
         indata = np.random.randn(len(tiles), size).astype(dtype)
         reduce_p = jax.lax.reduce_sum_p
-        attributes = dict(axes=(0,))
 
         def compute_fn(in0):
             input0 = tile_put_sharded(in0, tiles)
-            output = tile_map_primitive(reduce_p, [input0], attributes=attributes)
+            output = tile_map_primitive(reduce_p, input0, axes=(0,))
             return output
 
         compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)

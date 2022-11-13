@@ -59,7 +59,7 @@ def ipu_set_hw_seeds_translation_ipu(
 
 def ipu_set_hw_seeds_tmap(seeds: TileShardedArray) -> TileShardedArray:
     """Set IPU hardware seeds on a collection of tiles."""
-    return tile_map_primitive(ipu_set_hw_seeds_p, [seeds])  # type:ignore
+    return tile_map_primitive(ipu_set_hw_seeds_p, seeds)  # type:ignore
 
 
 ipu_set_hw_seeds_p.def_abstract_eval(ipu_set_hw_seeds_abstract_eval)
@@ -96,7 +96,7 @@ def ipu_get_hw_seeds_translation_ipu(
 
 def ipu_get_hw_seeds_tmap(tiles: Tuple[int, ...]) -> TileShardedArray:
     """Get IPU hardware seeds from a collection of tiles."""
-    return tile_map_primitive(ipu_get_hw_seeds_p, [], tiles=tiles)  # type:ignore
+    return tile_map_primitive(ipu_get_hw_seeds_p, tiles=tiles)  # type:ignore
 
 
 ipu_get_hw_seeds_p.def_abstract_eval(ipu_get_hw_seeds_abstract_eval)
@@ -151,7 +151,7 @@ def ipu_random_uniform_tmap(
 ) -> TileShardedArray:
     """IPU Uniform sampling on a collection of tiles."""
     return tile_map_primitive(  # type:ignore
-        ipu_random_uniform_p, [], dict(size=size, dtype=dtype, offset=offset, scale=scale), tiles=tiles
+        ipu_random_uniform_p, size=size, dtype=dtype, offset=offset, scale=scale, tiles=tiles
     )
 
 
@@ -203,5 +203,5 @@ def ipu_random_normal_tmap(
 ) -> TileShardedArray:
     """IPU Normal sampling on a collection of tiles."""
     return tile_map_primitive(  # type:ignore
-        ipu_random_normal_p, [], dict(size=size, dtype=dtype, mean=mean, stddev=stddev), tiles=tiles
+        ipu_random_normal_p, size=size, dtype=dtype, mean=mean, stddev=stddev, tiles=tiles
     )

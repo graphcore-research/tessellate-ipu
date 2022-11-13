@@ -26,21 +26,25 @@ The registry is indexed by the primitive name.
 
 
 def tile_map_primitive(
-    primitive: Primitive,
-    inputs: List[TileShardedArray],
-    attributes: Dict[str, Any] = None,
-    tiles: Optional[Tuple[int, ...]] = None,
+    primitive: Primitive, *args: TileShardedArray, **kwargs: Any
 ) -> Union[TileShardedArray, List[TileShardedArray]]:
     """Map a JAX primitive over tiles.
 
     Args:
         primitive: JAX primitive to map.
-        inputs: List of input sharded arrays.
-        attributes: Attributes to pass to the JAX primitive (and translation rule).
-        tiles: Optional tile mapping, provided when there is no input.
+        *args: List of input (tile) sharded arrays.
+        **kwargs: Attributes to pass to the JAX primitive (and translation rule).
+            tiles: Optional tile mapping, provided when there is no input.
     Returns:
         List of output sharded arrays.
     """
+    # Unpack arguments...
+    inputs = list(args)
+    assert all([isinstance(v, TileShardedArray) for v in args])
+    tiles: Optional[Tuple[int, ...]] = kwargs.get("tiles", None)
+    attributes = dict(kwargs)
+    attributes.pop("tiles", None)
+
     if primitive is None:
         # No primitive: by default a no-op.
         return inputs

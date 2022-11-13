@@ -46,7 +46,7 @@ class IpuTileBinaryPrimitiveTests(chex.TestCase, parameterized.TestCase):
         def compute_fn(in0, in1):
             input0 = tile_put_sharded(in0, tiles)
             input1 = tile_put_sharded(in1, tiles)
-            output = tile_map_primitive(lax.add_p, [input0, input1])
+            output = tile_map_primitive(lax.add_p, input0, input1)
             return output
 
         output = compute_fn(input0, input1)
@@ -66,7 +66,7 @@ class IpuTileBinaryPrimitiveTests(chex.TestCase, parameterized.TestCase):
         def compute_fn(in0, in1):
             input0 = tile_put_sharded(in0, tiles)
             input1 = tile_put_sharded(in1, tiles)
-            output = tile_map_primitive(lax.ge_p, [input0, input1])
+            output = tile_map_primitive(lax.ge_p, input0, input1)
             return output
 
         output = compute_fn(input0, input1)
