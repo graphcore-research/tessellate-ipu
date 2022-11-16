@@ -69,7 +69,7 @@ def ipu_binary_primitive_translation(
             make_ipu_vertex_io_info("in2", IpuVertexIOType.In, inavals[1]),
         ],
         outputs_info=[make_ipu_vertex_io_info("out", IpuVertexIOType.Out, outaval)],
-        attributes_u32=[],
+        attributes_i32=[],
         attributes_f32=[],
     )
     return ipu_prim_info

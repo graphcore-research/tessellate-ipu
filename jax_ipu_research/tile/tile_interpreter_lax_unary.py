@@ -69,7 +69,7 @@ def ipu_unary_primitive_translation(
         tiles=tiles,
         inputs_info=[make_ipu_vertex_io_info("in", IpuVertexIOType.In, inavals[0])],
         outputs_info=[make_ipu_vertex_io_info("out", IpuVertexIOType.Out, inavals[0])],
-        attributes_u32=[],
+        attributes_i32=[],
         attributes_f32=[],
     )
     return ipu_prim_info

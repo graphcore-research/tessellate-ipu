@@ -1,3 +1,4 @@
+# Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import chex
 import numpy as np
 from absl.testing import parameterized
@@ -16,7 +17,7 @@ from jax_ipu_research.tile.tile_interpreter_primitives_impl import (
     IpuTileMapEquation,
     IpuType,
     IpuVertexAttributeF32,
-    IpuVertexAttributeU32,
+    IpuVertexAttributeI32,
     IpuVertexIOInfo,
     IpuVertexIOType,
 )
@@ -93,6 +94,6 @@ class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
         assert vname == "MyVertex<float,int>"
 
     def test__make_ipu_vertex_attributes__proper_list_attributes(self):
-        attrs_u32, attrs_f32 = make_ipu_vertex_attributes(k1=2, k2=3.0)
-        assert attrs_u32[0] == IpuVertexAttributeU32("k1", 2)
+        attrs_i32, attrs_f32 = make_ipu_vertex_attributes(k1=2, k2=3.0)
+        assert attrs_i32[0] == IpuVertexAttributeI32("k1", 2)
         assert attrs_f32[0] == IpuVertexAttributeF32("k2", 3.0)

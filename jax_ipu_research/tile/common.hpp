@@ -1,14 +1,13 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #pragma once
 
-#include <cstdint>
-#include <json/json.hpp>
-
-#include <poplar/Tensor.hpp>
-#include <poplar/Type.hpp>
-
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+
+#include <cstdint>
+#include <json/json.hpp>
+#include <poplar/Tensor.hpp>
+#include <poplar/Type.hpp>
 
 namespace ipu {
 using json = nlohmann::json;

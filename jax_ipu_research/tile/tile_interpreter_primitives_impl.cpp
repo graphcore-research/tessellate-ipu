@@ -3,11 +3,13 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
-#include <json/json.hpp>
 
 #include <algorithm>
 #include <ipu_custom_primitive.hpp>
+#include <json/json.hpp>
+
 #include "tile_array_utils.hpp"
+#include "tile_dot_vertex_utils.hpp"
 
 namespace ipu {
 using json = nlohmann::json;
@@ -114,7 +116,7 @@ decltype(auto) makeVertexAttributeBindings(pybind11::module& m,
       .def_readwrite("value", &VertexAttrType::value);
 }
 
-using VertexAttributeU32 = VertexAttribute<uint32_t>;
+using VertexAttributeI32 = VertexAttribute<int32_t>;
 using VertexAttributeF32 = VertexAttribute<float>;
 
 /**
@@ -142,7 +144,7 @@ struct TileMapEquation {
   std::vector<VertexIOInfo> outputs_info;
 
   /** Attributes, with different types. */
-  std::vector<VertexAttributeU32> attributes_u32;
+  std::vector<VertexAttributeI32> attributes_i32;
   std::vector<VertexAttributeF32> attributes_f32;
 
   /** (Optional) IPU gp vertex (absolute) filename. */
@@ -225,7 +227,7 @@ struct TileMapEquation {
         }
       }
       // Map vertex attributes.
-      for (const auto& attr : attributes_u32) {
+      for (const auto& attr : attributes_i32) {
         graph.setInitialValue(v[attr.name], attr.value);
       }
       for (const auto& attr : attributes_f32) {
@@ -256,7 +258,7 @@ struct TileMapEquation {
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
-                                   inputs_info, outputs_info, attributes_u32,
+                                   inputs_info, outputs_info, attributes_i32,
                                    attributes_f32, gp_filename, perf_estimate)
 
 }  // namespace ipu
@@ -303,7 +305,7 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .value("In", VertexIOType::In)
       .value("Out", VertexIOType::Out)
       .value("InOut", VertexIOType::InOut);
-  makeVertexAttributeBindings<uint32_t>(m, "IpuVertexAttributeU32");
+  makeVertexAttributeBindings<int32_t>(m, "IpuVertexAttributeI32");
   makeVertexAttributeBindings<float>(m, "IpuVertexAttributeF32");
 
   pybind11::class_<ShapedArray>(m, "IpuShapedArray")
@@ -348,14 +350,14 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
                           const std::vector<TileIndexType>&,
                           const std::vector<VertexIOInfo>&,
                           const std::vector<VertexIOInfo>&,
-                          const std::vector<VertexAttributeU32>&,
+                          const std::vector<VertexAttributeI32>&,
                           const std::vector<VertexAttributeF32>&,
                           const std::string&, uint64_t>(),
            pybind11::arg("pname"), pybind11::arg("vname"),
            pybind11::arg("tiles"),
            pybind11::arg("inputs_info") = std::vector<VertexIOInfo>(),
            pybind11::arg("outputs_info") = std::vector<VertexIOInfo>(),
-           pybind11::arg("attributes_u32") = std::vector<VertexAttributeU32>(),
+           pybind11::arg("attributes_i32") = std::vector<VertexAttributeI32>(),
            pybind11::arg("attributes_f32") = std::vector<VertexAttributeF32>(),
            pybind11::arg("gp_filename") = "",
            pybind11::arg("perf_estimate") = 0)
@@ -370,7 +372,7 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("tiles", &TileMapEquation::tiles)
       .def_readwrite("inputs_info", &TileMapEquation::inputs_info)
       .def_readwrite("outputs_info", &TileMapEquation::outputs_info)
-      .def_readwrite("attributes_u32", &TileMapEquation::attributes_u32)
+      .def_readwrite("attributes_i32", &TileMapEquation::attributes_i32)
       .def_readwrite("attributes_f32", &TileMapEquation::attributes_f32)
       .def_readwrite("gp_filename", &TileMapEquation::gp_filename)
       .def_readwrite("perf_estimate", &TileMapEquation::perf_estimate);
@@ -378,6 +380,9 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
   pybind11::class_<TileMapEquationCall>(m, "TileMapEquationCall")
       .def_static("metadata", &TileMapEquationCall::metadata,
                   pybind11::arg("num_inputs"));
+
+  // IPU vertex utils.
+  makeIpuDotVertexUtilsBindings(m);
 }
 
 // cppimport configuration for compiling the pybind11 module.
@@ -387,6 +392,7 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
 cfg['extra_compile_args'] = ['-std=c++17', '-fPIC', '-O2', '-Wall']
 cfg['libraries'] = ['poplar', 'poputil', 'popops']
 cfg['include_dirs'] = []
+cfg['sources'] = ['poplin/ConvPartialsStridesPacking.cpp']
 setup_pybind11(cfg)
 %>
 */

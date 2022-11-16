@@ -77,8 +77,8 @@ def ipu_reduce_primitive_translation(
 
     # TODO: supporting partial reduce (i.e. last dimensions only).
 
-    attrs_u32, attrs_f32 = make_ipu_vertex_attributes(
-        numOutputsM1=np.prod(inaval.shape[:first_axis]), numPartials=np.prod(inaval.shape[first_axis:])
+    attrs_i32, attrs_f32 = make_ipu_vertex_attributes(
+        numOutputsM1=np.prod(inaval.shape[:first_axis]) - 1, numPartials=np.prod(inaval.shape[first_axis:])
     )
     vname = make_continuous_reduce_vertex_fullname(p, inaval.dtype, inaval.dtype, False)
     ipu_prim_info = IpuTileMapEquation(
@@ -87,7 +87,7 @@ def ipu_reduce_primitive_translation(
         tiles=tiles,
         inputs_info=[make_ipu_vertex_io_info("partials", IpuVertexIOType.In, inaval)],
         outputs_info=[make_ipu_vertex_io_info("out", IpuVertexIOType.Out, outaval)],
-        attributes_u32=attrs_u32,
+        attributes_i32=attrs_i32,
         attributes_f32=attrs_f32,
     )
     return ipu_prim_info

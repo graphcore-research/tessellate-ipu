@@ -64,7 +64,7 @@ def custom_arange_tile_translation_ipu(
         inputs_info=[make_ipu_vertex_io_info("scales", IpuVertexIOType.In, inavals[0], rank=2)],
         outputs_info=[make_ipu_vertex_io_info("out", IpuVertexIOType.Out, outaval)],
         # Additional attributes to pass to the vertex
-        attributes_u32=[],
+        attributes_i32=[],
         attributes_f32=[],
         # Optional GP filename and perf. estimate.
         gp_filename=gp_filename,

@@ -128,7 +128,7 @@ def ipu_random_uniform_translation_ipu(
     vname = make_ipu_vertex_name_templated("poprand::Uniform", dtype)
 
     outavals_dict = {"out": ipu_random_uniform_abstract_eval(size, dtype, offset, scale)}
-    attrs_u32, attrs_f32 = make_ipu_vertex_attributes(offset=offset, scale=scale)
+    attrs_i32, attrs_f32 = make_ipu_vertex_attributes(offset=offset, scale=scale)
     # Translation rule to IPU vertex.
     ipu_prim_info = IpuTileMapEquation(
         vname=vname,
@@ -136,7 +136,7 @@ def ipu_random_uniform_translation_ipu(
         tiles=tiles,
         inputs_info=[],
         outputs_info=make_ipu_vertex_outputs(outavals_dict),
-        attributes_u32=attrs_u32,
+        attributes_i32=attrs_i32,
         attributes_f32=attrs_f32,
     )
     return ipu_prim_info
@@ -180,7 +180,7 @@ def ipu_random_normal_translation_ipu(
     vname = make_ipu_vertex_name_templated("poprand::Normal", dtype)
 
     outavals_dict = {"out": ipu_random_normal_abstract_eval(size, dtype, mean, stddev)}
-    attrs_u32, attrs_f32 = make_ipu_vertex_attributes(mean=mean, stdDev=stddev)
+    attrs_i32, attrs_f32 = make_ipu_vertex_attributes(mean=mean, stdDev=stddev)
     # Translation rule to IPU vertex.
     ipu_prim_info = IpuTileMapEquation(
         vname=vname,
@@ -188,7 +188,7 @@ def ipu_random_normal_translation_ipu(
         tiles=tiles,
         inputs_info=[],
         outputs_info=make_ipu_vertex_outputs(outavals_dict),
-        attributes_u32=attrs_u32,
+        attributes_i32=attrs_i32,
         attributes_f32=attrs_f32,
     )
     return ipu_prim_info

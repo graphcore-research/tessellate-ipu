@@ -14,7 +14,7 @@ from .tile_interpreter_primitives_impl import (
     IpuTileMapEquation,
     IpuType,
     IpuVertexAttributeF32,
-    IpuVertexAttributeU32,
+    IpuVertexAttributeI32,
     IpuVertexIOInfo,
     IpuVertexIOType,
     TileMapEquationCall,
@@ -133,7 +133,7 @@ def make_ipu_vertex_name_templated(name: str, *dtypes: Any) -> str:
     return fullname
 
 
-def make_ipu_vertex_attributes(**kwargs) -> Tuple[List[IpuVertexAttributeU32], List[IpuVertexAttributeF32]]:
+def make_ipu_vertex_attributes(**kwargs) -> Tuple[List[IpuVertexAttributeI32], List[IpuVertexAttributeF32]]:
     """Make IPU vertex attributes, uint32 or floating.
 
     Args:
@@ -141,16 +141,16 @@ def make_ipu_vertex_attributes(**kwargs) -> Tuple[List[IpuVertexAttributeU32], L
     Returns:
         Int32 and floating attributes.
     """
-    attrs_u32: List[IpuVertexAttributeU32] = []
+    attrs_i32: List[IpuVertexAttributeI32] = []
     attrs_f32: List[IpuVertexAttributeF32] = []
     for k, v in kwargs.items():
         if isinstance(v, (int, np.int32, np.int64)):
-            attrs_u32.append(IpuVertexAttributeU32(k, int(v)))
+            attrs_i32.append(IpuVertexAttributeI32(k, int(v)))
         elif isinstance(v, (float, np.float32, np.float64)):
             attrs_f32.append(IpuVertexAttributeF32(k, v))
         else:
             raise TypeError(f"Unknown IPU vertex attribute type {k}: {v} with type {type(v)}.")
-    return attrs_u32, attrs_f32
+    return attrs_i32, attrs_f32
 
 
 def get_tile_map_ipu_arguments(**kwargs) -> Tuple[str, Tuple[int, ...], str]:
