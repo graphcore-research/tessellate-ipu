@@ -7,9 +7,10 @@ from jax import core
 
 from jax_ipu_research.tile import (
     IpuTileMapEquation,
-    IpuVertexIOType,
     from_numpy_dtype_to_ipu_type,
-    make_ipu_vertex_io_info,
+    make_ipu_vertex_constant_info,
+    make_ipu_vertex_in_info,
+    make_ipu_vertex_out_info,
     register_ipu_tile_primitive,
 )
 
@@ -53,6 +54,7 @@ def custom_arange_tile_translation_ipu(
     outaval = core.ShapedArray(outshape, outdtype)
     gp_filename = os.path.join(os.path.dirname(__file__), "custom_arange_vertex.cpp")
 
+    global_scale_data = np.array([7], dtype=outdtype)
     ipu_dtype = from_numpy_dtype_to_ipu_type(outdtype)
     vertex_name = f"CustomArangeVertex<{ipu_dtype.name.lower()}>"
     # Translation rule to IPU vertex
@@ -61,8 +63,11 @@ def custom_arange_tile_translation_ipu(
         pname=p.name,
         tiles=tiles,
         # IO vertex infos.
-        inputs_info=[make_ipu_vertex_io_info("scales", IpuVertexIOType.In, inavals[0], rank=2)],
-        outputs_info=[make_ipu_vertex_io_info("out", IpuVertexIOType.Out, outaval)],
+        inputs_info=[
+            make_ipu_vertex_in_info("scales", inavals[0], rank=2),
+            make_ipu_vertex_constant_info("global_scale", global_scale_data),
+        ],
+        outputs_info=[make_ipu_vertex_out_info("out", outaval)],
         # Additional attributes to pass to the vertex
         attributes_i32=[],
         attributes_f32=[],

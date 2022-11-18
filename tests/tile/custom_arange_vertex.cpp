@@ -14,12 +14,14 @@ class CustomArangeVertex : public Vertex {
  public:
   // Testing 2d tensor IO supported.
   Vector<Input<Vector<T>>, poplar::VectorLayout::ONE_PTR> scales; // (2, size)
+  // Testing constant vertex tensor.
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR>> global_scale; // (1,)
   Output<Vector<T, poplar::VectorLayout::SPAN>> out;  // (size, )
 
   bool compute() {
     const auto outsize = out.size();
     for (std::size_t idx = 0; idx < outsize; ++idx) {
-      out[idx] = T(idx) * scales[0][idx] * scales[1][idx];
+      out[idx] = T(idx) * scales[0][idx] * scales[1][idx] * global_scale[0];
     }
     return true;
   }

@@ -1,4 +1,5 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+import base64
 import os
 from copy import copy
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -11,6 +12,7 @@ from jax.interpreters.xla import ShapedArray
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
 
 from .tile_interpreter_primitives_impl import (
+    Base64Data,
     IpuTileMapEquation,
     IpuType,
     IpuVertexAttributeF32,
@@ -72,6 +74,39 @@ def make_ipu_vertex_io_info(name: str, iotype: IpuVertexIOType, aval: ShapedArra
     """
     ipu_type = from_numpy_dtype_to_ipu_type(aval.dtype)
     return IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type, rank=rank)
+
+
+def make_ipu_vertex_constant_info(name: str, data: np.ndarray, rank: int = 1) -> IpuVertexIOInfo:
+    """Make IPU vertex constant input info.
+
+    Args:
+        name: IO field name.
+        data: Numpy array with the constant data.
+        rank: Vertex IO tensor rank (1 or 2 supported).
+    Returns:
+        IPU vertex IO info.
+    """
+    data = np.asarray(data)
+    ipu_type = from_numpy_dtype_to_ipu_type(data.dtype)
+    constant_data = Base64Data(base64.b64encode(data))
+    return IpuVertexIOInfo(
+        name=name, iotype=IpuVertexIOType.In, shape=data.shape, dtype=ipu_type, rank=rank, constant_data=constant_data
+    )
+
+
+def make_ipu_vertex_in_info(name: str, aval: ShapedArray, rank: int = 1) -> IpuVertexIOInfo:
+    """Make IPU vertex IN (input) info."""
+    return make_ipu_vertex_io_info(name, IpuVertexIOType.In, aval, rank)
+
+
+def make_ipu_vertex_out_info(name: str, aval: ShapedArray, rank: int = 1) -> IpuVertexIOInfo:
+    """Make IPU vertex OUT (output) info."""
+    return make_ipu_vertex_io_info(name, IpuVertexIOType.Out, aval, rank)
+
+
+def make_ipu_vertex_inout_info(name: str, aval: ShapedArray, rank: int = 1) -> IpuVertexIOInfo:
+    """Make IPU vertex IN-OUT (input-output) info."""
+    return make_ipu_vertex_io_info(name, IpuVertexIOType.InOut, aval, rank)
 
 
 def make_ipu_vertex_inputs(

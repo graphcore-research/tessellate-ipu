@@ -5,6 +5,7 @@
 #include <pybind11/pybind11.h>
 
 #include <cstdint>
+#include <half/half.hpp>
 #include <json/json.hpp>
 #include <poplar/Tensor.hpp>
 #include <poplar/Type.hpp>
@@ -64,6 +65,85 @@ poplar::Type toPoplar(IpuType type) {
       return poplar::HALF;
     case IpuType::FLOAT:
       return poplar::FLOAT;
+  }
+  throw std::runtime_error("Unknown IPU datatype.");
+}
+
+/**
+ * @brief IPU type traits.
+ */
+template <IpuType T>
+struct IpuTypeTraits {};
+
+#define IPU_TYPE_DECLARE_TRAITS(T1, T2) \
+  template <>                           \
+  struct IpuTypeTraits<T1> {            \
+    using Type = T2;                    \
+  };
+
+IPU_TYPE_DECLARE_TRAITS(IpuType::BOOL, bool)
+IPU_TYPE_DECLARE_TRAITS(IpuType::UNSIGNED_CHAR, unsigned char)
+IPU_TYPE_DECLARE_TRAITS(IpuType::CHAR, char)
+IPU_TYPE_DECLARE_TRAITS(IpuType::UNSIGNED_SHORT, unsigned short)
+IPU_TYPE_DECLARE_TRAITS(IpuType::SHORT, short)
+IPU_TYPE_DECLARE_TRAITS(IpuType::UNSIGNED_INT, unsigned int)
+IPU_TYPE_DECLARE_TRAITS(IpuType::INT, int)
+IPU_TYPE_DECLARE_TRAITS(IpuType::UNSIGNED_LONG, unsigned long)
+IPU_TYPE_DECLARE_TRAITS(IpuType::LONG, long)
+IPU_TYPE_DECLARE_TRAITS(IpuType::HALF, half_float::half)
+IPU_TYPE_DECLARE_TRAITS(IpuType::FLOAT, float)
+
+/**
+ * @brief Make an array reference, with a given IPU type.
+ * @param raw_array Raw byte array (std::uint8_t).
+ * @tparam T IPU dtype.
+ * @return Array ref with proper C++ type.
+ */
+template <IpuType T>
+decltype(auto) makeArrayRef(poplar::ArrayRef<char> raw_array) {
+  using Type = typename IpuTypeTraits<T>::Type;
+  return poplar::ArrayRef(reinterpret_cast<const Type*>(raw_array.data()),
+                          std::size_t(raw_array.size() / sizeof(Type)));
+}
+
+/**
+ * @brief Apply/map a generic function on an array, casting to a proper dtype
+ * first.
+ *
+ * @param fn Generic functor to apply.
+ * @param raw_array Raw byte data array.
+ * @param type IPU dtype.
+ * @return Returned value of the function.
+ */
+template <typename Fn>
+decltype(auto) applyFnToArray(Fn&& fn, poplar::ArrayRef<char> raw_array,
+                              IpuType type) {
+  switch (type) {
+    case IpuType::BOOL:
+      return fn(makeArrayRef<IpuType::BOOL>(raw_array));
+    case IpuType::CHAR:
+      return fn(makeArrayRef<IpuType::CHAR>(raw_array));
+    case IpuType::UNSIGNED_CHAR:
+      return fn(makeArrayRef<IpuType::UNSIGNED_CHAR>(raw_array));
+    case IpuType::SHORT:
+      return fn(makeArrayRef<IpuType::SHORT>(raw_array));
+    case IpuType::UNSIGNED_SHORT:
+      return fn(makeArrayRef<IpuType::UNSIGNED_SHORT>(raw_array));
+    case IpuType::INT:
+      return fn(makeArrayRef<IpuType::INT>(raw_array));
+    case IpuType::UNSIGNED_INT:
+      return fn(makeArrayRef<IpuType::UNSIGNED_INT>(raw_array));
+    case IpuType::LONG:
+      return fn(makeArrayRef<IpuType::LONG>(raw_array));
+    case IpuType::UNSIGNED_LONG:
+      return fn(makeArrayRef<IpuType::UNSIGNED_LONG>(raw_array));
+    case IpuType::QUARTER:
+      // TODO?
+      throw std::runtime_error("Unsupported Quarter IPU datatype.");
+    case IpuType::HALF:
+      return fn(makeArrayRef<IpuType::HALF>(raw_array));
+    case IpuType::FLOAT:
+      return fn(makeArrayRef<IpuType::FLOAT>(raw_array));
   }
   throw std::runtime_error("Unknown IPU datatype.");
 }

@@ -2,11 +2,14 @@
 // NOTE: comment necessary for automatic JIT compilation of the module!
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #define FMT_HEADER_ONLY
+#include <fastbase64/fastavxbase64.h>
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <half/half.hpp>
 #include <ipu_custom_primitive.hpp>
 #include <json/json.hpp>
+#include <optional>
 
 #include "tile_array_utils.hpp"
 #include "tile_dot_vertex_utils.hpp"
@@ -35,6 +38,40 @@ struct ShapedArray {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ShapedArray, shape, dtype)
 
 /**
+ * @brief Data encoded in base64.
+ */
+struct Base64Data {
+  using byte = std::uint8_t;
+  /** Raw data as base64 encoded. */
+  std::string encoded_data;
+
+  /** Is the data empty? */
+  bool empty() const noexcept { return encoded_data.empty(); }
+  /**
+   * @brief Create base64 encoded data from raw data.
+   */
+  static Base64Data fromDecodedData(const std::string& data) {
+    return Base64Data{chromium_base64_encode(data)};
+  }
+  /**
+   * @brief Decode the data.
+   */
+  std::string decode() const { return chromium_base64_decode(encoded_data); }
+};
+// JSON encoding/decoding, supporting empty fields.
+void to_json(json& j, const Base64Data& v) {
+  if (!v.empty()) {
+    j = json{{"encoded_data", v.encoded_data}};
+  }
+}
+void from_json(const json& j, Base64Data& v) {
+  const auto it = j.find("encoded_data");
+  if (it != j.end()) {
+    it->get_to(v.encoded_data);
+  }
+}
+
+/**
  * @brief Vertex IO tensor info.
  */
 struct VertexIOInfo {
@@ -46,6 +83,17 @@ struct VertexIOInfo {
   ShapedArray aval;
   /** IO tensor rank. 1 (by default) or 2 supported. */
   uint8_t rank = 1;
+  /** Optional data for constant tensors. */
+  Base64Data constant_data = Base64Data();
+
+  /**
+   * @brief Is it a constant vertex IO input?
+   */
+  bool isConstantInput() const noexcept {
+    FMT_ASSERT(constant_data.empty() || iotype == VertexIOType::In,
+               "Constant IO tensor can only be input.");
+    return !constant_data.empty() && iotype == VertexIOType::In;
+  }
 
   /**
    * @brief Reshape a tensor to the proper rank for vertex connection.
@@ -61,7 +109,8 @@ struct VertexIOInfo {
     throw poputil::poplibs_error("IPU IO vertex tensor must of rank 1 or 2.");
   }
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VertexIOInfo, name, iotype, aval, rank)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VertexIOInfo, name, iotype, aval, rank,
+                                   constant_data)
 
 bool operator==(const VertexIOInfo& lhs, const VertexIOInfo& rhs) {
   return lhs.name == rhs.name && lhs.iotype == rhs.iotype &&
@@ -152,6 +201,40 @@ struct TileMapEquation {
   /** Vertex performance estimate (optional). */
   uint64_t perf_estimate = 0;
 
+
+  /**
+   * @brief Allocate all input tensors (including missing constant).
+   * @param graph Poplar graph.
+   * @param inputs Pre-existing input tensors.
+   * @return Collection of input tensors.
+   */
+  std::vector<poplar::Tensor> allocateInputTensors(
+      poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs) const {
+    FMT_ASSERT(inputs.size() <= inputs_info.size(),
+               "Inconsistent input vector size.");
+
+    std::vector<poplar::Tensor> inputs_all;
+    int input_idx = 0;
+    for (const auto& input_info : inputs_info) {
+      if (input_info.isConstantInput()) {
+        // Create a replicated constant tensor.
+        // TODO: support sharded constant as well.
+        const std::string raw_values = input_info.constant_data.decode();
+        const auto raw_values_ref =
+            poplar::ArrayRef<char>(raw_values.data(), raw_values.size());
+        auto t = createReplicatedConstantTensor(graph, input_info.aval.dtype,
+                                                input_info.aval.shape,
+                                                raw_values_ref, this->tiles);
+        inputs_all.push_back(t);
+      } else {
+        // Keep existing input tensor.
+        inputs_all.push_back(inputs[input_idx]);
+        input_idx++;
+      }
+    }
+    return inputs_all;
+  }
+
   /**
    * @brief Allocate output (or use existing input) tensors.
    * @param graph Poplar graph.
@@ -190,7 +273,8 @@ struct TileMapEquation {
    *
    * @param graph Poplar graph.
    * @param prog Poplar sequence program.
-   * @param inputs Vector of (sharded) input tensors.
+   * @param inputs Vector of (sharded) input tensors (including constant
+   * tensors).
    * @param outputs Vector of (sharded) output tensors (already allocated).
    * @param debug_prefix Debug context prefix.
    */
@@ -251,8 +335,9 @@ struct TileMapEquation {
       poplar::Graph& graph, poplar::program::Sequence& prog,
       const std::vector<poplar::Tensor>& inputs,
       const poplar::DebugContext& debug_prefix) const {
-    auto outputs = this->allocateOutputTensors(graph, inputs);
-    this->add(graph, prog, inputs, outputs, debug_prefix);
+    const auto inputs_all = this->allocateInputTensors(graph, inputs);
+    const auto outputs = this->allocateOutputTensors(graph, inputs);
+    this->add(graph, prog, inputs_all, outputs, debug_prefix);
     return outputs;
   }
 };
@@ -319,17 +404,31 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("shape", &ShapedArray::shape)
       .def_readwrite("dtype", &ShapedArray::dtype);
 
+  pybind11::class_<Base64Data>(m, "Base64Data")
+      .def(pybind11::init<>())
+      .def(pybind11::init<const std::string&>(), pybind11::arg("encoded_data"))
+      .def_readwrite("encoded_data", &Base64Data::encoded_data)
+      .def_static("from_decoded_data", &Base64Data::fromDecodedData)
+      .def_property_readonly("decoded_data", &Base64Data::decode)
+      .def_property_readonly("is_empty", &Base64Data::empty)
+      .def("to_json_str", [](const Base64Data& v) { return to_json_str(v); })
+      .def_static("from_json_str", [](const std::string& j) {
+        return from_json_str<Base64Data>(j);
+      });
+
   pybind11::class_<VertexIOInfo>(m, "IpuVertexIOInfo")
       .def(pybind11::init<>())
       .def(pybind11::init<const std::string&, VertexIOType, const ShapedArray&,
-                          uint8_t>(),
+                          uint8_t, const Base64Data&>(),
            pybind11::arg("name"), pybind11::arg("iotype"),
-           pybind11::arg("aval"), pybind11::arg("rank") = 1)
+           pybind11::arg("aval"), pybind11::arg("rank") = 1,
+           pybind11::arg("constant_data") = Base64Data())
       .def(pybind11::init<const std::string&, VertexIOType, const ShapeType&,
-                          IpuType, uint8_t>(),
+                          IpuType, uint8_t, const Base64Data&>(),
            pybind11::arg("name"), pybind11::arg("iotype"),
            pybind11::arg("shape"), pybind11::arg("dtype"),
-           pybind11::arg("rank") = 1)
+           pybind11::arg("rank") = 1,
+           pybind11::arg("constant_data") = Base64Data())
       .def(pybind11::self == pybind11::self)
       .def("to_json_str", [](const VertexIOInfo& v) { return to_json_str(v); })
       .def_static(
@@ -339,10 +438,13 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("iotype", &VertexIOInfo::iotype)
       .def_readwrite("aval", &VertexIOInfo::aval)
       .def_readwrite("rank", &VertexIOInfo::rank)
+      .def_readwrite("constant_data", &VertexIOInfo::constant_data)
       .def_property_readonly("shape",
                              [](const VertexIOInfo& v) { return v.aval.shape; })
-      .def_property_readonly(
-          "dtype", [](const VertexIOInfo& v) { return v.aval.dtype; });
+      .def_property_readonly("dtype",
+                             [](const VertexIOInfo& v) { return v.aval.dtype; })
+      .def_property_readonly("is_constant_input",
+                             &VertexIOInfo::isConstantInput);
 
   pybind11::class_<TileMapEquation>(m, "IpuTileMapEquation")
       .def(pybind11::init<>())
@@ -389,10 +491,14 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
 // clang-format off
 /*
 <%
-cfg['extra_compile_args'] = ['-std=c++17', '-fPIC', '-O2', '-Wall']
+cfg['extra_compile_args'] = ['-std=c++17', '-fPIC', '-O2', '-Wall', '-mavx2']
 cfg['libraries'] = ['poplar', 'poputil', 'popops']
 cfg['include_dirs'] = []
-cfg['sources'] = ['poplin/ConvPartialsStridesPacking.cpp']
+cfg['sources'] = [
+  'poplin/ConvPartialsStridesPacking.cpp',
+  '../external/fastbase64/chromiumbase64.c',
+  '../external/fastbase64/fastavxbase64.c',
+]
 setup_pybind11(cfg)
 %>
 */

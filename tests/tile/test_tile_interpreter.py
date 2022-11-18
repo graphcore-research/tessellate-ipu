@@ -84,12 +84,13 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
     #     assert output.tiles == tiles
     #     assert output.dtype == dtype
 
-    @parameterized.parameters([np.float32, np.float16, np.int32])
+    @parameterized.parameters([np.float32, np.int32])
     def test__tile_map_primitive__custom_vertex__ipu_jitting(self, dtype):
         size = 128
         tiles = (3, 4, 5)
         # 2d scaling tensor, per tile.
         scales = np.random.rand(len(tiles), 2, size).astype(dtype) + 1
+        global_scale = 7
 
         @partial(jax.jit, backend="ipu")
         def compute_fn(scales):
@@ -104,5 +105,7 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
         for idx in range(len(tiles)):
             # Proper scaled arange on every tile.
             npt.assert_array_almost_equal(
-                output.array[idx], np.arange(size).astype(dtype) * scales[idx, 0] * scales[idx, 1], decimal=0
+                output.array[idx],
+                np.arange(size).astype(dtype) * scales[idx, 0] * scales[idx, 1] * global_scale,
+                decimal=0,
             )
