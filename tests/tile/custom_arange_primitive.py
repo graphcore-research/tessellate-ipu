@@ -64,7 +64,7 @@ def custom_arange_tile_translation_ipu(
         tiles=tiles,
         # IO vertex infos.
         inputs_info=[
-            make_ipu_vertex_in_info("scales", inavals[0], rank=2),
+            make_ipu_vertex_in_info("scales", inavals[0], vertex_dim2=inavals[0].shape[1]),
             make_ipu_vertex_constant_info("global_scale", global_scale_data),
         ],
         outputs_info=[make_ipu_vertex_out_info("out", outaval)],

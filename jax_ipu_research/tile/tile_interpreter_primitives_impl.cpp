@@ -81,8 +81,9 @@ struct VertexIOInfo {
   VertexIOType iotype;
   /** IO tensor aval. */
   ShapedArray aval;
-  /** IO tensor rank. 1 (by default) or 2 supported. */
-  uint8_t rank = 1;
+  /** IO tensor second dimension (for rank 2 IO tensor). 0 (by default) for
+   * rank 1. */
+  uint32_t vertex_dim2 = 0;
   /** Optional data for constant tensors. */
   Base64Data constant_data = Base64Data();
 
@@ -99,23 +100,23 @@ struct VertexIOInfo {
    * @brief Reshape a tensor to the proper rank for vertex connection.
    */
   poplar::Tensor connectReshape(const poplar::Tensor& t) const {
-    if (rank == 1) {
+    if (vertex_dim2 == 0) {
       // Rank 1: flatten the IO tensor.
       return t.flatten();
-    } else if (rank == 2) {
-      // Assume already of rank 2. Poplar will check.
-      return t;
+    } else {
+      // Rank 2: reshape with proper 2nd dimension.
+      const std::size_t vertex_dim1 = t.numElements() / vertex_dim2;
+      return t.reshape({vertex_dim1, vertex_dim2});
     }
-    throw poputil::poplibs_error("IPU IO vertex tensor must of rank 1 or 2.");
   }
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VertexIOInfo, name, iotype, aval, rank,
-                                   constant_data)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VertexIOInfo, name, iotype, aval,
+                                   vertex_dim2, constant_data)
 
 bool operator==(const VertexIOInfo& lhs, const VertexIOInfo& rhs) {
   return lhs.name == rhs.name && lhs.iotype == rhs.iotype &&
          lhs.aval.shape == rhs.aval.shape && lhs.aval.dtype == rhs.aval.dtype &&
-         lhs.rank == rhs.rank;
+         lhs.vertex_dim2 == rhs.vertex_dim2;
 }
 
 /**
@@ -200,7 +201,6 @@ struct TileMapEquation {
   std::string gp_filename;
   /** Vertex performance estimate (optional). */
   uint64_t perf_estimate = 0;
-
 
   /**
    * @brief Allocate all input tensors (including missing constant).
@@ -419,15 +419,15 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
   pybind11::class_<VertexIOInfo>(m, "IpuVertexIOInfo")
       .def(pybind11::init<>())
       .def(pybind11::init<const std::string&, VertexIOType, const ShapedArray&,
-                          uint8_t, const Base64Data&>(),
+                          uint32_t, const Base64Data&>(),
            pybind11::arg("name"), pybind11::arg("iotype"),
-           pybind11::arg("aval"), pybind11::arg("rank") = 1,
+           pybind11::arg("aval"), pybind11::arg("vertex_dim2") = 0,
            pybind11::arg("constant_data") = Base64Data())
       .def(pybind11::init<const std::string&, VertexIOType, const ShapeType&,
-                          IpuType, uint8_t, const Base64Data&>(),
+                          IpuType, uint32_t, const Base64Data&>(),
            pybind11::arg("name"), pybind11::arg("iotype"),
            pybind11::arg("shape"), pybind11::arg("dtype"),
-           pybind11::arg("rank") = 1,
+           pybind11::arg("vertex_dim2") = 0,
            pybind11::arg("constant_data") = Base64Data())
       .def(pybind11::self == pybind11::self)
       .def("to_json_str", [](const VertexIOInfo& v) { return to_json_str(v); })
@@ -437,7 +437,7 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("name", &VertexIOInfo::name)
       .def_readwrite("iotype", &VertexIOInfo::iotype)
       .def_readwrite("aval", &VertexIOInfo::aval)
-      .def_readwrite("rank", &VertexIOInfo::rank)
+      .def_readwrite("vertex_dim2", &VertexIOInfo::vertex_dim2)
       .def_readwrite("constant_data", &VertexIOInfo::constant_data)
       .def_property_readonly("shape",
                              [](const VertexIOInfo& v) { return v.aval.shape; })
@@ -497,7 +497,7 @@ cfg['include_dirs'] = []
 cfg['sources'] = [
   'poplin/ConvPartialsStridesPacking.cpp',
   '../external/fastbase64/chromiumbase64.c',
-  '../external/fastbase64/fastavxbase64.c',
+  '../external/fastbase64/fastavxbase64.c'
 ]
 setup_pybind11(cfg)
 %>

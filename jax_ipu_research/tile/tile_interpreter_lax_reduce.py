@@ -51,7 +51,7 @@ def ipu_reduce_primitive_translation(
     inavals: List[ShapedArray],
     attributes: Dict[str, Any] = None,
 ) -> IpuTileMapEquation:
-    """IPU unary primitive translation rule to IPU vertex.
+    """IPU `reduce` primitive translation rule to IPU vertex.
 
     Args:
         p: JAX primitive.

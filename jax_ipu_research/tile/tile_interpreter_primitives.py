@@ -61,28 +61,30 @@ def from_ipu_type_to_numpy_dtype(v: IpuType) -> Any:
     return _ipu_type_to_numpy_dtype[v]
 
 
-def make_ipu_vertex_io_info(name: str, iotype: IpuVertexIOType, aval: ShapedArray, rank: int = 1) -> IpuVertexIOInfo:
+def make_ipu_vertex_io_info(
+    name: str, iotype: IpuVertexIOType, aval: ShapedArray, vertex_dim2: int = 0
+) -> IpuVertexIOInfo:
     """Make IPU vertex IO info.
 
     Args:
         name: IO field name.
         iotype: IO type.
         aval: Shaped array.
-        rank: Vertex IO tensor rank (1 or 2 supported).
+        vertex_dim2: Vertex IO tensor 2nd dimension.
     Returns:
         IPU vertex IO info.
     """
     ipu_type = from_numpy_dtype_to_ipu_type(aval.dtype)
-    return IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type, rank=rank)
+    return IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type, vertex_dim2=int(vertex_dim2))
 
 
-def make_ipu_vertex_constant_info(name: str, data: np.ndarray, rank: int = 1) -> IpuVertexIOInfo:
+def make_ipu_vertex_constant_info(name: str, data: np.ndarray, vertex_dim2: int = 0) -> IpuVertexIOInfo:
     """Make IPU vertex constant input info.
 
     Args:
         name: IO field name.
         data: Numpy array with the constant data.
-        rank: Vertex IO tensor rank (1 or 2 supported).
+        vertex_dim2: Vertex IO tensor 2nd dimension.
     Returns:
         IPU vertex IO info.
     """
@@ -90,34 +92,39 @@ def make_ipu_vertex_constant_info(name: str, data: np.ndarray, rank: int = 1) ->
     ipu_type = from_numpy_dtype_to_ipu_type(data.dtype)
     constant_data = Base64Data(base64.b64encode(data))
     return IpuVertexIOInfo(
-        name=name, iotype=IpuVertexIOType.In, shape=data.shape, dtype=ipu_type, rank=rank, constant_data=constant_data
+        name=name,
+        iotype=IpuVertexIOType.In,
+        shape=data.shape,
+        dtype=ipu_type,
+        vertex_dim2=vertex_dim2,
+        constant_data=constant_data,
     )
 
 
-def make_ipu_vertex_in_info(name: str, aval: ShapedArray, rank: int = 1) -> IpuVertexIOInfo:
+def make_ipu_vertex_in_info(name: str, aval: ShapedArray, vertex_dim2: int = 0) -> IpuVertexIOInfo:
     """Make IPU vertex IN (input) info."""
-    return make_ipu_vertex_io_info(name, IpuVertexIOType.In, aval, rank)
+    return make_ipu_vertex_io_info(name, IpuVertexIOType.In, aval, vertex_dim2)
 
 
-def make_ipu_vertex_out_info(name: str, aval: ShapedArray, rank: int = 1) -> IpuVertexIOInfo:
+def make_ipu_vertex_out_info(name: str, aval: ShapedArray, vertex_dim2: int = 0) -> IpuVertexIOInfo:
     """Make IPU vertex OUT (output) info."""
-    return make_ipu_vertex_io_info(name, IpuVertexIOType.Out, aval, rank)
+    return make_ipu_vertex_io_info(name, IpuVertexIOType.Out, aval, vertex_dim2)
 
 
-def make_ipu_vertex_inout_info(name: str, aval: ShapedArray, rank: int = 1) -> IpuVertexIOInfo:
+def make_ipu_vertex_inout_info(name: str, aval: ShapedArray, vertex_dim2: int = 0) -> IpuVertexIOInfo:
     """Make IPU vertex IN-OUT (input-output) info."""
-    return make_ipu_vertex_io_info(name, IpuVertexIOType.InOut, aval, rank)
+    return make_ipu_vertex_io_info(name, IpuVertexIOType.InOut, aval, vertex_dim2)
 
 
 def make_ipu_vertex_inputs(
-    inavals: Dict[str, ShapedArray], inout_names: Set[str] = set(), rank2_names: Set[str] = set()
+    inavals: Dict[str, ShapedArray], inout_names: Set[str] = set(), vertex_dims2: Dict[str, int] = dict()
 ) -> List[IpuVertexIOInfo]:
     """Build a collection of IPU vertex input infos.
 
     Args:
         inavals: Named collection of input avals.
         inout_names: Name of tensors with InOut status.
-        rank2_names: Name of tensors of rank 2.
+        vertex_dims2: Name of tensors with second vertex dim.
     Returns:
         List of IPU vertex IO info.
     """
@@ -125,21 +132,24 @@ def make_ipu_vertex_inputs(
     def _get_iotype(name: str):
         return IpuVertexIOType.InOut if name in inout_names else IpuVertexIOType.In
 
-    def _get_rank(name: str):
-        return 2 if name in rank2_names else 1
+    def _get_vertex_dim2(name: str):
+        return vertex_dims2.get(name, 0)
 
-    return [make_ipu_vertex_io_info(name, _get_iotype(name), aval, _get_rank(name)) for name, aval in inavals.items()]
+    return [
+        make_ipu_vertex_io_info(name, _get_iotype(name), aval=aval, vertex_dim2=_get_vertex_dim2(name))
+        for name, aval in inavals.items()
+    ]
 
 
 def make_ipu_vertex_outputs(
-    outavals: Dict[str, ShapedArray], inout_names: Set[str] = set(), rank2_names: Set[str] = set()
+    outavals: Dict[str, ShapedArray], inout_names: Set[str] = set(), vertex_dims2: Dict[str, int] = dict()
 ) -> List[IpuVertexIOInfo]:
     """Build a collection of IPU vertex output infos.
 
     Args:
         inavals: Named collection of output avals.
         inout_names: Name of tensors with InOut status.
-        rank2_names: Name of tensors of rank 2.
+        vertex_dims2: Name of tensors with second vertex dim.
     Returns:
         List of IPU vertex IO info.
     """
@@ -147,10 +157,13 @@ def make_ipu_vertex_outputs(
     def _get_iotype(name: str):
         return IpuVertexIOType.InOut if name in inout_names else IpuVertexIOType.Out
 
-    def _get_rank(name: str):
-        return 2 if name in rank2_names else 1
+    def _get_vertex_dim2(name: str):
+        return vertex_dims2.get(name, 0)
 
-    return [make_ipu_vertex_io_info(name, _get_iotype(name), aval, _get_rank(name)) for name, aval in outavals.items()]
+    return [
+        make_ipu_vertex_io_info(name, _get_iotype(name), aval=aval, vertex_dim2=_get_vertex_dim2(name))
+        for name, aval in outavals.items()
+    ]
 
 
 def make_ipu_vertex_name_templated(name: str, *dtypes: Any) -> str:
