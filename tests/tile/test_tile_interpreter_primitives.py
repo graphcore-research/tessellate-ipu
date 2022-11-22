@@ -19,6 +19,7 @@ from jax_ipu_research.tile.tile_interpreter_primitives import (
 )
 from jax_ipu_research.tile.tile_interpreter_primitives_impl import (
     Base64Data,
+    IpuTensorSlice,
     IpuTileMapEquation,
     IpuType,
     IpuVertexAttributeF32,
@@ -64,6 +65,22 @@ class Base64DataTests(chex.TestCase, parameterized.TestCase):
         assert data.to_json_str() == '{"encoded_data":"12345"}'
 
 
+class IpuTensorSliceTests(chex.TestCase, parameterized.TestCase):
+    def test__tensor_slice__init__proper_data(self):
+        slice = IpuTensorSlice(begin=10, end=15)
+        assert slice.begin == 10
+        assert slice.end == 15
+
+    def test__tensor_slice__to_json_str(self):
+        slice = IpuTensorSlice(begin=10, end=15)
+        assert slice.to_json_str() == '{"begin":10,"end":15}'
+
+    def test__tensor_slice__from_json_str(self):
+        slice = IpuTensorSlice.from_json_str('{"begin":10,"end":15}')
+        assert slice.begin == 10
+        assert slice.end == 15
+
+
 class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
     def test__ipu_vertex_io_info__init__proper_fields(self):
         ioinfo = IpuVertexIOInfo(name="in0", iotype=IpuVertexIOType.In, shape=[1, 2, 3], dtype=IpuType.FLOAT)
@@ -102,18 +119,18 @@ class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
         ioinfo = IpuVertexIOInfo(name="in0", iotype=IpuVertexIOType.InOut, shape=[1, 2, 3], dtype=IpuType.FLOAT)
         assert (
             ioinfo.to_json_str()
-            == '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"name":"in0","vertex_dim2":0}'
+            == '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"name":"in0","slices2d":[]}'
         )
 
     def test__ipu_vertex_io_info__from_json_str__proper_representation(self):
         ioinfo = IpuVertexIOInfo.from_json_str(
-            '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"name":"in0","vertex_dim2":3}'
+            '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"name":"in0","slices2d":[{"begin":10,"end":15}]}'
         )
         assert ioinfo.name == "in0"
         assert ioinfo.iotype == IpuVertexIOType.InOut
         assert ioinfo.shape == [1, 2, 3]
         assert ioinfo.dtype == IpuType.FLOAT
-        assert ioinfo.vertex_dim2 == 3
+        assert len(ioinfo.slices2d) == 1
 
     def test__ipu_tile_map_equation__init__proper_fields(self):
         eqn = IpuTileMapEquation(
@@ -136,33 +153,33 @@ class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
 
     def test__make_ipu_vertex_constant_info__proper_result(self):
         datain = np.array([1, 2, 3, 4], dtype=np.float32)
-        info = make_ipu_vertex_constant_info("constant", datain, vertex_dim2=5)
+        info = make_ipu_vertex_constant_info("constant", datain, vertex_dim2=2)
         assert isinstance(info, IpuVertexIOInfo)
         assert info.name == "constant"
         assert info.iotype == IpuVertexIOType.In
         assert tuple(info.shape) == datain.shape
         assert info.dtype == IpuType.FLOAT
         assert info.is_constant_input
-        assert info.vertex_dim2 == 5
+        assert len(info.slices2d) == 2
 
         dataout = np.frombuffer(base64.decodebytes(str.encode(info.constant_data.encoded_data)), dtype=datain.dtype)
         npt.assert_array_equal(dataout, datain)
 
     def test__make_ipu_vertex_inputs__proper_results(self):
-        inavals = {"in0": ShapedArray((3, 2), np.float16), "in1": ShapedArray((5,), np.uint8)}
+        inavals = {"in0": ShapedArray((3, 2), np.float16), "in1": ShapedArray((6,), np.uint8)}
         infos = make_ipu_vertex_inputs(inavals, {"in0"}, {"in1": 3})
         assert len(infos) == 2
         assert [v.dtype for v in infos] == [IpuType.HALF, IpuType.UNSIGNED_CHAR]
         assert [v.iotype for v in infos] == [IpuVertexIOType.InOut, IpuVertexIOType.In]
-        assert [v.vertex_dim2 for v in infos] == [0, 3]
+        assert [len(v.slices2d) for v in infos] == [0, 2]
 
     def test__make_ipu_vertex_ouputs__proper_results(self):
-        inavals = {"in0": ShapedArray((3, 2), np.float16), "in1": ShapedArray((5,), np.uint8)}
+        inavals = {"in0": ShapedArray((3, 2), np.float16), "in1": ShapedArray((10,), np.uint8)}
         infos = make_ipu_vertex_outputs(inavals, {"in0"}, {"in1": 5})
         assert len(infos) == 2
         assert [v.dtype for v in infos] == [IpuType.HALF, IpuType.UNSIGNED_CHAR]
         assert [v.iotype for v in infos] == [IpuVertexIOType.InOut, IpuVertexIOType.Out]
-        assert [v.vertex_dim2 for v in infos] == [0, 5]
+        assert [len(v.slices2d) for v in infos] == [0, 2]
 
     @parameterized.parameters([np.float32, np.float16, np.int8, np.int16, np.int32, np.uint8, np.uint16, np.uint32])
     def test__from_numpy_dtype_to_ipu_type__proper_round_trip(self, in_dtype):

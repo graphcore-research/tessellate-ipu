@@ -34,6 +34,12 @@ struct ShapedArray {
   ShapeType shape;
   /** Dtype of the array. */
   IpuType dtype;
+
+  /** @brief Size of the array (i.e. num elements). */
+  std::size_t size() const noexcept {
+    return std::accumulate(shape.begin(), shape.end(), 1,
+                           std::multiplies<std::size_t>());
+  }
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ShapedArray, shape, dtype)
 
@@ -72,6 +78,30 @@ void from_json(const json& j, Base64Data& v) {
 }
 
 /**
+ * @brief 1d tensor slice.
+ */
+struct TensorSlice {
+  /** 1d begin index. */
+  std::size_t begin;
+  /** 1d end index. */
+  std::size_t end;
+
+  /**
+   * @brief Make a collection of slices corresponding to a 2D tensor of shape
+   * (d0, d1).
+   */
+  static std::vector<TensorSlice> makeTensor2dSlices(size_t dim0, size_t dim1) {
+    std::vector<TensorSlice> slices;
+    slices.reserve(dim0);
+    for (std::size_t idx = 0; idx < dim0; ++idx) {
+      slices.push_back(TensorSlice{idx * dim1, (idx + 1) * dim1});
+    }
+    return slices;
+  }
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TensorSlice, begin, end)
+
+/**
  * @brief Vertex IO tensor info.
  */
 struct VertexIOInfo {
@@ -81,11 +111,28 @@ struct VertexIOInfo {
   VertexIOType iotype;
   /** IO tensor aval. */
   ShapedArray aval;
-  /** IO tensor second dimension (for rank 2 IO tensor). 0 (by default) for
-   * rank 1. */
-  uint32_t vertex_dim2 = 0;
   /** Optional data for constant tensors. */
   Base64Data constant_data = Base64Data();
+  /** Slices, in the case of 2d tensor input. */
+  std::vector<TensorSlice> slices2d;
+
+  /**
+   * @brief Build a vertex IO info (with vertex second dim info).
+   */
+  static VertexIOInfo makeVertexIOInfo(const std::string& name,
+                                         VertexIOType iotype,
+                                         const ShapeType& shape, IpuType dtype,
+                                         std::size_t vertex_dim2,
+                                         const Base64Data& constant_data) {
+    auto ioinfo = VertexIOInfo{
+        name, iotype, ShapedArray{shape, dtype}, constant_data, {}};
+    // Generate 2d slices when required.
+    if (vertex_dim2 > 0) {
+      ioinfo.slices2d = TensorSlice::makeTensor2dSlices(
+          ioinfo.aval.size() / vertex_dim2, vertex_dim2);
+    }
+    return ioinfo;
+  }
 
   /**
    * @brief Is it a constant vertex IO input?
@@ -97,26 +144,40 @@ struct VertexIOInfo {
   }
 
   /**
+   * @brief Is it a 2d IO tensor, i.e. vertext `vector<IO<vector...>>`.
+   */
+  bool isTensor2d() const noexcept { return !slices2d.empty(); }
+
+  /**
    * @brief Reshape a tensor to the proper rank for vertex connection.
    */
   poplar::Tensor connectReshape(const poplar::Tensor& t) const {
-    if (vertex_dim2 == 0) {
-      // Rank 1: flatten the IO tensor.
+    if (slices2d.empty()) {
+      // Rank 1 (no 2d slices): flatten the IO tensor.
       return t.flatten();
     } else {
-      // Rank 2: reshape with proper 2nd dimension.
-      const std::size_t vertex_dim1 = t.numElements() / vertex_dim2;
+      // 2d slices: extract the sub-tensors, and re-concat.
+      auto flat_tensor =  t.flatten();
+      std::vector<poplar::Tensor> tensors;
+      for (const auto& slice: slices2d)
+      {
+        tensors.push_back(flat_tensor.slice(slice.begin, slice.end));
+      }
+      // Concat and reshape to 2d vertex IO tensor.
+      auto t = poplar::concat(tensors);
+      const std::size_t vertex_dim1 = slices2d.size();
+      const std::size_t vertex_dim2 = t.numElements() / vertex_dim1;
       return t.reshape({vertex_dim1, vertex_dim2});
     }
   }
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VertexIOInfo, name, iotype, aval,
-                                   vertex_dim2, constant_data)
+                                   constant_data, slices2d)
 
 bool operator==(const VertexIOInfo& lhs, const VertexIOInfo& rhs) {
   return lhs.name == rhs.name && lhs.iotype == rhs.iotype &&
-         lhs.aval.shape == rhs.aval.shape && lhs.aval.dtype == rhs.aval.dtype &&
-         lhs.vertex_dim2 == rhs.vertex_dim2;
+         lhs.aval.shape == rhs.aval.shape && lhs.aval.dtype == rhs.aval.dtype;
+         // TODO: compare 2d slices.
 }
 
 /**
@@ -170,7 +231,7 @@ using VertexAttributeI32 = VertexAttribute<int32_t>;
 using VertexAttributeF32 = VertexAttribute<float>;
 
 /**
- * @brief IPU tile map(ped) equation (on the model of JAX equation).
+ * @brief IPU tile map(ped) equation (on the model of JAX equation `JaxprEqn`).
  *
  * This class represent a tile equation mapped on multiple tiles (which the same
  * input/output shapes, and constant attributes).
@@ -416,15 +477,32 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
         return from_json_str<Base64Data>(j);
       });
 
+  pybind11::class_<TensorSlice>(m, "IpuTensorSlice")
+      .def(pybind11::init<std::size_t, std::size_t>(), pybind11::arg("begin"),
+           pybind11::arg("end"))
+      .def_readwrite("begin", &TensorSlice::begin)
+      .def_readwrite("end", &TensorSlice::end)
+      .def_static("make_tensor2d_slices", &TensorSlice::makeTensor2dSlices)
+      .def("to_json_str", [](const TensorSlice& v) { return to_json_str(v); })
+      .def_static("from_json_str", [](const std::string& j) {
+        return from_json_str<TensorSlice>(j);
+      });
+
   pybind11::class_<VertexIOInfo>(m, "IpuVertexIOInfo")
       .def(pybind11::init<>())
       .def(pybind11::init<const std::string&, VertexIOType, const ShapedArray&,
-                          uint32_t, const Base64Data&>(),
+                          const Base64Data&, const std::vector<TensorSlice>&>(),
            pybind11::arg("name"), pybind11::arg("iotype"),
-           pybind11::arg("aval"), pybind11::arg("vertex_dim2") = 0,
-           pybind11::arg("constant_data") = Base64Data())
+           pybind11::arg("aval"), pybind11::arg("constant_data") = Base64Data(),
+           pybind11::arg("slices2d") = {})
       .def(pybind11::init<const std::string&, VertexIOType, const ShapeType&,
-                          IpuType, uint32_t, const Base64Data&>(),
+                          IpuType, const Base64Data&,
+                          const std::vector<TensorSlice>&>(),
+           pybind11::arg("name"), pybind11::arg("iotype"),
+           pybind11::arg("shape"), pybind11::arg("dtype"),
+           pybind11::arg("constant_data") = Base64Data(),
+           pybind11::arg("slices2d") = {})
+      .def(pybind11::init(&VertexIOInfo::makeVertexIOInfo),
            pybind11::arg("name"), pybind11::arg("iotype"),
            pybind11::arg("shape"), pybind11::arg("dtype"),
            pybind11::arg("vertex_dim2") = 0,
@@ -437,8 +515,8 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("name", &VertexIOInfo::name)
       .def_readwrite("iotype", &VertexIOInfo::iotype)
       .def_readwrite("aval", &VertexIOInfo::aval)
-      .def_readwrite("vertex_dim2", &VertexIOInfo::vertex_dim2)
       .def_readwrite("constant_data", &VertexIOInfo::constant_data)
+      .def_readwrite("slices2d", &VertexIOInfo::slices2d)
       .def_property_readonly("shape",
                              [](const VertexIOInfo& v) { return v.aval.shape; })
       .def_property_readonly("dtype",

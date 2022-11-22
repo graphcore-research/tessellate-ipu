@@ -25,8 +25,20 @@ tiles = (3, 4, 5)
 
 @partial(jax.jit, backend="ipu")
 def compute_fn(in0, in1):
+    assert in0.shape == (len(tiles), ...)
+    assert in1.shape == (len(tiles), ...)
+
+    # Sharding along the first axis.
     input0 = tile_put_sharded(in0, tiles)
     input1 = tile_put_sharded(in1, tiles)
+
+    # Also existing: replicating along the first axis.
+    # semantics: tile_put_replicated(x, tiles) = tile_put_sharded(repeat(X, len(tiles)), tiles)
+    input2 = tile_put_replicated(in2, tiles)
+
+    # TODO: combination of tile_put_replicated and tile_put_sharded
+    # input2 = tile_put_partial_sharding(in2, tiles, axis=(...))
+
     output = tile_map_primitive(lax.add_p, [input0, input1])
     return output
 ```
