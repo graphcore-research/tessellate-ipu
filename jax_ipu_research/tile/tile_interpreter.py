@@ -35,15 +35,21 @@ def tile_map_primitive(
         *args: List of input (tile) sharded arrays.
         **kwargs: Attributes to pass to the JAX primitive (and translation rule).
             tiles: Optional tile mapping, provided when there is no input.
+            sync: Synchronize tiles before the Poplar compute set.
     Returns:
         List of output sharded arrays.
     """
     # Unpack arguments...
     inputs = list(args)
     assert all([isinstance(v, TileShardedArray) for v in args])
+
+    # Tiles & sync arguments.
     tiles: Optional[Tuple[int, ...]] = kwargs.get("tiles", None)
+    sync: bool = kwargs.get("sync", False)
+    # Remove IPU arguments.
     attributes = dict(kwargs)
     attributes.pop("tiles", None)
+    attributes.pop("sync", None)
 
     if primitive is None:
         # No primitive: by default a no-op.
@@ -56,11 +62,12 @@ def tile_map_primitive(
     # TODO: check tile mapping consistency.
     tiles = tiles or inputs[0].tiles
     attributes = attributes or {}
-
     # Get the IPU tile map equation corresponding.
     _, ipu_prim_translation = _ipu_tile_primitive_registry[primitive.name]
     tile_map_eqn: IpuTileMapEquation = ipu_prim_translation(primitive, tiles, [v.tile_aval for v in inputs], attributes)
+    tile_map_eqn.sync = sync
     tile_map_eqn_json: str = tile_map_eqn.to_json_str()
+
     # Call JAX tile custom primitive, dispatching properly the equation call.
     outputs = tile_map_equation_call(
         [v.device_array for v in inputs],

@@ -120,10 +120,10 @@ struct VertexIOInfo {
    * @brief Build a vertex IO info (with vertex second dim info).
    */
   static VertexIOInfo makeVertexIOInfo(const std::string& name,
-                                         VertexIOType iotype,
-                                         const ShapeType& shape, IpuType dtype,
-                                         std::size_t vertex_dim2,
-                                         const Base64Data& constant_data) {
+                                       VertexIOType iotype,
+                                       const ShapeType& shape, IpuType dtype,
+                                       std::size_t vertex_dim2,
+                                       const Base64Data& constant_data) {
     auto ioinfo = VertexIOInfo{
         name, iotype, ShapedArray{shape, dtype}, constant_data, {}};
     // Generate 2d slices when required.
@@ -157,10 +157,9 @@ struct VertexIOInfo {
       return t.flatten();
     } else {
       // 2d slices: extract the sub-tensors, and re-concat.
-      auto flat_tensor =  t.flatten();
+      auto flat_tensor = t.flatten();
       std::vector<poplar::Tensor> tensors;
-      for (const auto& slice: slices2d)
-      {
+      for (const auto& slice : slices2d) {
         tensors.push_back(flat_tensor.slice(slice.begin, slice.end));
       }
       // Concat and reshape to 2d vertex IO tensor.
@@ -177,7 +176,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VertexIOInfo, name, iotype, aval,
 bool operator==(const VertexIOInfo& lhs, const VertexIOInfo& rhs) {
   return lhs.name == rhs.name && lhs.iotype == rhs.iotype &&
          lhs.aval.shape == rhs.aval.shape && lhs.aval.dtype == rhs.aval.dtype;
-         // TODO: compare 2d slices.
+  // TODO: compare 2d slices.
 }
 
 /**
@@ -262,6 +261,8 @@ struct TileMapEquation {
   std::string gp_filename;
   /** Vertex performance estimate (optional). */
   uint64_t perf_estimate = 0;
+  /** Synchronization of tiles before the compute set. */
+  bool sync = false;
 
   /**
    * @brief Allocate all input tensors (including missing constant).
@@ -396,7 +397,12 @@ struct TileMapEquation {
       poplar::Graph& graph, poplar::program::Sequence& prog,
       const std::vector<poplar::Tensor>& inputs,
       const poplar::DebugContext& debug_prefix) const {
+    // All input tensors: i.e. add constant tensors.
     const auto inputs_all = this->allocateInputTensors(graph, inputs);
+    // No vertex => assume identity function, i.e. forward inputs.
+    if (this->vname.empty()) {
+      return inputs_all;
+    }
     const auto outputs = this->allocateOutputTensors(graph, inputs);
     this->add(graph, prog, inputs_all, outputs, debug_prefix);
     return outputs;
@@ -405,7 +411,8 @@ struct TileMapEquation {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
                                    inputs_info, outputs_info, attributes_i32,
-                                   attributes_f32, gp_filename, perf_estimate)
+                                   attributes_f32, gp_filename, perf_estimate,
+                                   sync)
 
 }  // namespace ipu
 
@@ -434,6 +441,11 @@ class TileMapEquationCall : public jax::ipu::PrimitiveInterface {
     const auto tile_equation =
         ipu::from_json_str<ipu::TileMapEquation>(attributes);
     auto prog = poplar::program::Sequence();
+    // IPU tiles synchronization before compute set.
+    if (tile_equation.sync) {
+      const auto sync_type = poplar::SyncType::INTERNAL;
+      prog.add(poplar::program::Sync(sync_type, debug_context));
+    }
     outputs = tile_equation.add(graph, prog, inputs, debug_context);
     return prog;
   }
@@ -532,7 +544,7 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
                           const std::vector<VertexIOInfo>&,
                           const std::vector<VertexAttributeI32>&,
                           const std::vector<VertexAttributeF32>&,
-                          const std::string&, uint64_t>(),
+                          const std::string&, uint64_t, bool>(),
            pybind11::arg("pname"), pybind11::arg("vname"),
            pybind11::arg("tiles"),
            pybind11::arg("inputs_info") = std::vector<VertexIOInfo>(),
@@ -540,7 +552,7 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
            pybind11::arg("attributes_i32") = std::vector<VertexAttributeI32>(),
            pybind11::arg("attributes_f32") = std::vector<VertexAttributeF32>(),
            pybind11::arg("gp_filename") = "",
-           pybind11::arg("perf_estimate") = 0)
+           pybind11::arg("perf_estimate") = 0, pybind11::arg("sync") = false)
       .def("to_json_str",
            [](const TileMapEquation& v) { return to_json_str(v); })
       .def_static("from_json_str",
@@ -555,7 +567,8 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("attributes_i32", &TileMapEquation::attributes_i32)
       .def_readwrite("attributes_f32", &TileMapEquation::attributes_f32)
       .def_readwrite("gp_filename", &TileMapEquation::gp_filename)
-      .def_readwrite("perf_estimate", &TileMapEquation::perf_estimate);
+      .def_readwrite("perf_estimate", &TileMapEquation::perf_estimate)
+      .def_readwrite("sync", &TileMapEquation::sync);
 
   pybind11::class_<TileMapEquationCall>(m, "TileMapEquationCall")
       .def_static("metadata", &TileMapEquationCall::metadata,
