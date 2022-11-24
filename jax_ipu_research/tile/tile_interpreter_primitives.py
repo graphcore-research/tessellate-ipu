@@ -6,8 +6,9 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import cppimport.import_hook  # noqa: F401
 import numpy as np
-from jax import core
-from jax.interpreters import xla
+from jax import core, vmap
+from jax.interpreters import mlir, xla
+from jax.interpreters.mlir import LoweringRuleContext, ir
 from jax.interpreters.xla import ShapedArray
 from jax.lib import xla_client
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
@@ -244,9 +245,14 @@ def tile_map_equation_call_impl(*args, **params):
 
     pname, _, _ = get_tile_map_ipu_arguments(**params)
     primitive, _ = get_ipu_tile_primitive_translation(pname)
-    # TODO: should use `vmap` for proper mapping.
-    outputs = primitive.bind(*args, **get_primitive_arguments(params))
-    return outputs
+
+    def primitive_fn(*args):
+        return primitive.bind(*args, **get_primitive_arguments(params))
+
+    # Use `vmap` to run the equivalent computation on any device.
+    # TODO: caching of vmap function?
+    vmap_primitive_fn = vmap(primitive_fn, in_axes=0, out_axes=0)
+    return vmap_primitive_fn(*args)
 
 
 def tile_map_equation_call_abstract_eval(*args, **params) -> Union[ShapedArray, Tuple[ShapedArray]]:
@@ -270,13 +276,37 @@ def tile_map_equation_call_abstract_eval(*args, **params) -> Union[ShapedArray, 
     return outputs
 
 
-def tile_map_equation_call_xla_translation_default(ctx, *xla_args, **params):
-    """`tile_map_equation_call` default XLA translation, for CPU/GPU backends."""
-    raise NotImplementedError("No CPU/GPU implementation of `tile_map_equation_call`.")
+def tile_map_equation_call_mlir_translation_default(
+    ctx: LoweringRuleContext, *args: Union[ir.Value, Sequence[ir.Value]], **params
+) -> Sequence[Union[ir.Value, Sequence[ir.Value]]]:
+    """`tile_map_equation_call` default MLIR translation, for CPU/GPU backends."""
+    from .tile_interpreter import get_ipu_tile_primitive_translation
+
+    pname, _, _ = get_tile_map_ipu_arguments(**params)
+    primitive, _ = get_ipu_tile_primitive_translation(pname)
+
+    # Not sure using a local function is a good idea?
+    def primitive_fn(*inputs):
+        return primitive.bind(*inputs, **get_primitive_arguments(params))
+
+    # Use `vmap` to run the equivalent computation on any device.
+    vmap_primitive_fn = vmap(primitive_fn, in_axes=0, out_axes=0)
+    # Lower to MLIR using JAX tooling.
+    # TODO: cache lowering?
+    vmap_primitive_lower_fn = mlir.lower_fun(vmap_primitive_fn, multiple_results=primitive.multiple_results)
+    return vmap_primitive_lower_fn(ctx, *args)
 
 
 def tile_map_equation_call_xla_translation_ipu(ctx, *xla_args, **params):
-    """`tile_map_equation_call` IPU backend XLA translation, as a custom primitive."""
+    """`tile_map_equation_call` IPU backend XLA translation, as a custom primitive.
+
+    TODO: Move to MLIR translation.
+
+    Args:
+        ctx: XLA context
+        args: XLA operands
+        params: Additiona parameters/attributes to pass.
+    """
     from .tile_interpreter import get_ipu_tile_primitive_translation
 
     pname, tiles, tile_map_eqn_json = get_tile_map_ipu_arguments(**params)
@@ -315,23 +345,16 @@ tile_map_equation_call_multi_out_p.def_impl(tile_map_equation_call_impl)
 tile_map_equation_call_single_out_p.def_abstract_eval(tile_map_equation_call_abstract_eval)
 tile_map_equation_call_multi_out_p.def_abstract_eval(tile_map_equation_call_abstract_eval)
 
-# Register XLA translation, for different backends.
+# Register IPU XLA translation. TODO: move to MLIR.
 xla.backend_specific_translations["ipu"][
     tile_map_equation_call_single_out_p
 ] = tile_map_equation_call_xla_translation_ipu
-xla.backend_specific_translations["cpu"][
-    tile_map_equation_call_single_out_p
-] = tile_map_equation_call_xla_translation_default
-xla.backend_specific_translations["gpu"][
-    tile_map_equation_call_single_out_p
-] = tile_map_equation_call_xla_translation_default
+xla.backend_specific_translations["ipu"][
+    tile_map_equation_call_multi_out_p
+] = tile_map_equation_call_xla_translation_ipu
 
-xla.backend_specific_translations["ipu"][
-    tile_map_equation_call_multi_out_p
-] = tile_map_equation_call_xla_translation_ipu
-xla.backend_specific_translations["cpu"][
-    tile_map_equation_call_multi_out_p
-] = tile_map_equation_call_xla_translation_default
-xla.backend_specific_translations["gpu"][
-    tile_map_equation_call_multi_out_p
-] = tile_map_equation_call_xla_translation_default
+# Register MLIR translation for other backends.
+other_backends = ["cpu", "cuda", "tpu", "rocm"]
+for b in other_backends:
+    mlir.register_lowering(tile_map_equation_call_single_out_p, tile_map_equation_call_mlir_translation_default, b)
+    mlir.register_lowering(tile_map_equation_call_multi_out_p, tile_map_equation_call_mlir_translation_default, b)

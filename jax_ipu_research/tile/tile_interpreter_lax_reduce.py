@@ -75,8 +75,7 @@ def ipu_reduce_primitive_translation(
         )
     outaval = p.abstract_eval(*inavals, axes=axes)[0]
 
-    # TODO: supporting partial reduce (i.e. last dimensions only).
-
+    # Supporting partial reduce (i.e. last dimensions only).
     attrs_i32, attrs_f32 = make_ipu_vertex_attributes(
         numOutputsM1=np.prod(inaval.shape[:first_axis]) - 1, numPartials=np.prod(inaval.shape[first_axis:])
     )

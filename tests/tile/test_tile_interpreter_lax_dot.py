@@ -59,6 +59,11 @@ class IpuConvPartial1x1Utils(chex.TestCase, parameterized.TestCase):
 
 
 class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
+    def setUp(self):
+        super().setUp()
+        # Not very clean, but for better reproducibility.
+        np.random.seed(42)
+
     @parameterized.parameters(
         # Basic AMP unit config, without any in/out "groups"
         {"lhs_size": 7, "rhs_size": 16, "contract_size": 8, "indtype": np.float32, "accdtype": np.float32},
@@ -90,15 +95,14 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
 
         dot_general_fn_ipu = partial(jax.jit, backend="ipu")(dot_general_fn)
         output_ipu = dot_general_fn_ipu(lhs_data, rhs_data)
+        dot_general_fn_cpu = partial(jax.jit, backend="cpu")(dot_general_fn)
+        output_cpu = dot_general_fn_cpu(lhs_data, rhs_data)
 
         assert isinstance(output_ipu, TileShardedArray)
         assert output_ipu.tiles == tiles
         assert output_ipu.dtype == accdtype
-        assert output_ipu.shape == (len(tiles), lhs_size, rhs_size)
-        # # TODO: compare to CPU backend JAX result.
-        output_array = np.asarray(output_ipu.array)
-        for idx in range(len(tiles)):
-            npt.assert_array_almost_equal(output_array[idx], lhs_data[idx] @ rhs_data[idx].T, decimal=2)
+        assert output_ipu.shape == output_cpu.shape
+        npt.assert_array_almost_equal(output_ipu.array, output_cpu, decimal=2)
 
     @parameterized.parameters(
         # Power of two lhs and rhs size.
