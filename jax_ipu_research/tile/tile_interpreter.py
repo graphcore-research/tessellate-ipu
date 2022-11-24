@@ -68,6 +68,7 @@ def tile_map_primitive(
     attributes = attributes or {}
     # Get the IPU tile map equation corresponding.
     _, ipu_prim_translation = _ipu_tile_primitive_registry[primitive.name]
+    # TODO: pass outavals as well => no need to do it manually in every translation function.
     tile_map_eqn: IpuTileMapEquation = ipu_prim_translation(primitive, tiles, [v.tile_aval for v in inputs], attributes)
     tile_map_eqn.sync = sync
     tile_map_eqn_json: str = tile_map_eqn.to_json_str()

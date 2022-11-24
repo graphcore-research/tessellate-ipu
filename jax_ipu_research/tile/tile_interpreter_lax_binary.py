@@ -15,6 +15,38 @@ from .tile_interpreter_primitives import (
     make_ipu_vertex_io_info,
 )
 
+# popops definitions.
+# enum class TernaryOpType { CLAMP, SELECT };
+
+# enum class BinaryOpType {
+#   ADD,
+#   ATAN2,
+#   BITWISE_AND,
+#   BITWISE_OR,
+#   BITWISE_XOR,
+#   BITWISE_XNOR,
+#   DIVIDE,
+#   EQUAL,
+#   GREATER_THAN_EQUAL,
+#   GREATER_THAN,
+#   INV_STD_DEV_TO_VARIANCE,
+#   LESS_THAN_EQUAL,
+#   LOGICAL_AND,
+#   LOGICAL_OR,
+#   LESS_THAN,
+#   MAXIMUM,
+#   MINIMUM,
+#   MULTIPLY,
+#   NOT_EQUAL,
+#   POWER,
+#   REMAINDER,
+#   SHIFT_LEFT,
+#   SHIFT_RIGHT,
+#   SHIFT_RIGHT_SIGN_EXTEND,
+#   SUBTRACT,
+#   VARIANCE_TO_INV_STD_DEV
+# };
+
 _binary_primitive_to_vertex_basename: Dict[Primitive, Tuple[str, Any]] = {
     lax.add_p: ("ADD", None),
     lax.atan2_p: ("ATAN2", None),
@@ -27,7 +59,7 @@ _binary_primitive_to_vertex_basename: Dict[Primitive, Tuple[str, Any]] = {
     lax.max_p: ("MAXIMUM", None),
     lax.min_p: ("MINIMUM", None),
     lax.mul_p: ("MULTIPLY", None),
-    lax.ne_p: ("EQUAL", np.bool_),
+    lax.ne_p: ("NOT_EQUAL", np.bool_),
     lax.pow_p: ("POWER", None),
     lax.rem_p: ("REMAINDER", None),
     lax.sub_p: ("SUBTRACT", None),
