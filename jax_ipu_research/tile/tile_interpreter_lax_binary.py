@@ -5,6 +5,8 @@ import numpy as np
 from jax import lax
 from jax.core import Primitive, ShapedArray
 
+from jax_ipu_research.utils import DTypeLike
+
 from .tile_interpreter import register_ipu_tile_primitive
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
@@ -34,7 +36,7 @@ _binary_primitive_to_vertex_basename: Dict[Primitive, Tuple[str, Any]] = {
 """
 
 
-def make_binary1d_vertex_fullname(basename: str, dtype: Any) -> str:
+def make_binary1d_vertex_fullname(basename: str, dtype: DTypeLike) -> str:
     """Create the full vertex name from the basename and dtype."""
     ipu_dtype = from_numpy_dtype_to_ipu_type(dtype).name.lower()
     return f"popops::BinaryOp1D<popops::expr::BinaryOpType::{basename},{ipu_dtype}>"

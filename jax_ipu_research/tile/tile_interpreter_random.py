@@ -5,6 +5,8 @@ import jax
 import numpy as np
 from jax.core import Primitive, ShapedArray
 
+from jax_ipu_research.utils import DTypeLike
+
 from .tile_array import TileShardedArray
 from .tile_interpreter import register_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_primitives import (
@@ -106,7 +108,7 @@ register_ipu_tile_primitive(ipu_get_hw_seeds_p, ipu_get_hw_seeds_translation_ipu
 ipu_random_uniform_p = Primitive("ipu_random_uniform")
 
 
-def ipu_random_uniform_abstract_eval(size: int, dtype: Any, offset: Any, scale: Any) -> ShapedArray:
+def ipu_random_uniform_abstract_eval(size: int, dtype: DTypeLike, offset: Any, scale: Any) -> ShapedArray:
     dtype = np.dtype(dtype)
     # Type supported in the IPU vertex.
     assert dtype in {np.dtype(np.float16), np.dtype(np.float32), np.dtype(np.int32)}
@@ -147,7 +149,7 @@ register_ipu_tile_primitive(ipu_random_uniform_p, ipu_random_uniform_translation
 
 
 def ipu_random_uniform_tmap(
-    tiles: Tuple[int, ...], size: int, dtype: Any, offset: float = 0.0, scale: float = 1.0
+    tiles: Tuple[int, ...], size: int, dtype: DTypeLike, offset: float = 0.0, scale: float = 1.0
 ) -> TileShardedArray:
     """IPU Uniform sampling on a collection of tiles."""
     return tile_map_primitive(  # type:ignore
@@ -158,7 +160,7 @@ def ipu_random_uniform_tmap(
 ipu_random_normal_p = Primitive("ipu_random_normal")
 
 
-def ipu_random_normal_abstract_eval(size: int, dtype: Any, mean: float, stddev: float) -> ShapedArray:
+def ipu_random_normal_abstract_eval(size: int, dtype: DTypeLike, mean: float, stddev: float) -> ShapedArray:
     dtype = np.dtype(dtype)
     # Type supported in the IPU vertex.
     assert dtype in {np.dtype(np.float16), np.dtype(np.float32)}
@@ -199,7 +201,7 @@ register_ipu_tile_primitive(ipu_random_normal_p, ipu_random_normal_translation_i
 
 
 def ipu_random_normal_tmap(
-    tiles: Tuple[int, ...], size: int, dtype: Any, mean: float = 0.0, stddev: float = 1.0
+    tiles: Tuple[int, ...], size: int, dtype: DTypeLike, mean: float = 0.0, stddev: float = 1.0
 ) -> TileShardedArray:
     """IPU Normal sampling on a collection of tiles."""
     return tile_map_primitive(  # type:ignore

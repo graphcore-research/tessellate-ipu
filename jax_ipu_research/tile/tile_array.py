@@ -5,6 +5,8 @@ import chex
 import numpy as np
 from jax.interpreters.xla import DeviceArray, ShapedArray
 
+from jax_ipu_research.utils import DTypeLike
+
 from .tile_array_primitives import tile_put_replicated_prim, tile_put_sharded_prim
 
 
@@ -61,7 +63,7 @@ class TileShardedArray:
     def device_array(self) -> DeviceArray:
         return self.array
 
-    def __array__(self, dtype: Any = None):
+    def __array__(self, dtype: DTypeLike = None):
         # Force converting to Numpy array.
         return np.asarray(self.array, dtype=dtype)
 

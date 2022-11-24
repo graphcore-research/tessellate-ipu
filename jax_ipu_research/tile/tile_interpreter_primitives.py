@@ -2,7 +2,7 @@
 import base64
 import os
 from copy import copy
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import cppimport.import_hook  # noqa: F401
 import numpy as np
@@ -11,6 +11,8 @@ from jax.interpreters import xla
 from jax.interpreters.xla import ShapedArray
 from jax.lib import xla_client
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
+
+from jax_ipu_research.utils import Array
 
 from .tile_interpreter_primitives_impl import (
     Base64Data,
@@ -221,13 +223,17 @@ tile_map_equation_call_single_out_p = core.Primitive("tile_map_equation_call_sin
 tile_map_equation_call_multi_out_p = core.Primitive("tile_map_equation_call_multi_out")
 
 
-def tile_map_equation_call_single_out(inputs, pname: str, tiles: Tuple[int, ...], tile_map_eqn_json: str, **kwargs):
+def tile_map_equation_call_single_out(
+    inputs: Sequence[Array], pname: str, tiles: Tuple[int, ...], tile_map_eqn_json: str, **kwargs
+) -> Array:
     return tile_map_equation_call_single_out_p.bind(
         *inputs, pname=pname, tiles=tiles, tile_map_eqn_json=tile_map_eqn_json, **kwargs
     )
 
 
-def tile_map_equation_call_multi_out(inputs, pname: str, tiles: Tuple[int, ...], tile_map_eqn_json: str, **kwargs):
+def tile_map_equation_call_multi_out(
+    inputs: Sequence[Array], pname: str, tiles: Tuple[int, ...], tile_map_eqn_json: str, **kwargs
+) -> Sequence[Array]:
     return tile_map_equation_call_multi_out_p.bind(
         *inputs, pname=pname, tiles=tiles, tile_map_eqn_json=tile_map_eqn_json, **kwargs
     )
@@ -243,7 +249,7 @@ def tile_map_equation_call_impl(*args, **params):
     return outputs
 
 
-def tile_map_equation_call_abstract_eval(*args, **params) -> List[ShapedArray]:
+def tile_map_equation_call_abstract_eval(*args, **params) -> Union[ShapedArray, Tuple[ShapedArray]]:
     from .tile_interpreter import get_ipu_tile_primitive_translation
 
     pname, tiles, _ = get_tile_map_ipu_arguments(**params)
@@ -258,7 +264,7 @@ def tile_map_equation_call_abstract_eval(*args, **params) -> List[ShapedArray]:
     # Re-construct sharded abtract output
     if not primitive.multiple_results:
         tile_outputs = [tile_outputs]
-    outputs = [ShapedArray((num_tiles, *v.shape), v.dtype) for v in tile_outputs]
+    outputs = tuple([ShapedArray((num_tiles, *v.shape), v.dtype) for v in tile_outputs])
     if not primitive.multiple_results:
         outputs = outputs[0]
     return outputs

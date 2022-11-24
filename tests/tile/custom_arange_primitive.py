@@ -13,20 +13,21 @@ from jax_ipu_research.tile import (
     make_ipu_vertex_out_info,
     register_ipu_tile_primitive,
 )
+from jax_ipu_research.utils import DTypeLike
 
 custom_arange_p = core.Primitive("custom_arange")
 
 
-def custom_arange(scales, size: int, dtype: Any):
+def custom_arange(scales, size: int, dtype: DTypeLike):
     return custom_arange_p.bind(size=size, dtype=dtype)
 
 
-def custom_arange_numpy_impl(scales, size: int, dtype: Any):
+def custom_arange_numpy_impl(scales, size: int, dtype: DTypeLike):
     # Artificial complexity to test a 2D input array!
     return np.arange(size).astype(dtype) * scales[0] * scales[1]
 
 
-def custom_arange_abstract_eval(scales, size: int, dtype: Any):
+def custom_arange_abstract_eval(scales, size: int, dtype: DTypeLike):
     return core.ShapedArray((size,), dtype)
 
 
