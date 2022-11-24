@@ -9,7 +9,11 @@ from jax.core import Primitive
 from jax.interpreters.xla import ShapedArray
 
 from .tile_array import TileShardedArray
-from .tile_interpreter_primitives import IpuTileMapEquation, tile_map_equation_call
+from .tile_interpreter_primitives import (
+    IpuTileMapEquation,
+    tile_map_equation_call_multi_out,
+    tile_map_equation_call_single_out,
+)
 
 IpuVertexTranslation = Callable[
     [Primitive, Tuple[int, ...], List[ShapedArray], Optional[Dict[str, Any]]], IpuTileMapEquation
@@ -69,7 +73,10 @@ def tile_map_primitive(
     tile_map_eqn_json: str = tile_map_eqn.to_json_str()
 
     # Call JAX tile custom primitive, dispatching properly the equation call.
-    outputs = tile_map_equation_call(
+    tile_map_eqn_call_fn = (
+        tile_map_equation_call_multi_out if primitive.multiple_results else tile_map_equation_call_single_out
+    )
+    outputs = tile_map_eqn_call_fn(
         [v.device_array for v in inputs],
         pname=primitive.name,
         tiles=tiles,

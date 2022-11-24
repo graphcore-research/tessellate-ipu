@@ -27,7 +27,28 @@ class CustomArangeVertex : public Vertex {
   }
 };
 
+template<typename T>
+class CustomMultiOutVertex : public Vertex {
+ public:
+  Input<Vector<T, poplar::VectorLayout::SPAN>> in;     // (size, )
+  Output<Vector<T, poplar::VectorLayout::SPAN>> out0;  // (size, )
+  Output<Vector<T, poplar::VectorLayout::SPAN>> out1;  // (size, )
+
+  bool compute() {
+    const auto outsize = in.size();
+    for (std::size_t idx = 0; idx < in.size(); ++idx) {
+      // Most basic compute!
+      out0[idx] = in[idx];
+      out1[idx] = -in[idx];
+    }
+    return true;
+  }
+};
+
 // explicit instantiations
 template class CustomArangeVertex<int>;
 template class CustomArangeVertex<half>;
 template class CustomArangeVertex<float>;
+
+template class CustomMultiOutVertex<int>;
+template class CustomMultiOutVertex<float>;

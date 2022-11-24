@@ -9,6 +9,7 @@ import numpy as np
 from jax import core
 from jax.interpreters import xla
 from jax.interpreters.xla import ShapedArray
+from jax.lib import xla_client
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
 
 from .tile_interpreter_primitives_impl import (
@@ -215,11 +216,19 @@ def get_primitive_arguments(params: Dict[str, Any]) -> Dict[str, Any]:
     return params
 
 
-tile_map_equation_call_p = core.Primitive("tile_map_equation_call")
+# Two primitives required, to differentiate single/multi output cases.
+tile_map_equation_call_single_out_p = core.Primitive("tile_map_equation_call_single_out")
+tile_map_equation_call_multi_out_p = core.Primitive("tile_map_equation_call_multi_out")
 
 
-def tile_map_equation_call(inputs, pname: str, tiles: Tuple[int, ...], tile_map_eqn_json: str, **kwargs):
-    return tile_map_equation_call_p.bind(
+def tile_map_equation_call_single_out(inputs, pname: str, tiles: Tuple[int, ...], tile_map_eqn_json: str, **kwargs):
+    return tile_map_equation_call_single_out_p.bind(
+        *inputs, pname=pname, tiles=tiles, tile_map_eqn_json=tile_map_eqn_json, **kwargs
+    )
+
+
+def tile_map_equation_call_multi_out(inputs, pname: str, tiles: Tuple[int, ...], tile_map_eqn_json: str, **kwargs):
+    return tile_map_equation_call_multi_out_p.bind(
         *inputs, pname=pname, tiles=tiles, tile_map_eqn_json=tile_map_eqn_json, **kwargs
     )
 
@@ -278,18 +287,45 @@ def tile_map_equation_call_xla_translation_ipu(ctx, *xla_args, **params):
     if len(tile_map_eqn.gp_filename) > 0:
         ipu_gp_filename = os.path.abspath(tile_map_eqn.gp_filename)
     outputs = ipu_xla_custom_primitive_call(
-        TileMapEquationCall, ctx, xla_args, outputs_aval, attributes=tile_map_eqn_json, ipu_gp_filename=ipu_gp_filename
+        TileMapEquationCall,
+        ctx,
+        xla_args,
+        outputs_aval,
+        attributes=tile_map_eqn_json,
+        ipu_gp_filename=ipu_gp_filename,
     )
     if not primitive.multiple_results:
-        outputs = outputs[0]
-    return outputs
+        return outputs[0]
+    # Re-construct the XLA tuple (TODO: clean this back & forth mess!)
+    return xla_client.ops.Tuple(ctx, outputs)
 
 
+tile_map_equation_call_single_out_p.multiple_results = False
+tile_map_equation_call_multi_out_p.multiple_results = True
 # Register the primal implementation with JAX
-tile_map_equation_call_p.def_impl(tile_map_equation_call_impl)
+tile_map_equation_call_single_out_p.def_impl(tile_map_equation_call_impl)
+tile_map_equation_call_multi_out_p.def_impl(tile_map_equation_call_impl)
 # Register the abstract evaluation with JAX
-tile_map_equation_call_p.def_abstract_eval(tile_map_equation_call_abstract_eval)
+tile_map_equation_call_single_out_p.def_abstract_eval(tile_map_equation_call_abstract_eval)
+tile_map_equation_call_multi_out_p.def_abstract_eval(tile_map_equation_call_abstract_eval)
+
 # Register XLA translation, for different backends.
-xla.backend_specific_translations["ipu"][tile_map_equation_call_p] = tile_map_equation_call_xla_translation_ipu
-xla.backend_specific_translations["cpu"][tile_map_equation_call_p] = tile_map_equation_call_xla_translation_default
-xla.backend_specific_translations["gpu"][tile_map_equation_call_p] = tile_map_equation_call_xla_translation_default
+xla.backend_specific_translations["ipu"][
+    tile_map_equation_call_single_out_p
+] = tile_map_equation_call_xla_translation_ipu
+xla.backend_specific_translations["cpu"][
+    tile_map_equation_call_single_out_p
+] = tile_map_equation_call_xla_translation_default
+xla.backend_specific_translations["gpu"][
+    tile_map_equation_call_single_out_p
+] = tile_map_equation_call_xla_translation_default
+
+xla.backend_specific_translations["ipu"][
+    tile_map_equation_call_multi_out_p
+] = tile_map_equation_call_xla_translation_ipu
+xla.backend_specific_translations["cpu"][
+    tile_map_equation_call_multi_out_p
+] = tile_map_equation_call_xla_translation_default
+xla.backend_specific_translations["gpu"][
+    tile_map_equation_call_multi_out_p
+] = tile_map_equation_call_xla_translation_default
