@@ -31,15 +31,20 @@ template<typename T>
 class CustomMultiOutVertex : public Vertex {
  public:
   Input<Vector<T, poplar::VectorLayout::SPAN>> in;     // (size, )
-  Output<Vector<T, poplar::VectorLayout::SPAN>> out0;  // (size, )
-  Output<Vector<T, poplar::VectorLayout::SPAN>> out1;  // (size, )
+
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> out0;  // (size, )
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> out1;  // (size, )
+
+  // Temporary cache entry (automatically allocated by JAX-tile equation)
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> tmp;  // (size, )
 
   bool compute() {
     const auto outsize = in.size();
     for (std::size_t idx = 0; idx < in.size(); ++idx) {
       // Most basic compute!
-      out0[idx] = in[idx];
-      out1[idx] = -in[idx];
+      tmp[idx] = 2 * in[idx];
+      out0[idx] = tmp[idx];
+      out1[idx] = -tmp[idx];
     }
     return true;
   }

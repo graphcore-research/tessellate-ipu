@@ -19,6 +19,7 @@ from jax_ipu_research.tile.tile_interpreter_primitives import (
 )
 from jax_ipu_research.tile.tile_interpreter_primitives_impl import (
     Base64Data,
+    IpuShapedArray,
     IpuTensorSlice,
     IpuTileMapEquation,
     IpuType,
@@ -63,6 +64,14 @@ class Base64DataTests(chex.TestCase, parameterized.TestCase):
         assert not data.is_empty
         assert data.encoded_data == "12345"
         assert data.to_json_str() == '{"encoded_data":"12345"}'
+
+
+class IpuShapedArrayTests(chex.TestCase, parameterized.TestCase):
+    def test__shaped_array__init__default_values(self):
+        aval = IpuShapedArray()
+        assert aval.shape == []
+        assert aval.dtype == IpuType.UNSIGNED_CHAR
+        assert aval.size == 1
 
 
 class IpuTensorSliceTests(chex.TestCase, parameterized.TestCase):
@@ -140,6 +149,8 @@ class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
         assert eqn.vname == "vertex"
         assert eqn.pname == "prim"
         assert eqn.attributes_f32 == [IpuVertexAttributeF32("test", 2.5)]
+        assert not eqn.use_tmp_space
+        assert eqn.tmp_space_aval.shape == [0]
 
     def test__make_ipu_vertex_io_info__proper_result(self):
         aval = ShapedArray([1, 2, 3], np.float16)

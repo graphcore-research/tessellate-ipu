@@ -15,6 +15,7 @@ from .tile_interpreter_primitives import (
     IpuVertexIOType,
     from_ipu_type_to_numpy_dtype,
     from_numpy_dtype_to_ipu_type,
+    make_ipu_shaped_array,
     make_ipu_vertex_constant_info,
     make_ipu_vertex_in_info,
     make_ipu_vertex_inout_info,

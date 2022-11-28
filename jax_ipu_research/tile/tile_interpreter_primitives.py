@@ -13,10 +13,11 @@ from jax.interpreters.xla import ShapedArray
 from jax.lib import xla_client
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
 
-from jax_ipu_research.utils import Array
+from jax_ipu_research.utils import Array, DTypeLike
 
 from .tile_interpreter_primitives_impl import (
     Base64Data,
+    IpuShapedArray,
     IpuTileMapEquation,
     IpuType,
     IpuVertexAttributeF32,
@@ -63,6 +64,11 @@ def from_numpy_dtype_to_ipu_type(v: Any) -> IpuType:
 def from_ipu_type_to_numpy_dtype(v: IpuType) -> Any:
     """Convert from IPU type to Numpy dtype."""
     return _ipu_type_to_numpy_dtype[v]
+
+
+def make_ipu_shaped_array(shape: Sequence[int], dtype: DTypeLike) -> IpuShapedArray:
+    """Convert to IPU shaped array."""
+    return IpuShapedArray(shape, from_numpy_dtype_to_ipu_type(dtype))
 
 
 def make_ipu_vertex_io_info(

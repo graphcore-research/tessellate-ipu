@@ -33,7 +33,7 @@ struct ShapedArray {
   /** Shape of the array. */
   ShapeType shape;
   /** Dtype of the array. */
-  IpuType dtype;
+  IpuType dtype = IpuType::UNSIGNED_CHAR;
 
   /** @brief Size of the array (i.e. num elements). */
   std::size_t size() const noexcept {
@@ -257,12 +257,21 @@ struct TileMapEquation {
   std::vector<VertexAttributeI32> attributes_i32;
   std::vector<VertexAttributeF32> attributes_f32;
 
+  /** Temporary vertex scratch space (empty by default). */
+  ShapedArray tmp_space_aval =
+      ipu::ShapedArray{ipu::ShapeType{0}, IpuType::UNSIGNED_CHAR};
+
   /** (Optional) IPU gp vertex (absolute) filename. */
-  std::string gp_filename;
+  std::string gp_filename = "";
   /** Vertex performance estimate (optional). */
   uint64_t perf_estimate = 0;
   /** Synchronization of tiles before the compute set. */
   bool sync = false;
+
+  /**
+   * @brief Does it require temporary vertex space?
+   */
+  bool useTmpSpace() const { return tmp_space_aval.size() > 0; }
 
   /**
    * @brief Allocate all input tensors (including missing constant).
@@ -331,6 +340,18 @@ struct TileMapEquation {
   }
 
   /**
+   * @brief Allocate the temporary-scratch space tensor (if used).
+   */
+  std::optional<poplar::Tensor> allocateTmpSpaceTensor(
+      poplar::Graph& graph) const {
+    if (!useTmpSpace()) {
+      return std::nullopt;
+    }
+    return createShardedVariable(graph, toPoplar(tmp_space_aval.dtype),
+                                 {tmp_space_aval.size()}, this->tiles);
+  }
+
+  /**
    * @brief Add vertex/equation to Poplar graph & compute set.
    *
    * @param graph Poplar graph.
@@ -349,6 +370,10 @@ struct TileMapEquation {
     FMT_ASSERT(outputs.size() == outputs_info.size(),
                "Inconsistent outputs vector size.");
     poplar::DebugContext debug_context(debug_prefix, this->pname);
+
+    // Tensor used for vertex temp. scratch space.
+    const std::string tmp_space_name = "tmp";
+    auto tmp_space_tensor_opt = allocateTmpSpaceTensor(graph);
 
     poplar::ComputeSet cs = graph.addComputeSet(debug_context);
     for (size_t tidx = 0; tidx < tiles.size(); ++tidx) {
@@ -371,6 +396,11 @@ struct TileMapEquation {
           const auto& info = outputs_info[k];
           graph.connect(v[info.name], info.connectReshape(outputs[k][tidx]));
         }
+      }
+      // Connect tmp scratch space.
+      if (tmp_space_tensor_opt.has_value()) {
+        auto tmp_space_tensor = tmp_space_tensor_opt.value();
+        graph.connect(v[tmp_space_name], tmp_space_tensor[tidx]);
       }
       // Map vertex attributes.
       for (const auto& attr : attributes_i32) {
@@ -411,8 +441,8 @@ struct TileMapEquation {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
                                    inputs_info, outputs_info, attributes_i32,
-                                   attributes_f32, gp_filename, perf_estimate,
-                                   sync)
+                                   attributes_f32, tmp_space_aval, gp_filename,
+                                   perf_estimate, sync)
 
 }  // namespace ipu
 
@@ -475,7 +505,8 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
           "from_json_str",
           [](const std::string& j) { return from_json_str<ShapedArray>(j); })
       .def_readwrite("shape", &ShapedArray::shape)
-      .def_readwrite("dtype", &ShapedArray::dtype);
+      .def_readwrite("dtype", &ShapedArray::dtype)
+      .def_property_readonly("size", &ShapedArray::size);
 
   pybind11::class_<Base64Data>(m, "Base64Data")
       .def(pybind11::init<>())
@@ -544,13 +575,16 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
                           const std::vector<VertexIOInfo>&,
                           const std::vector<VertexAttributeI32>&,
                           const std::vector<VertexAttributeF32>&,
-                          const std::string&, uint64_t, bool>(),
+                          const ShapedArray&, const std::string&, uint64_t,
+                          bool>(),
            pybind11::arg("pname"), pybind11::arg("vname"),
            pybind11::arg("tiles"),
            pybind11::arg("inputs_info") = std::vector<VertexIOInfo>(),
            pybind11::arg("outputs_info") = std::vector<VertexIOInfo>(),
            pybind11::arg("attributes_i32") = std::vector<VertexAttributeI32>(),
            pybind11::arg("attributes_f32") = std::vector<VertexAttributeF32>(),
+           pybind11::arg("tmp_space_aval") =
+               ShapedArray{{0}, IpuType::UNSIGNED_CHAR},
            pybind11::arg("gp_filename") = "",
            pybind11::arg("perf_estimate") = 0, pybind11::arg("sync") = false)
       .def("to_json_str",
@@ -566,9 +600,11 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("outputs_info", &TileMapEquation::outputs_info)
       .def_readwrite("attributes_i32", &TileMapEquation::attributes_i32)
       .def_readwrite("attributes_f32", &TileMapEquation::attributes_f32)
+      .def_readwrite("tmp_space_aval", &TileMapEquation::tmp_space_aval)
       .def_readwrite("gp_filename", &TileMapEquation::gp_filename)
       .def_readwrite("perf_estimate", &TileMapEquation::perf_estimate)
-      .def_readwrite("sync", &TileMapEquation::sync);
+      .def_readwrite("sync", &TileMapEquation::sync)
+      .def_property_readonly("use_tmp_space", &TileMapEquation::useTmpSpace);
 
   pybind11::class_<TileMapEquationCall>(m, "TileMapEquationCall")
       .def_static("metadata", &TileMapEquationCall::metadata,

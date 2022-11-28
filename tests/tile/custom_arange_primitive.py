@@ -8,6 +8,7 @@ from jax import core
 from jax_ipu_research.tile import (
     IpuTileMapEquation,
     from_numpy_dtype_to_ipu_type,
+    make_ipu_shaped_array,
     make_ipu_vertex_constant_info,
     make_ipu_vertex_in_info,
     make_ipu_vertex_out_info,
@@ -135,6 +136,8 @@ def custom_multi_out_tile_translation_ipu(
             make_ipu_vertex_in_info("in", inaval),
         ],
         outputs_info=[make_ipu_vertex_out_info("out0", inaval), make_ipu_vertex_out_info("out1", inaval)],
+        # Temporary scratch space to use by the vertex (zero=unused).
+        tmp_space_aval=make_ipu_shaped_array((inaval.size * 3,), inaval.dtype),
         # Additional attributes to pass to the vertex
         attributes_i32=[],
         attributes_f32=[],

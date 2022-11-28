@@ -129,5 +129,5 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
         assert out1.tiles == tiles
         assert out1.dtype == dtype
 
-        npt.assert_array_equal(out0, input)
-        npt.assert_array_equal(out1, -input)
+        npt.assert_array_equal(out0, 2 * input)
+        npt.assert_array_equal(out1, -2 * input)
