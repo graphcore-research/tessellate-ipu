@@ -9,10 +9,10 @@ from jax_ipu_research.utils import DTypeLike
 from .tile_interpreter import register_ipu_tile_primitive
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
-    IpuVertexIOType,
     from_numpy_dtype_to_ipu_type,
     make_ipu_vertex_attributes,
-    make_ipu_vertex_io_info,
+    make_ipu_vertex_in_info,
+    make_ipu_vertex_out_info,
 )
 
 # popops definition.
@@ -108,8 +108,8 @@ def ipu_unary_primitive_translation(
         vname=vname,
         pname=p.name,
         tiles=tiles,
-        inputs_info=[make_ipu_vertex_io_info("in", IpuVertexIOType.In, inavals[0])],
-        outputs_info=[make_ipu_vertex_io_info("out", IpuVertexIOType.Out, inavals[0])],
+        inputs_info=[make_ipu_vertex_in_info("in", inavals[0])],
+        outputs_info=[make_ipu_vertex_out_info("out", inavals[0])],
         attributes_i32=[],
         attributes_f32=[],
     )
@@ -151,10 +151,48 @@ def ipu_cast_primitive_translation(
         vname=vname,
         pname=p.name,
         tiles=tiles,
-        inputs_info=[make_ipu_vertex_io_info("src", IpuVertexIOType.In, inaval)],
-        outputs_info=[make_ipu_vertex_io_info("dst", IpuVertexIOType.Out, outaval)],
+        inputs_info=[make_ipu_vertex_in_info("src", inaval)],
+        outputs_info=[make_ipu_vertex_out_info("dst", outaval)],
         attributes_i32=attrs_i32,
         attributes_f32=attrs_f32,
+    )
+    return ipu_prim_info
+
+
+def ipu_integer_pow_translation(
+    p: Primitive,
+    tiles: Tuple[int, ...],
+    inavals: List[ShapedArray],
+    attributes: Dict[str, Any] = None,
+) -> IpuTileMapEquation:
+    """IPU `integer_pow` primitive translation rule to IPU vertex.
+
+    Args:
+        p: JAX primitive.
+        tiles: Collection of tiles.
+        inavals: Input shaped arrays.
+        attributes: (unused) attributes.
+    Returns:
+        IPU tile map primitive structure.
+    """
+    assert len(inavals) == 1
+    assert attributes is not None
+    inaval = inavals[0]
+    pow = attributes["y"]
+    if pow != 2:
+        # TODO: general vertex?
+        raise ValueError("Only supporting integer power of 2 on IPU tile primitives.")
+
+    # IPU cast arguments.
+    vname = make_unary1d_vertex_fullname("SQUARE", inaval.dtype)
+    ipu_prim_info = IpuTileMapEquation(
+        vname=vname,
+        pname=p.name,
+        tiles=tiles,
+        inputs_info=[make_ipu_vertex_in_info("in", inaval)],
+        outputs_info=[make_ipu_vertex_out_info("out", inaval)],
+        attributes_i32=[],
+        attributes_f32=[],
     )
     return ipu_prim_info
 
@@ -164,3 +202,4 @@ for p in _unary_primitive_to_vertex_basename.keys():
     register_ipu_tile_primitive(p, ipu_unary_primitive_translation)
 
 register_ipu_tile_primitive(lax.convert_element_type_p, ipu_cast_primitive_translation)
+register_ipu_tile_primitive(lax.integer_pow_p, ipu_integer_pow_translation)
