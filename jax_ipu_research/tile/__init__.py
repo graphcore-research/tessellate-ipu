@@ -6,6 +6,7 @@ from . import (
     tile_interpreter_lax_dot,
     tile_interpreter_lax_reduce,
     tile_interpreter_lax_unary,
+    tile_interpreter_linalg,
 )
 from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import register_ipu_tile_primitive, tile_map_primitive
