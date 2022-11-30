@@ -7,8 +7,8 @@ from jax import core
 
 from jax_ipu_research.tile import (
     IpuTileMapEquation,
+    create_simple_tile_primitive,
     from_numpy_dtype_to_ipu_type,
-    make_ipu_shaped_array,
     make_ipu_vertex_constant_info,
     make_ipu_vertex_in_info,
     make_ipu_vertex_out_info,
@@ -89,70 +89,13 @@ custom_arange_p.def_abstract_eval(custom_arange_abstract_eval)
 register_ipu_tile_primitive(custom_arange_p, custom_arange_tile_translation_ipu)
 
 
-custom_multi_out_p = core.Primitive("custom_multi_out")
-
-
-def custom_multi_out():
-    return custom_multi_out_p.bind()
-
-
-def custom_multi_out_numpy_impl(x):
-    return (x, -x)
-
-
-def custom_multi_out_abstract_eval(x):
-    return (x, x)
-
-
-def custom_multi_out_tile_translation_ipu(
-    p: core.Primitive,
-    tiles: Tuple[int, ...],
-    inavals: List[core.ShapedArray],
-    attributes: Dict[str, Any] = None,
-) -> IpuTileMapEquation:
-    """IPU tile translation for custom arange vertex.
-
-    Args:
-        p: JAX primitive.
-        tiles: Collection of tiles.
-        inavals: Input shaped arrays.
-        attributes: Op attributes.
-    Returns:
-        IPU tile map primitive structure.
-    """
-    assert len(inavals) == 1
-    inaval = inavals[0]
-    gp_filename = os.path.join(os.path.dirname(__file__), "custom_arange_vertex.cpp")
-
-    ipu_dtype = from_numpy_dtype_to_ipu_type(inaval.dtype)
-    vertex_name = f"CustomMultiOutVertex<{ipu_dtype.name.lower()}>"
-    # Translation rule to IPU vertex
-    ipu_prim_info = IpuTileMapEquation(
-        vname=vertex_name,
-        pname=p.name,
-        tiles=tiles,
-        # IO vertex infos.
-        inputs_info=[
-            make_ipu_vertex_in_info("in", inaval),
-        ],
-        outputs_info=[make_ipu_vertex_out_info("out0", inaval), make_ipu_vertex_out_info("out1", inaval)],
-        # Temporary scratch space to use by the vertex (zero=unused).
-        tmp_space_aval=make_ipu_shaped_array((inaval.size * 3,), inaval.dtype),
-        # Additional attributes to pass to the vertex
-        attributes_i32=[],
-        attributes_f32=[],
-        # Optional GP filename and perf. estimate.
-        gp_filename=gp_filename,
-        perf_estimate=10,
-    )
-    return ipu_prim_info
-
-
-custom_multi_out_p.map_primitive = False
-custom_multi_out_p.multiple_results = True
-# Register the primal implementation with JAX
-custom_multi_out_p.def_impl(custom_multi_out_numpy_impl)
-# Register the abstract evaluation with JAX
-custom_multi_out_p.def_abstract_eval(custom_multi_out_abstract_eval)
-# Register tile IPU translation.
-register_ipu_tile_primitive(custom_multi_out_p, custom_multi_out_tile_translation_ipu)
+# Declaring a tile primitive in a very simple & fast way.
+custom_multi_out_p = create_simple_tile_primitive(
+    "custom_multi_out",
+    "CustomMultiOutVertex<{in}>",  # Support templated dtype from input.
+    ["in"],
+    {"out0": 0, "out1": 0},
+    tmp_space_input_idx=0,
+    gp_filename=os.path.join(os.path.dirname(__file__), "custom_arange_vertex.cpp"),
+    perf_estimate=100,
+)

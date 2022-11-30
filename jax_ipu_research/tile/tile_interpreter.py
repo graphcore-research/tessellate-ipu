@@ -11,6 +11,10 @@ from jax.interpreters.xla import ShapedArray
 from .tile_array import TileShardedArray
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
+    from_numpy_dtype_to_ipu_type,
+    make_ipu_shaped_array,
+    make_ipu_vertex_in_info,
+    make_ipu_vertex_out_info,
     tile_map_equation_call_multi_out,
     tile_map_equation_call_single_out,
 )
@@ -109,3 +113,91 @@ def register_ipu_tile_primitive(primitive: Primitive, translation: IpuVertexTran
 def get_ipu_tile_primitive_translation(pname: str) -> Tuple[Primitive, IpuVertexTranslation]:
     """Ge the primitive and IPU translation corresponding to a primitive name."""
     return _ipu_tile_primitive_registry[pname]
+
+
+def create_simple_tile_primitive(
+    pname: str,
+    vname: str,
+    inputs: List[str],
+    outputs: Dict[str, int],
+    tmp_space_input_idx: Optional[int] = None,
+    gp_filename: Optional[str] = None,
+    perf_estimate: int = 0,
+) -> Primitive:
+    """Create a simple IPU-JAX tile primitive.
+
+    Factory method helping creating tile primitives in the simple cases (i.e.
+    output shape corresponding to an input, ...)
+
+    Args:
+        pname: Primitive name.
+        vname: Vertex name. Supporting templated dtype from input(s).
+        inputs: Set of input names.
+        outputs: Set output names (with input index for aval).
+        tmp_space_input_idx: Optional tmp space (allocating the same size as input referenced)
+        gp_filename: Optional IPU gp filename.
+        perf_estimate: Optional performance estimate.
+    Returns:
+        JAX primitive, suitable for IPU tile mapping.
+    """
+    p = Primitive(pname)
+    p.map_primitive = False  # What for ???
+    p.multiple_results = len(outputs) > 1
+    num_inputs = len(inputs)
+
+    def p_abstract_aval(*args, **kwargs):
+        assert len(args) == num_inputs
+        out_avals = [args[idx] for idx in outputs.values()]
+        return tuple(out_avals) if p.multiple_results else out_avals[0]
+
+    def p_impl(*args, **kwargs):
+        # TODO: call `tile_map_primitive` on single tile.
+        raise NotImplementedError(f"IPU tile primitive '{pname}' not implemented.")
+
+    def p_tile_translation_ipu(
+        p: Primitive,
+        tiles: Tuple[int, ...],
+        inavals: List[ShapedArray],
+        attributes: Dict[str, Any] = None,
+    ) -> IpuTileMapEquation:
+        """IPU tile translation for custom vertex."""
+        assert len(inavals) == len(inputs)
+        outavals = p_abstract_aval(*inavals)
+
+        inavals_dict = {inname: inaval for inname, inaval in zip(inputs, inavals)}
+        # Generate vertex fullname, using templated dtypes.
+        vname_used_inputs = [v for v in inputs if f"{{{v}}}" in vname]
+        vname_dtype_inputs = {
+            v: from_numpy_dtype_to_ipu_type(inavals_dict[v].dtype).name.lower() for v in vname_used_inputs
+        }
+        vertex_fullname = vname.format(**vname_dtype_inputs)
+
+        ipu_prim_info = IpuTileMapEquation(
+            vname=vertex_fullname,
+            pname=p.name,
+            tiles=tiles,
+            # IO vertex infos.
+            inputs_info=[make_ipu_vertex_in_info(inname, inaval) for inname, inaval in zip(inputs, inavals)],
+            outputs_info=[
+                make_ipu_vertex_out_info(outname, outaval) for outname, outaval in zip(outputs.keys(), outavals)
+            ],
+            # Additional attributes to pass to the vertex
+            attributes_i32=[],
+            attributes_f32=[],
+            # Optional GP filename and perf. estimate.
+            gp_filename=gp_filename,
+            perf_estimate=perf_estimate,
+        )
+        if tmp_space_input_idx is not None:
+            # Temporary scratch space to use by the vertex (zero=unused).
+            inaval = inavals[tmp_space_input_idx]
+            ipu_prim_info.tmp_space_aval = make_ipu_shaped_array(inaval.shape, inaval.dtype)
+        return ipu_prim_info
+
+    # Register the primal implementation with JAX
+    p.def_impl(p_impl)
+    # Register the abstract evaluation with JAX
+    p.def_abstract_eval(p_abstract_aval)
+    # Register tile IPU translation.
+    register_ipu_tile_primitive(p, p_tile_translation_ipu)
+    return p
