@@ -66,6 +66,7 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
 
     @parameterized.parameters(
         # Basic AMP unit config, without any in/out "groups"
+        {"lhs_size": 1, "rhs_size": 8, "contract_size": 8, "indtype": np.float32, "accdtype": np.float32},
         {"lhs_size": 7, "rhs_size": 16, "contract_size": 8, "indtype": np.float32, "accdtype": np.float32},
         {"lhs_size": 17, "rhs_size": 128, "contract_size": 8, "indtype": np.float32, "accdtype": np.float32},
         # Float16, with different accumulator types.
@@ -133,3 +134,38 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
 
         with self.assertRaises(Exception):
             dot_general_fn(lhs_data, rhs_data)
+
+    @parameterized.parameters(
+        # Basic AMP unit config, without any in/out "groups"
+        # {"lhs_shape": (8, 8), "rhs_shape": (1, 8), "indtype": np.float32, "accdtype": np.float32},
+        # {"lhs_shape": (8, 8), "rhs_shape": (8, ), "indtype": np.float32, "accdtype": np.float32},
+        {"lhs_shape": (1, 8), "rhs_shape": (8, 8), "indtype": np.float32, "accdtype": np.float32},
+    )
+    def test__dot_matrix_vector__amp_slic_vertices__ipu_jitting(self, lhs_shape, rhs_shape, indtype, accdtype):
+        tiles = (0, 3)
+        lhs_data = np.random.randn(len(tiles), *lhs_shape).astype(indtype)
+        rhs_data = np.random.randn(len(tiles), *rhs_shape).astype(indtype)
+
+        def dot_general_fn(lhs, rhs):
+            lhs = tile_put_sharded(lhs, tiles)
+            rhs = tile_put_sharded(rhs, tiles)
+            output = tile_map_primitive(
+                jax.lax.dot_general_p,
+                lhs,
+                rhs,
+                dimension_numbers=(([len(lhs_shape) - 1], [len(rhs_shape) - 1]), ([], [])),
+                precision=None,
+                preferred_element_type=None,
+            )
+            return output
+
+        dot_general_fn_ipu = partial(jax.jit, backend="ipu")(dot_general_fn)
+        output_ipu = dot_general_fn_ipu(lhs_data, rhs_data)
+        dot_general_fn_cpu = partial(jax.jit, backend="cpu")(dot_general_fn)
+        output_cpu = dot_general_fn_cpu(lhs_data, rhs_data)
+
+        assert isinstance(output_ipu, TileShardedArray)
+        assert output_ipu.tiles == tiles
+        assert output_ipu.dtype == accdtype
+        assert output_ipu.shape == output_cpu.shape
+        npt.assert_array_almost_equal(output_ipu.array, output_cpu, decimal=2)

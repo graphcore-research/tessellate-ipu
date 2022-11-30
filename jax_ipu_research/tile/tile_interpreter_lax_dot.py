@@ -114,8 +114,9 @@ class IpuConvPartial1x1Args:
     def __post_init__(self):
         # No output stride supported.
         assert self.out_stride == 1
+        # Multiples of 8 or 16.
         assert self.in_chans_per_group % 8 == 0
-        assert self.out_chans_per_group % 16 == 0
+        assert self.out_chans_per_group % 8 == 0
 
 
 def make_conv1x1_partial_attributes(
@@ -171,7 +172,8 @@ def make_conv1x1_partial_worklist_entry(
     """Build an IPU `WorklistEntry` constant tensor, to feed to the `Conv1x1PartialOut` vertex."""
     # TODO: relax these conditions?
     assert out_offset >= 0
-    assert num_field_elems >= 0
+    # `num_field_elems` bias?
+    assert num_field_elems >= -2
     assert in_offset >= 0
     return np.array([out_offset, num_field_elems, in_offset], dtype=np.uint32).astype(worklist_dtype)
 
@@ -199,16 +201,18 @@ def ipu_dot_general_primitive_translation(
     assert attributes is not None
     num_context_workers = 6
     lhs_aval, rhs_aval = inavals
+    assert lhs_aval.dtype == rhs_aval.dtype
     outaval = p.abstract_eval(*inavals, **attributes)[0]
 
-    # Only support this config for now!
     ((lhs_contracting_dims, rhs_contracting_dims), (lhs_batch_dims, rhs_batch_dims)) = attributes["dimension_numbers"]
-    assert lhs_contracting_dims == [1]
-    assert rhs_contracting_dims == [1]
+    # Only last dimension contracting supported.
+    assert lhs_contracting_dims == [lhs_aval.ndim - 1]
+    assert rhs_contracting_dims == [rhs_aval.ndim - 1]
+    # No batching supported.
     assert len(lhs_batch_dims) == 0
     assert len(rhs_batch_dims) == 0
     # Accumulator/output dtype.
-    accum_dtype = attributes.get("preferred_element_type", lhs_aval.dtype)
+    accum_dtype = attributes.get("preferred_element_type", None) or lhs_aval.dtype
 
     static_args = IpuConvPartial1x1StaticArgs(
         fp_dtype=lhs_aval.dtype,
