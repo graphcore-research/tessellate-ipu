@@ -5,9 +5,49 @@ import chex
 import numpy as np
 from jax.interpreters.xla import DeviceArray, ShapedArray
 
-from jax_ipu_research.utils import DTypeLike
+from jax_ipu_research.utils import DTypeLike, Shape
 
 from .tile_array_primitives import tile_put_replicated_prim, tile_put_sharded_prim
+
+SliceType = Union[int, slice]
+MultiSliceType = Tuple[SliceType, ...]
+
+
+def check_tile_array_multi_slice(slices: MultiSliceType, shape: Shape) -> bool:
+    """Check if a tile array multi-slice is valid, i.e.
+    it will keep memort contiguity of the underlying IPU array.
+
+    Args:
+        slices: Tuple of slices.
+        shape: (full) Shape of the array to slice.
+    """
+    assert isinstance(slices, tuple)
+    # TODO: support `newaxis`
+    if len(slices) > len(shape):
+        raise ValueError(f"Unsupported slicing `{slices}` on IPU tile array of shape `{shape}`.")
+    if len(slices) < len(shape):
+        # Complete with full slices.
+        full_slices = [slice(None)] * (len(shape) - len(slices))
+        slices = (*slices, *full_slices)
+
+    # Check there is no strided slice.
+    for s in slices[1:]:
+        if isinstance(s, slice) and s.step not in {None, 1}:
+            raise ValueError(f"Unsupported strided slicing `{slices}` on IPU tile array of shape `{shape}`.")
+
+    # Last axis with non trivial stride
+    non_trivial_slice_axes = [idx for idx in range(len(shape)) if (shape[idx] > 1 and slices[idx] != slice(None))]
+    last_non_trivial_slice_axis = max(non_trivial_slice_axes) if len(non_trivial_slice_axes) > 0 else 0
+
+    # Check only axis slicing in-between.
+    for idx in range(1, last_non_trivial_slice_axis):
+        s = slices[idx]
+        valid_slice = isinstance(s, int)
+        if not valid_slice:
+            raise ValueError(f"Unsupported slicing `{slices}` on IPU tile array of shape `{shape}`.")
+
+    # Should be good!
+    return True
 
 
 @chex.dataclass(frozen=True, mappable_dataclass=False)
@@ -48,10 +88,18 @@ class TileShardedArray:
         return self.array.shape
 
     @property
+    def size(self) -> int:
+        return self.array.size
+
+    @property
     def aval(self) -> ShapedArray:
         if isinstance(self.array, np.ndarray):
             return ShapedArray(self.array.shape, self.array.dtype)
         return self.array.aval
+
+    @property
+    def num_tiles(self) -> int:
+        return len(self.tiles)
 
     @property
     def tile_aval(self) -> ShapedArray:
@@ -60,21 +108,50 @@ class TileShardedArray:
         return ShapedArray(aval.shape[1:], aval.dtype)
 
     @property
+    def tile_shape(self) -> Shape:
+        return self.tile_aval.shape
+
+    @property
     def device_array(self) -> DeviceArray:
         return self.array
+
+    def reshape(self, shape: Shape) -> "TileShardedArray":
+        d0 = shape[0]
+        if d0 != -1 and d0 != self.num_tiles:
+            raise ValueError(f"Can not reshape '{shape}' the tile sharding axis in a TileShardedArray.")
+        shape = (self.num_tiles, *shape[1:])
+        return TileShardedArray(array=self.array.reshape(shape), tiles=self.tiles)  # type:ignore
+
+    def tile_reshape(self, shape: Shape) -> "TileShardedArray":
+        return self.reshape((self.num_tiles, *shape))
+
+    def squeeze(self):
+        squeezed_array = self.array.squeeze()
+        has_single_tile = self.num_tiles == 1
+        if has_single_tile:
+            squeezed_array = squeezed_array.reshape((1, *squeezed_array.shape))
+        return TileShardedArray(array=squeezed_array, tiles=self.tiles)  # type:ignore
 
     def __array__(self, dtype: DTypeLike = None):
         # Force converting to Numpy array.
         return np.asarray(self.array, dtype=dtype)
 
-    def __getitem__(self, key: Union[int, slice]) -> "TileShardedArray":
+    def __getitem__(self, key: Union[SliceType, MultiSliceType]) -> "TileShardedArray":
         """Slice over the tile axis."""
-        if not isinstance(key, (int, slice)):
+        # Make sure we have a tuple of slices.
+        if isinstance(key, (int, slice)):
+            return self.__getitem__((key,))
+        if not isinstance(key, tuple):
             raise ValueError(f"Unsupported tile sharded array slicing key: {key}.")
-        if isinstance(key, int):
-            # Integer get converted into slicing, for consistency.
-            key = slice(key, key + 1)
-        return TileShardedArray(array=self.array[key], tiles=self.tiles[key])  # type:ignore
+
+        # First key => always a slice so we keep the tile axis.
+        k0 = key[0]
+        if isinstance(k0, int):
+            key = (slice(k0, k0 + 1), *key[1:])
+
+        # Check we have a valid slice (keep memory contiguity).
+        check_tile_array_multi_slice(key, self.array.shape)
+        return TileShardedArray(array=self.array[key], tiles=self.tiles[key[0]])  # type:ignore
 
 
 def tile_put_sharded(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShardedArray:

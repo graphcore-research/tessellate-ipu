@@ -7,7 +7,7 @@ from absl.testing import parameterized
 from jax.lax.linalg import qr_p
 
 from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_replicated, tile_put_sharded
-from jax_ipu_research.tile.tile_interpreter_linalg import qr_correction_vector_p, qr_householder_update_p
+from jax_ipu_research.tile.tile_interpreter_linalg import ipu_qr, qr_correction_vector_p, qr_householder_update_p
 
 
 class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
@@ -81,3 +81,21 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         npt.assert_array_equal(v_ipu.array[0][:col_idx], 0)
         npt.assert_almost_equal(np.linalg.norm(v_ipu.array[0]), 1.0)
         # TODO: additional testing?
+
+    def test__linalg_qr_ipu__result_close_to_numpy(self):
+        N = 8
+        # Random symmetric matrix...
+        x = np.random.randn(N, N).astype(np.float32)
+        x = (x + x.T) / 2
+        xsdiag = np.sign(np.diag(x)).astype(x.dtype)
+
+        def qr_decomposition_fn(x, xsdiag):
+            return ipu_qr(x, xsdiag)
+
+        qr_decomposition_fn_ipu = jax.jit(qr_decomposition_fn, backend="ipu")
+        Q, RT = qr_decomposition_fn_ipu(x, xsdiag)
+        # Numpy as reference point!
+        Qexp, Rexp = np.linalg.qr(x)
+
+        npt.assert_array_almost_equal(np.abs(Q.array)[0], np.abs(Qexp), decimal=5)
+        npt.assert_array_almost_equal(np.abs(RT.array)[0], np.abs(Rexp.T), decimal=5)

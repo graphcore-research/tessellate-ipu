@@ -54,3 +54,7 @@ How to run a terminal with IPU model (useful for local debugging):
 TF_POPLAR_FLAGS='--use_ipu_model --ipu_model_tiles=8' ipython
 TF_CPP_MIN_LOG_LEVEL=0 TF_CPP_VMODULE='poplar_compiler=1,poplar_executor=1' TF_POPLAR_FLAGS='--use_ipu_model' ipython
 ```
+
+How to benchmark a test / piece of code:
+* `PVTI_OPTIONS='{"enable":"true", "directory":"./reports"}'`
+* `POPLAR_ENGINE_OPTIONS='{"autoReport.all":"true", "debug.allowOutOfMemory":"true"}'`

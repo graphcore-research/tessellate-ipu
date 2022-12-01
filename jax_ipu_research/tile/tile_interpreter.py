@@ -34,6 +34,15 @@ The registry is indexed by the primitive name.
 """
 
 
+def check_tile_mapping_consistency(args: Sequence[TileShardedArray]):
+    if len(args) == 0:
+        return
+    t0: TileShardedArray = args[0]
+    for t1 in args[1:]:
+        if t0.tiles != t1.tiles:
+            raise ValueError(f"Inconsistent tile mapping between input arrays: {t0.tiles} vs {t1.tiles}.")
+
+
 def tile_map_primitive(
     primitive: Primitive, *args: TileShardedArray, **kwargs: Any
 ) -> Union[TileShardedArray, Sequence[TileShardedArray]]:
@@ -69,6 +78,7 @@ def tile_map_primitive(
         raise TypeError("Tile map inputs must be `TileShardedArray` instances.")
 
     # TODO: check tile mapping consistency.
+    check_tile_mapping_consistency(inputs)
     tiles = tiles or inputs[0].tiles
     attributes = attributes or {}
     # Get the IPU tile map equation corresponding.
