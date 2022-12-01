@@ -1,4 +1,5 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+#include <poplar/HalfFloat.hpp>
 #include <poplar/Vertex.hpp>
 
 #ifdef __IPU__
@@ -129,3 +130,94 @@ class LinalgQRVertex : public Vertex {
 
 // explicit instantiations
 template class LinalgQRVertex<float>;
+
+/**
+ * @brief Vertex implementing the inplace householder update in the QR
+ * algorithm.
+ *
+ * More specifically:
+ *  x -= 2 * w @ v.T
+ */
+template <typename T>
+class QRHouseholderUpdateVertex : public Vertex {
+ public:
+  InOut<Vector<T, poplar::VectorLayout::ONE_PTR>> x;  // flatten (N, N)
+
+  Input<Vector<T, poplar::VectorLayout::SPAN>> v;     // (N,) v
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR>> w;  // (N,) w
+
+  bool compute() {
+    const std::size_t size = v.size();
+
+    for (std::size_t r = 0; r < size; r++) {
+      T* data = &x[r * size];
+      // Pre-compute the full scaling factor for every line.
+      const T scale = T(-2) * w[r];
+      for (std::size_t c = 0; c < size; c++) {
+        data[c] += scale * v[c];
+      }
+    }
+    return true;
+  }
+};
+
+// explicit instantiations
+template class QRHouseholderUpdateVertex<float>;
+template class QRHouseholderUpdateVertex<half>;
+
+/**
+ * @brief Vertex implementing the inplace householder update in the QR
+ * algorithm.
+ *
+ * More specifically:
+ *  x -= 2 * w @ v.T
+ */
+template <typename T>
+class QRCorrectionVectorVertex : public Vertex {
+ public:
+  Input<Vector<T, poplar::VectorLayout::SPAN>> Rcol;      // (N,) R column.
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR>> sdiag;  // (N,) R diag. sign.
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> v;  // (N,) correction vec.
+
+  const unsigned col_idx;  // R column index.
+
+  QRCorrectionVectorVertex();
+
+  bool compute() {
+    const std::size_t size = Rcol.size();
+    // Initialization of v
+    for (std::size_t k = 0; k < col_idx; ++k) {
+      v[k] = 0;
+    }
+    for (std::size_t k = col_idx; k < size; ++k) {
+      v[k] = Rcol[k];
+    }
+
+    // Compute the l2 norm ||v||=sqrt(sum_i v_i**2).
+    float norm = 0.;
+    for (std::size_t k = 0; k < size; ++k) {
+      norm += v[k] * v[k];
+    }
+    norm = std::sqrt(norm);
+
+    // Change the entry of v that corresponds to the diagonal element of R.
+    v[col_idx] -= norm * sdiag[col_idx];  // TODO: using sign(x)=x/|x|
+
+    // Compute the l2 norm ||v||=sqrt(sum_i v_i**2).
+    norm = 0.;
+    for (std::size_t k = 0; k < size; ++k) {
+      norm += v[k] * v[k];
+    }
+    norm = std::sqrt(norm);
+
+    // Normalize v by the new norm.
+    for (std::size_t k = 0; k < size; ++k) {
+      v[k] = v[k] / norm;
+    }
+    return true;
+  }
+};
+
+// explicit instantiations
+template class QRCorrectionVectorVertex<float>;
+template class QRCorrectionVectorVertex<half>;

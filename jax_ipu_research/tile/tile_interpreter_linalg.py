@@ -6,7 +6,7 @@ from jax.core import Primitive, ShapedArray
 from jax.lax.linalg import qr_p
 from numpy.typing import DTypeLike
 
-from .tile_interpreter import register_ipu_tile_primitive
+from .tile_interpreter import create_simple_tile_primitive, register_ipu_tile_primitive
 from .tile_interpreter_primitives import (  # make_ipu_vertex_attributes,
     IpuTileMapEquation,
     from_numpy_dtype_to_ipu_type,
@@ -14,6 +14,10 @@ from .tile_interpreter_primitives import (  # make_ipu_vertex_attributes,
     make_ipu_vertex_in_info,
     make_ipu_vertex_out_info,
 )
+
+
+def get_qr_vertex_gp_filename() -> str:
+    return os.path.join(os.path.dirname(__file__), "vertex", "tile_qr_vertex.cpp")
 
 
 def make_qr_fullname_vertex(dtype: DTypeLike) -> str:
@@ -48,7 +52,6 @@ def ipu_qr_primitive_translation(
     size = inaval.shape[0]
     qaval, raval = qr_p.abstract_eval(inaval, full_matrices=True)[0]
 
-    gp_filename = os.path.join(os.path.dirname(__file__), "vertex", "tile_qr_vertex.cpp")
     vname = make_qr_fullname_vertex(inaval.dtype)
     ipu_prim_info = IpuTileMapEquation(
         vname=vname,
@@ -64,7 +67,7 @@ def ipu_qr_primitive_translation(
         # Temporary scratch space to use by the vertex (zero=unused).
         tmp_space_aval=make_ipu_shaped_array((size, 3), inaval.dtype),
         # Optional GP filename and perf. estimate.
-        gp_filename=gp_filename,
+        gp_filename=get_qr_vertex_gp_filename(),
         perf_estimate=size**2,
     )
     return ipu_prim_info
@@ -72,3 +75,23 @@ def ipu_qr_primitive_translation(
 
 # Register QR tile IPU translation.
 register_ipu_tile_primitive(qr_p, ipu_qr_primitive_translation)
+
+# Vertex performing inplace update: x -= 2 * w @ v.T
+qr_householder_update_p = create_simple_tile_primitive(
+    "qr_householder_update",
+    "QRHouseholderUpdateVertex<{x}>",
+    ["x", "v", "w"],
+    {"x": 0},
+    gp_filename=get_qr_vertex_gp_filename(),
+    perf_estimate=1000,
+)
+
+# Vertex computing QR correction vector
+qr_correction_vector_p = create_simple_tile_primitive(
+    "qr_correction_vector",
+    "QRCorrectionVectorVertex<{Rcol}>",
+    ["Rcol", "sdiag"],
+    {"v": 0},
+    gp_filename=get_qr_vertex_gp_filename(),
+    perf_estimate=1000,
+)

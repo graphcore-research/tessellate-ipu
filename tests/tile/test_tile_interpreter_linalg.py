@@ -6,7 +6,8 @@ import numpy.testing as npt
 from absl.testing import parameterized
 from jax.lax.linalg import qr_p
 
-from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
+from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_replicated, tile_put_sharded
+from jax_ipu_research.tile.tile_interpreter_linalg import qr_correction_vector_p, qr_householder_update_p
 
 
 class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
@@ -37,3 +38,46 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         assert isinstance(R_ipu, TileShardedArray)
         npt.assert_array_almost_equal(np.abs(Q_ipu), np.abs(Q_cpu))
         npt.assert_array_almost_equal(np.abs(R_ipu), np.abs(R_cpu))
+
+    def test__qr_householder_update__proper_result(self):
+        N = 8
+        tiles = (0,)
+        x = np.random.randn(N, N).astype(np.float32)
+        v = np.random.randn(
+            N,
+        ).astype(np.float32)
+        w = np.random.randn(
+            N,
+        ).astype(np.float32)
+
+        def qr_householder_update_fn(x, v, w):
+            x = tile_put_replicated(x, tiles)
+            v = tile_put_replicated(v, tiles)
+            w = tile_put_replicated(w, tiles)
+            return tile_map_primitive(qr_householder_update_p, x, v, w)
+
+        qr_householder_update_fn_ipu = jax.jit(qr_householder_update_fn, backend="ipu")
+        x_ipu = qr_householder_update_fn_ipu(x, v, w)
+
+        assert isinstance(x_ipu, TileShardedArray)
+        npt.assert_array_almost_equal(x_ipu.array[0], x - 2 * np.outer(w, v))
+
+    def test__qr_correction_vector__proper_result(self):
+        N = 8
+        tiles = (0,)
+        col_idx = 4
+        Rcol = np.random.randn(N).astype(np.float32)
+        sdiag = np.random.randn(N).astype(np.float32)
+
+        def qr_correction_vector_fn(Rcol, sdiag):
+            Rcol = tile_put_replicated(Rcol, tiles)
+            sdiag = tile_put_replicated(sdiag, tiles)
+            return tile_map_primitive(qr_correction_vector_p, Rcol, sdiag, col_idx=col_idx)
+
+        qr_correction_vector_fn_ipu = jax.jit(qr_correction_vector_fn, backend="ipu")
+        v_ipu = qr_correction_vector_fn_ipu(Rcol, sdiag)
+
+        assert isinstance(v_ipu, TileShardedArray)
+        npt.assert_array_equal(v_ipu.array[0][:col_idx], 0)
+        npt.assert_almost_equal(np.linalg.norm(v_ipu.array[0]), 1.0)
+        # TODO: additional testing?

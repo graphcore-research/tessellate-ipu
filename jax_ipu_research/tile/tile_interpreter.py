@@ -11,10 +11,11 @@ from jax.interpreters.xla import ShapedArray
 from .tile_array import TileShardedArray
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
+    IpuVertexIOType,
     from_numpy_dtype_to_ipu_type,
     make_ipu_shaped_array,
-    make_ipu_vertex_in_info,
-    make_ipu_vertex_out_info,
+    make_ipu_vertex_attributes,
+    make_ipu_vertex_io_info,
     tile_map_equation_call_multi_out,
     tile_map_equation_call_single_out,
 )
@@ -145,6 +146,16 @@ def create_simple_tile_primitive(
     p.multiple_results = len(outputs) > 1
     num_inputs = len(inputs)
 
+    # InOut entries.
+    inout_names = {v for v in inputs if v in outputs}
+
+    def get_iotype(name: str, default: IpuVertexIOType) -> IpuVertexIOType:
+        return IpuVertexIOType.InOut if name in inout_names else default
+
+    # Build inputs/outputs vertex IO type.
+    inputs_iotype = {v: get_iotype(v, IpuVertexIOType.In) for v in inputs}
+    outputs_iotype = {v: get_iotype(v, IpuVertexIOType.Out) for v in outputs.keys()}
+
     def p_abstract_aval(*args, **kwargs):
         assert len(args) == num_inputs
         out_avals = [args[idx] for idx in outputs.values()]
@@ -163,6 +174,8 @@ def create_simple_tile_primitive(
         """IPU tile translation for custom vertex."""
         assert len(inavals) == len(inputs)
         outavals = p_abstract_aval(*inavals)
+        if not p.multiple_results:
+            outavals = (outavals,)
 
         inavals_dict = {inname: inaval for inname, inaval in zip(inputs, inavals)}
         # Generate vertex fullname, using templated dtypes.
@@ -172,18 +185,25 @@ def create_simple_tile_primitive(
         }
         vertex_fullname = vname.format(**vname_dtype_inputs)
 
+        # Pass attributes to the vertex.
+        attributes = {} if attributes is None else attributes
+        attrs_i32, attrs_f32 = make_ipu_vertex_attributes(**attributes)
         ipu_prim_info = IpuTileMapEquation(
             vname=vertex_fullname,
             pname=p.name,
             tiles=tiles,
             # IO vertex infos.
-            inputs_info=[make_ipu_vertex_in_info(inname, inaval) for inname, inaval in zip(inputs, inavals)],
+            inputs_info=[
+                make_ipu_vertex_io_info(inname, inputs_iotype[inname], inaval)
+                for inname, inaval in zip(inputs, inavals)
+            ],
             outputs_info=[
-                make_ipu_vertex_out_info(outname, outaval) for outname, outaval in zip(outputs.keys(), outavals)
+                make_ipu_vertex_io_info(outname, outputs_iotype[outname], outaval)
+                for outname, outaval in zip(outputs.keys(), outavals)
             ],
             # Additional attributes to pass to the vertex
-            attributes_i32=[],
-            attributes_f32=[],
+            attributes_i32=attrs_i32,
+            attributes_f32=attrs_f32,
             # Optional GP filename and perf. estimate.
             gp_filename=gp_filename,
             perf_estimate=perf_estimate,

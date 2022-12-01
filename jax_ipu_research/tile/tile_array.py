@@ -86,6 +86,7 @@ def tile_put_sharded(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShardedA
     Returns:
         Tile sharded array.
     """
+    # TODO: support JAX pytrees.
     return TileShardedArray(array=tile_put_sharded_prim(array, tiles), tiles=tiles)  # type:ignore
 
 
@@ -98,4 +99,5 @@ def tile_put_replicated(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShard
     Returns:
         Tile sharded array.
     """
+    # TODO: support JAX pytrees.
     return TileShardedArray(array=tile_put_replicated_prim(array, tiles), tiles=tiles)  # type:ignore
