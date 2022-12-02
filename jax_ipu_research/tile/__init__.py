@@ -11,6 +11,7 @@ from . import (
 from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_simple_tile_primitive, register_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_hw_primitives import hw_cycle_count_p
+from .tile_interpreter_lax_dot import IpuConvVertexType
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
     IpuVertexIOType,

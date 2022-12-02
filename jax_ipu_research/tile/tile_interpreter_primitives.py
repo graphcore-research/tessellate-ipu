@@ -211,6 +211,12 @@ def make_ipu_vertex_attributes(**kwargs) -> Tuple[List[IpuVertexAttributeI32], L
     return attrs_i32, attrs_f32
 
 
+def tile_map_remove_ipu_attributes(attributes: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove IPU attributes from a dictionary."""
+    ipu_prefix = "ipu_"
+    return {k: v for k, v in attributes.items() if not k.startswith(ipu_prefix)}
+
+
 def get_tile_map_ipu_arguments(**kwargs) -> Tuple[str, Tuple[int, ...], str]:
     """Get the tile map arguments: primitive name, tiles and eqn."""
     return kwargs["pname"], kwargs["tiles"], kwargs["tile_map_eqn_json"]
@@ -222,6 +228,7 @@ def get_primitive_arguments(params: Dict[str, Any]) -> Dict[str, Any]:
     params.pop("pname", None)
     params.pop("tiles", None)
     params.pop("tile_map_eqn_json", None)
+    params = tile_map_remove_ipu_attributes(params)
     return params
 
 

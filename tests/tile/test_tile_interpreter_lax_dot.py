@@ -7,13 +7,13 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
+from jax_ipu_research.tile import IpuConvVertexType, TileShardedArray, tile_map_primitive, tile_put_sharded
 from jax_ipu_research.tile.tile_interpreter_lax_dot import (
     IpuConvPartial1x1Args,
     IpuConvPartial1x1StaticArgs,
     ipuGetTransformedOutStride,
     ipuReverseTransformedOutStride,
-    make_conv1x1_partial_attributes,
+    make_conv_partial1x1_attributes,
 )
 
 
@@ -36,7 +36,7 @@ class IpuConvPartial1x1Utils(chex.TestCase, parameterized.TestCase):
         assert out_stride1[0]
         assert out_stride1[1] == out_stride0
 
-    def test__make_conv1x1_partial_attributes__proper_values(self):
+    def test__make_conv_partial1x1_attributes__proper_values(self):
         conv_static_args = IpuConvPartial1x1StaticArgs(np.float32, np.float32, True, False, 16, 2, False)
         conv_args = IpuConvPartial1x1Args(
             num_conv_groups=1,
@@ -48,7 +48,7 @@ class IpuConvPartial1x1Utils(chex.TestCase, parameterized.TestCase):
             in_chans_per_group=8,
             out_flip=True,
         )
-        attrs = make_conv1x1_partial_attributes(conv_static_args, conv_args)
+        attrs = make_conv_partial1x1_attributes(conv_static_args, conv_args)
         assert len(attrs) == 7
         attrs_dict = {v.name: v.value for v in attrs}
         assert attrs_dict["numConvGroupsM1"] == 0
@@ -76,7 +76,7 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
         # {"lhs_size": 11, "rhs_size": 64, "contract_size": 32, "indtype": np.float16, "accdtype": np.float32},
         # {"lhs_size": 256, "rhs_size": 256, "contract_size": 256, "indtype": np.float32, "accdtype": np.float32},
     )
-    def test__dot_general__conv1x1_partial__ipu_jitting(self, lhs_size, rhs_size, contract_size, indtype, accdtype):
+    def test__dot_general__conv_partial1x1__ipu_jitting(self, lhs_size, rhs_size, contract_size, indtype, accdtype):
         tiles = (0, 3)
         lhs_data = np.random.randn(len(tiles), lhs_size, contract_size).astype(indtype)
         rhs_data = np.random.randn(len(tiles), rhs_size, contract_size).astype(indtype)
@@ -91,6 +91,7 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
                 dimension_numbers=(([1], [1]), ([], [])),
                 precision=jax.lax.Precision.DEFAULT,
                 preferred_element_type=accdtype,
+                ipu_vertex_type=IpuConvVertexType.ConvPartial1x1,
             )
             return output
 
@@ -113,7 +114,7 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
         {"lhs_size": 7, "rhs_size": 16, "contract_size": 16, "indtype": np.float32, "accdtype": np.float32},
         {"lhs_size": 7, "rhs_size": 16, "contract_size": 32, "indtype": np.float16, "accdtype": np.float16},
     )
-    def test__dot_general__conv1x1_partial__input_errors(self, lhs_size, rhs_size, contract_size, indtype, accdtype):
+    def test__dot_general__conv_partial1x1__input_errors(self, lhs_size, rhs_size, contract_size, indtype, accdtype):
         tiles = (0, 3)
         lhs_data = np.random.randn(len(tiles), lhs_size, contract_size).astype(indtype)
         rhs_data = np.random.randn(len(tiles), rhs_size, contract_size).astype(indtype)
@@ -134,6 +135,45 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
 
         with self.assertRaises(Exception):
             dot_general_fn(lhs_data, rhs_data)
+
+    @parameterized.parameters(
+        # Basic HMAC unit.
+        # {"lhs_shape": (1,), "rhs_shape": (1,), "indtype": np.float32, "accdtype": np.float32},
+        {"lhs_shape": (2,), "rhs_shape": (2,), "indtype": np.float32, "accdtype": np.float32},
+        {"lhs_shape": (4,), "rhs_shape": (4,), "indtype": np.float32, "accdtype": np.float32},
+        {"lhs_shape": (16,), "rhs_shape": (16,), "indtype": np.float32, "accdtype": np.float32},
+        {"lhs_shape": (64,), "rhs_shape": (64,), "indtype": np.float32, "accdtype": np.float32},
+        {"lhs_shape": (128,), "rhs_shape": (128,), "indtype": np.float32, "accdtype": np.float32},
+    )
+    def test__dot_general__conv_partial_hmac__ipu_jitting(self, lhs_shape, rhs_shape, indtype, accdtype):
+        tiles = (0, 3)
+        lhs_data = np.random.randn(len(tiles), *lhs_shape).astype(indtype)
+        rhs_data = np.random.randn(len(tiles), *rhs_shape).astype(indtype)
+
+        def dot_general_fn(lhs, rhs):
+            lhs = tile_put_sharded(lhs, tiles)
+            rhs = tile_put_sharded(rhs, tiles)
+            output = tile_map_primitive(
+                jax.lax.dot_general_p,
+                lhs,
+                rhs,
+                dimension_numbers=(([len(lhs_shape) - 1], [len(rhs_shape) - 1]), ([], [])),
+                precision=jax.lax.Precision.DEFAULT,
+                preferred_element_type=accdtype,
+                ipu_vertex_type=IpuConvVertexType.ConvPartialHMAC,
+            )
+            return output
+
+        dot_general_fn_ipu = partial(jax.jit, backend="ipu")(dot_general_fn)
+        output_ipu = dot_general_fn_ipu(lhs_data, rhs_data)
+        dot_general_fn_cpu = partial(jax.jit, backend="cpu")(dot_general_fn)
+        output_cpu = dot_general_fn_cpu(lhs_data, rhs_data)
+
+        assert isinstance(output_ipu, TileShardedArray)
+        assert output_ipu.tiles == tiles
+        assert output_ipu.dtype == accdtype
+        assert output_ipu.shape == output_cpu.shape
+        npt.assert_array_almost_equal(output_ipu.array, output_cpu, decimal=2)
 
     @parameterized.parameters(
         # Basic AMP unit config, without any in/out "groups"
