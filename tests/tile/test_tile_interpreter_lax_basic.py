@@ -9,7 +9,8 @@ from absl.testing import parameterized
 from jax import lax
 from jax.core import ShapedArray
 
-from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
+from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_replicated, tile_put_sharded
+from jax_ipu_research.tile.tile_interpreter_lax_binary import scaled_add_p, scaled_sub_p
 from jax_ipu_research.tile.tile_interpreter_lax_unary import (
     ipu_unary_primitive_translation,
     make_unary1d_vertex_fullname,
@@ -138,6 +139,10 @@ class IpuTileUnaryPrimitiveTests(chex.TestCase):
 
 
 class IpuTileBinaryPrimitiveTests(chex.TestCase, parameterized.TestCase):
+    def setUp(self):
+        super().setUp()
+        np.random.seed(42)
+
     @parameterized.parameters(
         [
             (lax.add_p, np.float32),
@@ -217,3 +222,31 @@ class IpuTileBinaryPrimitiveTests(chex.TestCase, parameterized.TestCase):
         assert output.tiles == tiles
         assert output.dtype == np.bool_
         npt.assert_array_equal(output.array, input0 >= input1)
+
+    @parameterized.parameters(
+        [
+            (scaled_add_p, np.float32),
+            (scaled_add_p, np.float16),
+            (scaled_sub_p, np.float32),
+            (scaled_sub_p, np.float16),
+        ]
+    )
+    def test__tile_map_primitive__scaled_ops__ipu_jitting__proper_result(self, scale_op_p, dtype):
+        tiles = (3, 4, 5)
+        inshape = (len(tiles), 7, 9, 5)
+        A = np.random.randn(*inshape).astype(dtype)
+        B = np.random.randn(*inshape).astype(dtype)
+        sB = np.random.randn(1).astype(dtype)
+
+        @partial(jax.jit, backend="ipu")
+        def compute_fn(A, B, sB):
+            A = tile_put_sharded(A, tiles)
+            B = tile_put_sharded(B, tiles)
+            sB = tile_put_replicated(sB, tiles)
+            return tile_map_primitive(scale_op_p, A, B, sB)
+
+        output = compute_fn(A, B, sB)
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        assert output.dtype == A.dtype
+        npt.assert_array_almost_equal(output.array, scale_op_p.impl(A, B, sB), decimal=2)
