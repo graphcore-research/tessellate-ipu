@@ -10,8 +10,10 @@ from numpy.typing import DTypeLike
 
 from jax_ipu_research.utils import Array
 
-from .tile_array import TileShardedArray, tile_put_replicated
+from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_simple_tile_primitive, register_ipu_tile_primitive, tile_map_primitive
+from .tile_interpreter_lax_binary import scaled_sub_p
+from .tile_interpreter_lax_dot import IpuConvVertexType
 from .tile_interpreter_primitives import (  # make_ipu_vertex_attributes,
     IpuTileMapEquation,
     from_numpy_dtype_to_ipu_type,
@@ -116,49 +118,53 @@ def ipu_qr(x: Array, xsdiag: Array) -> Tuple[Array, Array]:
     assert x.shape[0] == x.shape[1]
     N = x.shape[0]
 
-    Q_tiles = (0,)
-    R_tiles = (1,)
-    # all_tiles = (*Q_tiles, *R_tiles)
+    # Sharding R and Q
+    Q_tiles = tuple(range(0, N))
+    R_tiles = tuple(range(N, 2 * N))
 
     # TODO: on-device construction of identity
-    Q = tile_put_replicated(np.identity(N, dtype=x.dtype), Q_tiles)
+    Q = tile_put_sharded(np.identity(N, dtype=x.dtype), Q_tiles)
     # TODO: shard R and Q on different tiles.
-    RT = tile_put_replicated(x.T, R_tiles)
-    sdiag = tile_put_replicated(xsdiag, R_tiles)
+    RT = tile_put_sharded(x.T, R_tiles)
+    # Replicate once on all tiles. Faster then for the looping.
+    sdiag_full = tile_put_replicated(xsdiag, R_tiles)
 
     for cidx in range(N - 1):
         # Extract the proper R column (no tile copy, pure view).
-        Rcol = RT[:, cidx]
-        # Correction vector.
+        Rcol = RT[cidx]
+        sdiag = sdiag_full[cidx]
+        # Correction vector. NOTE: computed on a single tile, changing at every loop.
         v: TileShardedArray = tile_map_primitive(qr_correction_vector_p, Rcol, sdiag, col_idx=cidx)  # type:ignore
 
+        # Replicate to all Q and R tiles.
+        vQ = tile_put_replicated(v.array[0], Q_tiles)
+        vR = tile_put_replicated(v.array[0], R_tiles)
+
         # w = R^T @ v
-        v = v.tile_reshape((1, -1))  # tmp fix for `dot_general`
         w: TileShardedArray = tile_map_primitive(  # type:ignore
             dot_general_p,
-            v,
+            vR,
             RT,
-            dimension_numbers=(([1], [1]), ([], [])),
+            dimension_numbers=(([0], [0]), ([], [])),
             precision=None,
             preferred_element_type=None,
+            ipu_vertex_type=IpuConvVertexType.ConvPartialHMAC,
         )
         # Inplace update of R.
-        RT = tile_map_primitive(qr_householder_update_p, RT, v, w)  # type:ignore
+        RT = tile_map_primitive(scaled_sub_p, RT, vR, w)  # type:ignore
 
         # w = Q @ v
-        # v = v.tile_reshape((1, -1))  # tmp fix for `dot_general`
-        # TODO: cleaner syntax to move to Q tiles.
-        v = tile_put_replicated(v.array[0], Q_tiles)
         w: TileShardedArray = tile_map_primitive(  # type:ignore
             dot_general_p,
-            v,
+            vQ,
             Q,
-            dimension_numbers=(([1], [1]), ([], [])),
+            dimension_numbers=(([0], [0]), ([], [])),
             precision=None,
             preferred_element_type=None,
+            ipu_vertex_type=IpuConvVertexType.ConvPartialHMAC,
         )
         # Inplace update of Q.
-        Q = tile_map_primitive(qr_householder_update_p, Q, v, w)  # type:ignore
+        Q = tile_map_primitive(scaled_sub_p, Q, vQ, w)  # type:ignore
 
     # Return JAX arrays directly?
     return (Q, RT)

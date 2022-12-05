@@ -152,7 +152,8 @@ class QRHouseholderUpdateVertex : public Vertex {
     for (std::size_t r = 0; r < size; r++) {
       T* data = &x[r * size];
       // Pre-compute the full scaling factor for every line.
-      const T scale = T(-2) * w[r];
+      // const T scale = T(-2) * w[r];
+      const T scale = -w[r];
       for (std::size_t c = 0; c < size; c++) {
         data[c] += scale * v[c];
       }
@@ -212,7 +213,8 @@ class QRCorrectionVectorVertex : public Vertex {
 
     // Normalize v by the new norm.
     for (std::size_t k = 0; k < size; ++k) {
-      v[k] = v[k] / norm;
+      // Householder transform factor 2.
+      v[k] = std::sqrt(2.0f) * v[k] / norm;
     }
     return true;
   }

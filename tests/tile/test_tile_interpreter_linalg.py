@@ -60,7 +60,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         x_ipu = qr_householder_update_fn_ipu(x, v, w)
 
         assert isinstance(x_ipu, TileShardedArray)
-        npt.assert_array_almost_equal(x_ipu.array[0], x - 2 * np.outer(w, v))
+        npt.assert_array_almost_equal(x_ipu.array[0], x - np.outer(w, v))
 
     def test__qr_correction_vector__proper_result(self):
         N = 8
@@ -79,11 +79,11 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
 
         assert isinstance(v_ipu, TileShardedArray)
         npt.assert_array_equal(v_ipu.array[0][:col_idx], 0)
-        npt.assert_almost_equal(np.linalg.norm(v_ipu.array[0]), 1.0)
+        npt.assert_almost_equal(np.linalg.norm(v_ipu.array[0]), 1.0 * np.sqrt(2))
         # TODO: additional testing?
 
     def test__linalg_qr_ipu__result_close_to_numpy(self):
-        N = 8
+        N = 32
         # Random symmetric matrix...
         x = np.random.randn(N, N).astype(np.float32)
         x = (x + x.T) / 2
@@ -97,5 +97,5 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         # Numpy as reference point!
         Qexp, Rexp = np.linalg.qr(x)
 
-        npt.assert_array_almost_equal(np.abs(Q.array)[0], np.abs(Qexp), decimal=5)
-        npt.assert_array_almost_equal(np.abs(RT.array)[0], np.abs(Rexp.T), decimal=5)
+        npt.assert_array_almost_equal(np.abs(Q.array), np.abs(Qexp), decimal=5)
+        npt.assert_array_almost_equal(np.abs(RT.array), np.abs(Rexp.T), decimal=5)
