@@ -83,7 +83,11 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         assert isinstance(x_ipu, TileShardedArray)
         npt.assert_array_almost_equal(x_ipu.array[0], x - np.outer(w, v))
 
-    @parameterized.parameters({"N": 16, "col_idx": 0}, {"N": 16, "col_idx": 3}, {"N": 16, "col_idx": 15})
+    @parameterized.parameters(
+        {"N": 16, "col_idx": 0},
+        {"N": 16, "col_idx": 13},
+        {"N": 16, "col_idx": 15},
+    )
     def test__qr_correction_vector_vertex__proper_result(self, N, col_idx):
         tiles = (0,)
         Rcol = np.random.randn(N).astype(np.float32)
@@ -122,9 +126,14 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
 
         start, end = np.asarray(start)[0], np.asarray(end)[0]
         qr_correction_cycle_count = end[0] - start[0]
-        assert qr_correction_cycle_count <= 20000
+        assert qr_correction_cycle_count <= 1500
+        # print(qr_correction_cycle_count)
+        # assert False
 
-    @parameterized.parameters({"N": 16}, {"N": 32}, {"N": 128})
+    @parameterized.parameters(
+        {"N": 16},
+        {"N": 128},
+    )
     def test__linalg_qr_ipu__result_close_to_numpy(self, N):
         # Random symmetric matrix...
         x = np.random.randn(N, N).astype(np.float32)

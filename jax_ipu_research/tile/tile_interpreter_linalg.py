@@ -96,7 +96,7 @@ qr_householder_update_p = create_simple_tile_primitive(
 # Vertex computing QR correction vector
 qr_correction_vector_p = create_simple_tile_primitive(
     "qr_correction_vector",
-    "QRCorrectionVectorVertex<{Rcol}>",
+    "QRCorrectionVectorVertex",
     ["Rcol", "sdiag"],
     {"v": 0},
     gp_filename=get_qr_vertex_gp_filename(),
