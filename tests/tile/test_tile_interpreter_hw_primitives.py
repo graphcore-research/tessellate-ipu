@@ -8,7 +8,7 @@ import numpy.testing as npt
 from absl.testing import parameterized
 
 from jax_ipu_research import is_ipu_model
-from jax_ipu_research.tile import TileShardedArray, hw_cycle_count_p, tile_map_primitive
+from jax_ipu_research.tile import TileShardedArray, ipu_hw_cycle_count, tile_put_replicated
 
 
 class IpuTileHardwarePrimitives(chex.TestCase, parameterized.TestCase):
@@ -18,16 +18,18 @@ class IpuTileHardwarePrimitives(chex.TestCase, parameterized.TestCase):
 
     # @pytest.mark.skipif(is_ipu_model(jax.devices("ipu")[0]), reason="Not supported on IPU model.")
     @parameterized.parameters({"sync": True}, {"sync": False})
-    def test__tile_hw_cycle_count__proper_hw_counter(self, sync: bool):
+    def test__ipu_hw_cycle_count__proper_hw_counter(self, sync: bool):
         tiles = (1, 2, self.num_tiles - 1)
+        val = np.random.rand(1).astype(np.float32)
 
         @partial(jax.jit, backend="ipu")
-        def compute_fn():
-            cycles0 = tile_map_primitive(hw_cycle_count_p, tiles=tiles, sync=sync)
-            cycles1 = tile_map_primitive(hw_cycle_count_p, tiles=tiles, sync=False)
+        def compute_fn(val):
+            val = tile_put_replicated(val, tiles)
+            val, cycles0 = ipu_hw_cycle_count(val, sync=sync)
+            val, cycles1 = ipu_hw_cycle_count(val, sync=False)
             return cycles0, cycles1
 
-        cycles0_ipu, cycles1_ipu = compute_fn()
+        cycles0_ipu, cycles1_ipu = compute_fn(val)
 
         assert isinstance(cycles0_ipu, TileShardedArray)
         assert cycles0_ipu.tiles == tiles
@@ -45,6 +47,6 @@ class IpuTileHardwarePrimitives(chex.TestCase, parameterized.TestCase):
             # Real IPU hw.
             npt.assert_equal(diff_cycles_count[:, 1], 0)
             npt.assert_equal(diff_cycles_count[:, 0] > 30, True)
-            npt.assert_equal(diff_cycles_count[:, 0] <= 100, True)
+            npt.assert_equal(diff_cycles_count[:, 0] <= 150, True)
             # Should be the same accross all tiles, even without synchronization.
             npt.assert_equal(diff_cycles_count[:, 0], diff_cycles_count[0, 0])

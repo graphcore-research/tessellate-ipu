@@ -6,8 +6,29 @@ import numpy.testing as npt
 from absl.testing import parameterized
 from jax.lax.linalg import qr_p
 
-from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_replicated, tile_put_sharded
+from jax_ipu_research.tile import (
+    TileShardedArray,
+    ipu_hw_cycle_count,
+    tile_map_primitive,
+    tile_put_replicated,
+    tile_put_sharded,
+)
 from jax_ipu_research.tile.tile_interpreter_linalg import ipu_qr, qr_correction_vector_p, qr_householder_update_p
+
+
+def qr_correction_vector_impl(rcol, sdiag, rcol_idx):
+    """Reference implementation of QR correction vector."""
+    N = len(rcol)
+    mask = (np.arange(0, N) >= rcol_idx).astype(rcol.dtype)
+    v = rcol * mask
+    norm = np.linalg.norm(v)
+
+    v[rcol_idx] -= norm * sdiag[rcol_idx]
+    norm = np.linalg.norm(v)
+
+    scale = np.sqrt(2.0) / norm
+    v *= scale
+    return v
 
 
 class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
@@ -62,10 +83,9 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         assert isinstance(x_ipu, TileShardedArray)
         npt.assert_array_almost_equal(x_ipu.array[0], x - np.outer(w, v))
 
-    def test__qr_correction_vector__proper_result(self):
-        N = 8
+    @parameterized.parameters({"N": 16, "col_idx": 0}, {"N": 16, "col_idx": 3}, {"N": 16, "col_idx": 15})
+    def test__qr_correction_vector_vertex__proper_result(self, N, col_idx):
         tiles = (0,)
-        col_idx = 4
         Rcol = np.random.randn(N).astype(np.float32)
         sdiag = np.random.randn(N).astype(np.float32)
 
@@ -76,14 +96,36 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
 
         qr_correction_vector_fn_ipu = jax.jit(qr_correction_vector_fn, backend="ipu")
         v_ipu = qr_correction_vector_fn_ipu(Rcol, sdiag)
+        v_expected = qr_correction_vector_impl(Rcol, sdiag, col_idx)
 
         assert isinstance(v_ipu, TileShardedArray)
         npt.assert_array_equal(v_ipu.array[0][:col_idx], 0)
-        npt.assert_almost_equal(np.linalg.norm(v_ipu.array[0]), 1.0 * np.sqrt(2))
-        # TODO: additional testing?
+        npt.assert_almost_equal(np.linalg.norm(v_ipu.array[0]), 1.0 * np.sqrt(2), decimal=5)
+        npt.assert_array_almost_equal(v_ipu.array[0], v_expected)
 
-    def test__linalg_qr_ipu__result_close_to_numpy(self):
-        N = 32
+    def test__qr_correction_vector_vertex__benchmark_performance(self):
+        N = 128
+        tiles = (0,)
+        col_idx = 16
+        Rcol = np.random.randn(N).astype(np.float32)
+
+        def qr_correction_vector_fn(Rcol):
+            Rcol = tile_put_replicated(Rcol, tiles)
+            Rcol, start = ipu_hw_cycle_count(Rcol)
+            # FIXME: having to pass the same data to get accurate cycle count.
+            r = tile_map_primitive(qr_correction_vector_p, Rcol, Rcol, col_idx=col_idx)
+            r, end = ipu_hw_cycle_count(r)  # type:ignore
+            return r, start, end
+
+        qr_correction_vector_fn = jax.jit(qr_correction_vector_fn, backend="ipu")
+        _, start, end = qr_correction_vector_fn(Rcol)
+
+        start, end = np.asarray(start)[0], np.asarray(end)[0]
+        qr_correction_cycle_count = end[0] - start[0]
+        assert qr_correction_cycle_count <= 20000
+
+    @parameterized.parameters({"N": 16}, {"N": 32}, {"N": 128})
+    def test__linalg_qr_ipu__result_close_to_numpy(self, N):
         # Random symmetric matrix...
         x = np.random.randn(N, N).astype(np.float32)
         x = (x + x.T) / 2
