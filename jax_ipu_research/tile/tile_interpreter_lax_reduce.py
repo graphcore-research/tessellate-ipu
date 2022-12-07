@@ -10,9 +10,9 @@ from .tile_interpreter import register_ipu_tile_primitive
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
     IpuVertexIOType,
-    from_numpy_dtype_to_ipu_type,
     make_ipu_vertex_attributes,
     make_ipu_vertex_io_info,
+    make_ipu_vertex_name_templated,
 )
 
 _reduce_primitive_to_basename: Dict[Primitive, str] = {
@@ -39,10 +39,8 @@ def make_continuous_reduce_vertex_fullname(
         Full popops continuous reduce vertex name.
     """
     basename = _reduce_primitive_to_basename[reduce_p]
-    partial_dtype_ipu = from_numpy_dtype_to_ipu_type(partial_dtype).name.lower()
-    out_dtype_ipu = from_numpy_dtype_to_ipu_type(out_dtype).name.lower()
-    is_update_str = str(is_update).lower()
-    return f"popops::ContinuousReduce<popops::{basename},{partial_dtype_ipu},{out_dtype_ipu},{is_update_str}>"
+    basename = f"popops::{basename}"
+    return make_ipu_vertex_name_templated("popops::ContinuousReduce", basename, partial_dtype, out_dtype, is_update)
 
 
 def ipu_reduce_primitive_translation(

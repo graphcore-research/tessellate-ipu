@@ -16,7 +16,6 @@ class IpuTileHardwarePrimitives(chex.TestCase, parameterized.TestCase):
         self.device = jax.devices("ipu")[0]
         self.num_tiles = self.device.num_tiles
 
-    # @pytest.mark.skipif(is_ipu_model(jax.devices("ipu")[0]), reason="Not supported on IPU model.")
     @parameterized.parameters({"sync": True}, {"sync": False})
     def test__ipu_hw_cycle_count__proper_hw_counter(self, sync: bool):
         tiles = (1, 2, self.num_tiles - 1)
@@ -50,3 +49,26 @@ class IpuTileHardwarePrimitives(chex.TestCase, parameterized.TestCase):
             npt.assert_equal(diff_cycles_count[:, 0] <= 150, True)
             # Should be the same accross all tiles, even without synchronization.
             npt.assert_equal(diff_cycles_count[:, 0], diff_cycles_count[0, 0])
+
+    @parameterized.parameters(
+        {"dtype": np.float32},
+        {"dtype": np.float16},
+        {"dtype": np.int32},
+        {"dtype": np.int16},
+        {"dtype": np.int8},
+        {"dtype": np.uint32},
+        # {"dtype": np.uint16}, Not supported by XLA backend? FAILED_PRECONDITION error.
+        {"dtype": np.uint8},
+        {"dtype": np.bool_},
+    )
+    def test__ipu_hw_cycle_count__proper_barrier_dtypes_support(self, dtype):
+        tiles = (0,)
+        val = np.random.randn(32).astype(dtype)
+
+        @partial(jax.jit, backend="ipu")
+        def compute_fn(val):
+            val = tile_put_replicated(val, tiles)
+            val, cycles = ipu_hw_cycle_count(val, sync=False)
+            return val, cycles
+
+        compute_fn(val)

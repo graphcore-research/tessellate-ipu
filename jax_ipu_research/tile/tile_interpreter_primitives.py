@@ -55,15 +55,57 @@ _ipu_type_to_numpy_dtype = {
 """Mapping from IPU type to Numpy dtype.
 """
 
+_ipu_type_to_name = {
+    IpuType.BOOL: "bool",
+    IpuType.UNSIGNED_CHAR: "unsigned char",
+    IpuType.UNSIGNED_SHORT: "unsigned short",
+    IpuType.UNSIGNED_INT: "unsigned int",
+    IpuType.CHAR: "signed char",
+    IpuType.SHORT: "short",
+    IpuType.INT: "int",
+    IpuType.HALF: "half",
+    IpuType.FLOAT: "float",
+}
+"""Mapping from IPU type to name (used in vertex naming convention).
+"""
+
 
 def from_numpy_dtype_to_ipu_type(v: Any) -> IpuType:
     """Convert from Numpy dtype to IPU type."""
+    if isinstance(v, IpuType):
+        return v
     return _numpy_dtype_to_ipu_type[np.dtype(v)]
 
 
 def from_ipu_type_to_numpy_dtype(v: IpuType) -> Any:
     """Convert from IPU type to Numpy dtype."""
+    if isinstance(v, np.dtype) or (isinstance(v, type) and issubclass(v, np.number)):
+        return np.dtype(v)
     return _ipu_type_to_numpy_dtype[v]
+
+
+def get_ipu_type_name(v: Any) -> str:
+    """Get the (vertex dtype) name of an IPU type."""
+    return _ipu_type_to_name[from_numpy_dtype_to_ipu_type(v)]
+
+
+def make_ipu_vertex_name_templated(basename: str, *args) -> str:
+    """Make an IPU vertex full/templated name, from a basename and additional arguments."""
+
+    def get_arg_name(v) -> str:
+        if isinstance(v, str):
+            return v
+        elif isinstance(v, (bool, int)):
+            return str(v).lower()
+        elif isinstance(v, (IpuType, np.dtype)) or (isinstance(v, type) and issubclass(v, np.number)):
+            return get_ipu_type_name(v)
+        raise ValueError(f"Unknown IPU template argument type: {v}.")
+
+    if len(args) == 0:
+        return basename
+
+    args_name = ",".join([get_arg_name(v) for v in args])
+    return f"{basename}<{args_name}>"
 
 
 def make_ipu_shaped_array(shape: Sequence[int], dtype: DTypeLike) -> IpuShapedArray:
@@ -174,21 +216,6 @@ def make_ipu_vertex_outputs(
         make_ipu_vertex_io_info(name, _get_iotype(name), aval=aval, vertex_dim2=_get_vertex_dim2(name))
         for name, aval in outavals.items()
     ]
-
-
-def make_ipu_vertex_name_templated(name: str, *dtypes: Any) -> str:
-    """Make templated vertex name, e.g. `Uniform<float>`.
-
-    Args:
-        name: Basename of the vertex.
-        dtypes: Dtypes to use in templated name.
-    Returns:
-        Full templated vertex name.
-    """
-    dtype_names = [from_numpy_dtype_to_ipu_type(d).name.lower() for d in dtypes]
-    dtype_name_concat = ",".join(dtype_names)
-    fullname = f"{name}<{dtype_name_concat}>"
-    return fullname
 
 
 def make_ipu_vertex_attributes(**kwargs) -> Tuple[List[IpuVertexAttributeI32], List[IpuVertexAttributeF32]]:

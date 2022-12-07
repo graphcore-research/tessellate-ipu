@@ -54,11 +54,12 @@ class CycleCountBarrier : public SupervisorVertex {
 };
 
 // explicit instantiations
+template class CycleCountBarrier<bool>;
 template class CycleCountBarrier<unsigned char>;
-template class CycleCountBarrier<char>;
+template class CycleCountBarrier<signed char>;
 template class CycleCountBarrier<unsigned short>;
 template class CycleCountBarrier<short>;
-template class CycleCountBarrier<unsigned int>;
+template class CycleCountBarrier<unsigned>;
 template class CycleCountBarrier<int>;
 template class CycleCountBarrier<float>;
 template class CycleCountBarrier<half>;

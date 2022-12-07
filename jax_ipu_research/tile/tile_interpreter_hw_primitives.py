@@ -8,8 +8,8 @@ from jax import core
 from .tile_interpreter import TileShardedArray, register_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
-    from_numpy_dtype_to_ipu_type,
     make_ipu_vertex_inout_info,
+    make_ipu_vertex_name_templated,
     make_ipu_vertex_out_info,
 )
 
@@ -54,8 +54,7 @@ def hw_cycle_count_tile_translation_ipu(
     inaval = inavals[0]
     _, outaval = hw_cycle_count_abstract_eval(inaval)
 
-    dtype_ipu = from_numpy_dtype_to_ipu_type(inaval.dtype).name.lower()
-    vertex_name = f"CycleCountBarrier<{dtype_ipu}>"
+    vertex_name = make_ipu_vertex_name_templated("CycleCountBarrier", inaval.dtype)
     gp_filename = os.path.join(os.path.dirname(__file__), "vertex", "hw_vertex.cpp")
 
     # Translation rule to IPU vertex

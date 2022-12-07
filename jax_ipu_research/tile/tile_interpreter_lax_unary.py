@@ -10,6 +10,7 @@ from .tile_interpreter import register_ipu_tile_primitive
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
     from_numpy_dtype_to_ipu_type,
+    get_ipu_type_name,
     make_ipu_vertex_attributes,
     make_ipu_vertex_in_info,
     make_ipu_vertex_out_info,
@@ -81,7 +82,7 @@ _unary_primitive_to_vertex_basename: Dict[Primitive, str] = {
 
 def make_unary1d_vertex_fullname(basename: str, dtype: DTypeLike) -> str:
     """Create the full vertex name from the basename and dtype."""
-    ipu_dtype = from_numpy_dtype_to_ipu_type(dtype).name.lower()
+    ipu_dtype = get_ipu_type_name(dtype)
     return f"popops::UnaryOp1D<popops::expr::UnaryOpType::{basename},{ipu_dtype}>"
 
 

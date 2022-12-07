@@ -198,9 +198,16 @@ class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
         out_dtype = from_ipu_type_to_numpy_dtype(ipu_type)
         assert out_dtype == in_dtype
 
+    def test__from_numpy_dtype_to_ipu_type__handle_ipu_type_input(self):
+        assert from_numpy_dtype_to_ipu_type(IpuType.CHAR) == IpuType.CHAR
+
+    def test__from_ipu_type_to_numpy_dtype__handle_numpy_type_input(self):
+        assert from_ipu_type_to_numpy_dtype(np.dtype(np.float32)) == np.dtype(np.float32)
+        assert from_ipu_type_to_numpy_dtype(np.float32) == np.dtype(np.float32)
+
     def test__make_ipu_vertex_name_templated__proper_fullname(self):
-        vname = make_ipu_vertex_name_templated("MyVertex", np.float32, np.int32)
-        assert vname == "MyVertex<float,int>"
+        vname = make_ipu_vertex_name_templated("MyVertex", "subclass", np.float32, np.uint32, 3, False)
+        assert vname == "MyVertex<subclass,float,unsigned int,3,false>"
 
     def test__make_ipu_vertex_attributes__proper_list_attributes(self):
         attrs_i32, attrs_f32 = make_ipu_vertex_attributes(k1=2, k2=3.0)

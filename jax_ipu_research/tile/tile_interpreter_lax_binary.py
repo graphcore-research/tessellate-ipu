@@ -10,7 +10,7 @@ from jax_ipu_research.utils import DTypeLike
 from .tile_interpreter import register_ipu_tile_primitive
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
-    from_numpy_dtype_to_ipu_type,
+    get_ipu_type_name,
     make_ipu_vertex_attributes,
     make_ipu_vertex_in_info,
     make_ipu_vertex_inout_info,
@@ -72,7 +72,7 @@ _binary_primitive_to_vertex_basename: Dict[Primitive, Tuple[str, Any]] = {
 
 def make_binary1d_vertex_fullname(basename: str, dtype: DTypeLike) -> str:
     """Create the full vertex name from the basename and dtype."""
-    ipu_dtype = from_numpy_dtype_to_ipu_type(dtype).name.lower()
+    ipu_dtype = get_ipu_type_name(dtype)
     return f"popops::BinaryOp1D<popops::expr::BinaryOpType::{basename},{ipu_dtype}>"
 
 
@@ -144,7 +144,7 @@ def make_scale_op_vertex_fullname(basename: str, dtype: DTypeLike) -> str:
     """Create the full vertex name from the basename and dtype."""
     mem_constraints = False
     mem_constraints_str = str(mem_constraints).lower()
-    ipu_dtype = from_numpy_dtype_to_ipu_type(dtype).name.lower()
+    ipu_dtype = get_ipu_type_name(dtype)
     return f"popops::{basename}<{ipu_dtype},{ipu_dtype},{ipu_dtype},{mem_constraints_str}>"
 
 
