@@ -1,4 +1,5 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+import math
 import os
 from typing import Any, Dict, List, Tuple
 
@@ -11,7 +12,7 @@ from numpy.typing import DTypeLike
 from jax_ipu_research.utils import Array
 
 from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
-from .tile_interpreter import create_simple_tile_primitive, register_ipu_tile_primitive, tile_map_primitive
+from .tile_interpreter import create_ipu_tile_primitive, register_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_lax_binary import scaled_sub_p
 from .tile_interpreter_lax_dot import IpuConvVertexType
 from .tile_interpreter_primitives import (  # make_ipu_vertex_attributes,
@@ -83,22 +84,62 @@ def ipu_qr_primitive_translation(
 # Register QR tile IPU translation.
 register_ipu_tile_primitive(qr_p, ipu_qr_primitive_translation)
 
-# Vertex performing inplace update: x -= 2 * w @ v.T
-qr_householder_update_p = create_simple_tile_primitive(
-    "qr_householder_update",
-    "QRHouseholderUpdateVertex<{x}>",
-    ["x", "v", "w"],
-    {"x": 0},
+
+def make_ipu_vector1d_worker_offsets(
+    size: int, vector_size: int = 2, num_workers: int = 6, wdtype: DTypeLike = np.uint16
+) -> np.ndarray:
+    """Make the QR householder row update worker sizes, i.e. how many
+    data vectors per worker thread?
+
+    Args:
+        size: Size of the vector to divide.
+        vector_size: Vector size (2: float, 4: half).
+        num_workers: Number of workers.
+        wdtype: Worklists dtype.
+    Returns:
+        (6,) number of data vectors per thread.
+    """
+    def make_offsets_fn(sizes):
+        sizes = [0] + sizes
+        offsets =  np.cumsum(np.array(sizes, wdtype), dtype=wdtype)
+        return offsets
+
+    assert size % vector_size == 0
+    # Base worksize on the first few workers.
+    base_worksize: int = math.ceil(size / (vector_size * num_workers))
+    num_base_workers = size // (vector_size * base_worksize)
+    worker_sizes: List[int] = [base_worksize] * num_base_workers
+    if num_base_workers == num_workers:
+        return make_offsets_fn(worker_sizes)
+
+    # Remainer term, for the next thread.
+    rem_worksize = size - base_worksize * vector_size * num_base_workers
+    rem_worksize = rem_worksize // vector_size
+    worker_sizes += [rem_worksize]
+    # Fill the rest with zeros.
+    unused_workers = (num_workers - num_base_workers - 1)
+    worker_sizes += [0] * unused_workers
+    return make_offsets_fn(worker_sizes)
+
+
+"""Vertex QR HouseHolder performing row inplace update: x -= scale[0] @ v
+"""
+qr_householder_row_update_p = create_ipu_tile_primitive(
+    "qr_householder_row_update",
+    "QRHouseholderRowUpdateVertex",
+    inputs=["x", "v", "scale"],
+    outputs={"x": 0},
+    constants={"worker_offsets": lambda inavals, *_: make_ipu_vector1d_worker_offsets(inavals[1].size, vector_size=2, wdtype=np.uint16)},
     gp_filename=get_qr_vertex_gp_filename(),
     perf_estimate=1000,
 )
 
 # Vertex computing QR correction vector
-qr_correction_vector_p = create_simple_tile_primitive(
+qr_correction_vector_p = create_ipu_tile_primitive(
     "qr_correction_vector",
     "QRCorrectionVectorVertex",
-    ["Rcol", "sdiag"],
-    {"v": 0},
+    inputs=["Rcol", "sdiag"],
+    outputs={"v": 0},
     gp_filename=get_qr_vertex_gp_filename(),
     perf_estimate=1000,
 )

@@ -1,5 +1,5 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-# Register basic JAX primitives for tile interpreter.
+# Register basic JAX primitives for tile interpreter + all additional libraries + paths.
 from . import (
     external_libs,
     tile_interpreter_lax_binary,
@@ -9,8 +9,9 @@ from . import (
     tile_interpreter_linalg,
 )
 from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
-from .tile_interpreter import create_simple_tile_primitive, register_ipu_tile_primitive, tile_map_primitive
+from .tile_interpreter import create_ipu_tile_primitive, register_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_hw_primitives import hw_cycle_count_p, ipu_hw_cycle_count
+from .tile_interpreter_lax_binary import scaled_add_p, scaled_sub_p
 from .tile_interpreter_lax_dot import IpuConvVertexType
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,

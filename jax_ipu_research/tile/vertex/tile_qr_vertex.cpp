@@ -2,16 +2,7 @@
 #include <poplar/HalfFloat.hpp>
 #include <poplar/Vertex.hpp>
 
-#ifdef __IPU__
-// Use the IPU intrinsics
-#include <ipu_memory_intrinsics>
-#include <ipu_vector_math>
-#define NAMESPACE ipu
-#else
-// Use the std functions
-#include <cmath>
-#define NAMESPACE std
-#endif
+#include "intrinsics_utils.hpp"
 
 using namespace poplar;
 
@@ -134,41 +125,6 @@ class LinalgQRVertex : public Vertex {
 template class LinalgQRVertex<float>;
 
 /**
- * @brief Vertex implementing the inplace householder update in the QR
- * algorithm.
- *
- * More specifically:
- *  x -= 2 * w @ v.T
- */
-template <typename T>
-class QRHouseholderUpdateVertex : public Vertex {
- public:
-  InOut<Vector<T, poplar::VectorLayout::ONE_PTR>> x;  // flatten (N, N)
-
-  Input<Vector<T, poplar::VectorLayout::SPAN>> v;     // (N,) v
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR>> w;  // (N,) w
-
-  bool compute() {
-    const std::size_t size = v.size();
-
-    for (std::size_t r = 0; r < size; r++) {
-      T* data = &x[r * size];
-      // Pre-compute the full scaling factor for every line.
-      // const T scale = T(-2) * w[r];
-      const T scale = -w[r];
-      for (std::size_t c = 0; c < size; c++) {
-        data[c] += scale * v[c];
-      }
-    }
-    return true;
-  }
-};
-
-// explicit instantiations
-template class QRHouseholderUpdateVertex<float>;
-template class QRHouseholderUpdateVertex<half>;
-
-/**
  * @brief Vertex computing the correction vector in the QR algorithm.
  */
 class QRCorrectionVectorVertex : public MultiVertex {
@@ -282,3 +238,75 @@ class QRCorrectionVectorVertex : public MultiVertex {
 
 float QRCorrectionVectorVertex::shared_partial_sqnorms[6] = {-1};
 float QRCorrectionVectorVertex::shared_updated_scale = 0;
+
+/**
+ * @brief Vertex implementing the inplace householder (row) update in the QR
+ * algorithm. NOTE: the vertex is only updating the sub-slice of x corresponding
+ * to v.
+ *
+ * More specifically: x[-M:] -= w[0] * v
+ *
+ * NOTE: poplar::constraint here to make sure x and v are not part of the same
+ * memory bank, allowing simultaneous loads (see `ld2x64pace` instruction).
+ */
+class[[poplar::constraint("elem(*x) != elem(*v)")]] QRHouseholderRowUpdateVertex
+    : public MultiVertex {
+ public:
+  using T = float;
+  // Using `uint16` seems to be generating more efficient loops?
+  using IndexType = unsigned short;
+
+  InOut<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> x;  // (N,) row of Q or R
+  Input<Vector<T, poplar::VectorLayout::SPAN, 8>>
+      v;  // (M,) v correction vector
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR>>
+      scale;  // (1,) scaling factor.
+
+  Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
+      worker_offsets;  // (7,) threads work size.
+
+  IndexType start_idx;  // X start idx. Must be a multiple of 4 (for bank
+                             // alignment aspects).
+
+  bool compute(unsigned wid) {
+    // Always assuming size % 2 == 0
+    constexpr unsigned ptr_step = 1;
+    const IndexType wstart = worker_offsets[wid];
+    const IndexType wend = worker_offsets[wid + 1];
+    const IndexType wsize = wend - wstart;
+    
+    // Set the $TAS register with the proper scale.
+    const T s = -scale[0];
+    __builtin_ipu_put_tas(s);
+
+    // Nothing to do in this worker thread.
+    if (wstart == wend) {
+      return true;
+    }
+    // X and v IO pointers.
+    const float2* ptr_inxdata_f2 =
+        reinterpret_cast<const float2*>(&x[start_idx]) + wstart;
+    float2* ptr_outxdata_f2 = reinterpret_cast<float2*>(&x[start_idx]) + wstart;
+    const float2* ptr_vdata_f2 = reinterpret_cast<const float2*>(&v[0]) + wstart;
+
+    float2 xin, vin, rtmp, rout;
+    // First vectors loading.
+    xin = ipu::load_postinc(&ptr_inxdata_f2, ptr_step);
+    vin = ipu::load_postinc(&ptr_vdata_f2, ptr_step);
+    // TODO: use ld2x64pace + tapack instructions.
+    for (IndexType idx = 1; idx != wsize; ++idx) {
+      rtmp = __builtin_ipu_f32v2axpy(xin, vin);
+      // Grouping here seems to help the compiler optimising loads?
+      xin = ipu::load_postinc(&ptr_inxdata_f2, ptr_step);
+      vin = ipu::load_postinc(&ptr_vdata_f2, ptr_step);
+      rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
+      ipu::store_postinc(&ptr_outxdata_f2, rout, ptr_step);
+    }
+    // Finish the loop, getting the last computation.
+    rtmp = __builtin_ipu_f32v2axpy(xin, vin);
+    rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
+    ipu::store_postinc(&ptr_outxdata_f2, rout, ptr_step);
+
+    return true;
+  }
+};

@@ -5,6 +5,7 @@ In particular, we need a registry mapping JAX primitives to IPU vertex (and addi
 """
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
+import numpy as np
 from jax.core import Primitive
 from jax.interpreters.xla import ShapedArray
 
@@ -15,6 +16,7 @@ from .tile_interpreter_primitives import (
     from_numpy_dtype_to_ipu_type,
     make_ipu_shaped_array,
     make_ipu_vertex_attributes,
+    make_ipu_vertex_constant_info,
     make_ipu_vertex_io_info,
     tile_map_equation_call_multi_out,
     tile_map_equation_call_single_out,
@@ -25,6 +27,12 @@ IpuVertexTranslation = Callable[
 ]
 """Ipu vertex translation: callable translating a JAX primitive (with inputs/outputs) into a full
 vertex info data structure.
+"""
+
+IpuVertexConstantFactory = Callable[
+    [Sequence[ShapedArray], Sequence[ShapedArray], Optional[Dict[str, Any]]], np.ndarray
+]
+"""Ipu vertex constant factory method: can build the constant from inavals, outavals and attributes.
 """
 
 _ipu_tile_primitive_registry: Dict[str, Tuple[Primitive, IpuVertexTranslation]] = {}
@@ -126,16 +134,18 @@ def get_ipu_tile_primitive_translation(pname: str) -> Tuple[Primitive, IpuVertex
     return _ipu_tile_primitive_registry[pname]
 
 
-def create_simple_tile_primitive(
+def create_ipu_tile_primitive(
     pname: str,
     vname: str,
     inputs: List[str],
     outputs: Dict[str, int],
+    constants: Optional[Dict[str, IpuVertexConstantFactory]] = None,
     tmp_space_input_idx: Optional[int] = None,
     gp_filename: Optional[str] = None,
     perf_estimate: int = 0,
 ) -> Primitive:
-    """Create a simple IPU-JAX tile primitive.
+    """Create a simple IPU-JAX tile primitive directy mapping to an IPU vertex (from
+    the official SDK, or custom implementation).
 
     Factory method helping creating tile primitives in the simple cases (i.e.
     output shape corresponding to an input, ...)
@@ -145,6 +155,7 @@ def create_simple_tile_primitive(
         vname: Vertex name. Supporting templated dtype from input(s).
         inputs: Set of input names.
         outputs: Set output names (with input index for aval).
+        constants: Vertex constants factory function: (inavals, outavals, attrs) -> np.ndarray
         tmp_space_input_idx: Optional tmp space (allocating the same size as input referenced)
         gp_filename: Optional IPU gp filename.
         perf_estimate: Optional performance estimate.
@@ -155,6 +166,7 @@ def create_simple_tile_primitive(
     p.map_primitive = False  # What for ???
     p.multiple_results = len(outputs) > 1
     num_inputs = len(inputs)
+    constants_fn = constants or {}
 
     # InOut entries.
     inout_names = {v for v in inputs if v in outputs}
@@ -195,6 +207,18 @@ def create_simple_tile_primitive(
         }
         vertex_fullname = vname.format(**vname_dtype_inputs)
 
+        # IO infos.
+        inputs_info = [
+            make_ipu_vertex_io_info(inname, inputs_iotype[inname], inaval) for inname, inaval in zip(inputs, inavals)
+        ]
+        outputs_info = [
+            make_ipu_vertex_io_info(outname, outputs_iotype[outname], outaval)
+            for outname, outaval in zip(outputs.keys(), outavals)
+        ]
+        constants_info = [
+            make_ipu_vertex_constant_info(cname, fn(inavals, outavals, attributes), vertex_dim2=0)
+            for cname, fn in constants_fn.items()
+        ]
         # Pass attributes to the vertex.
         attributes = {} if attributes is None else attributes
         attrs_i32, attrs_f32 = make_ipu_vertex_attributes(**attributes)
@@ -203,14 +227,8 @@ def create_simple_tile_primitive(
             pname=p.name,
             tiles=tiles,
             # IO vertex infos.
-            inputs_info=[
-                make_ipu_vertex_io_info(inname, inputs_iotype[inname], inaval)
-                for inname, inaval in zip(inputs, inavals)
-            ],
-            outputs_info=[
-                make_ipu_vertex_io_info(outname, outputs_iotype[outname], outaval)
-                for outname, outaval in zip(outputs.keys(), outavals)
-            ],
+            inputs_info=inputs_info + constants_info,
+            outputs_info=outputs_info,
             # Additional attributes to pass to the vertex
             attributes_i32=attrs_i32,
             attributes_f32=attrs_f32,

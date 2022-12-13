@@ -115,11 +115,12 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
         size = 128
         tiles = (3, 4, 5)
         input = np.random.rand(len(tiles), size).astype(dtype) + 1
+        scale_value = 3
 
         @partial(jax.jit, backend="ipu")
         def compute_fn(input):
             input = tile_put_sharded(input, tiles)
-            out0, out1 = tile_map_primitive(custom_multi_out_p, input)  # type:ignore
+            out0, out1 = tile_map_primitive(custom_multi_out_p, input, scale_value=scale_value)  # type:ignore
             return out0, out1
 
         out0, out1 = compute_fn(input)
@@ -129,5 +130,5 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
         assert out1.tiles == tiles
         assert out1.dtype == dtype
 
-        npt.assert_array_equal(out0, 2 * input)
-        npt.assert_array_equal(out1, -2 * input)
+        npt.assert_array_equal(out0, size * scale_value * input)
+        npt.assert_array_equal(out1, -size * scale_value * input)

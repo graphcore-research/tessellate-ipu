@@ -7,7 +7,7 @@ from jax import core
 
 from jax_ipu_research.tile import (
     IpuTileMapEquation,
-    create_simple_tile_primitive,
+    create_ipu_tile_primitive,
     from_numpy_dtype_to_ipu_type,
     make_ipu_vertex_constant_info,
     make_ipu_vertex_in_info,
@@ -90,11 +90,12 @@ register_ipu_tile_primitive(custom_arange_p, custom_arange_tile_translation_ipu)
 
 
 # Declaring a tile primitive in a very simple & fast way.
-custom_multi_out_p = create_simple_tile_primitive(
+custom_multi_out_p = create_ipu_tile_primitive(
     "custom_multi_out",
     "CustomMultiOutVertex<{in}>",  # Support templated dtype from input.
-    ["in"],
-    {"out0": 0, "out1": 0},
+    inputs=["in"],
+    outputs={"out0": 0, "out1": 0},
+    constants={"constant_scale": lambda ins, *_: np.array([ins[0].size], ins[0].dtype)},
     tmp_space_input_idx=0,
     gp_filename=os.path.join(os.path.dirname(__file__), "custom_arange_vertex.cpp"),
     perf_estimate=100,
