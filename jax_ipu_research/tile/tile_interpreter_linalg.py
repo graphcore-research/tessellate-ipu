@@ -13,9 +13,8 @@ from jax_ipu_research.utils import Array
 
 from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_ipu_tile_primitive, register_ipu_tile_primitive, tile_map_primitive
-from .tile_interpreter_lax_binary import scaled_sub_p
 from .tile_interpreter_lax_dot import IpuConvVertexType
-from .tile_interpreter_primitives import (  # make_ipu_vertex_attributes,
+from .tile_interpreter_primitives import (
     IpuTileMapEquation,
     from_numpy_dtype_to_ipu_type,
     make_ipu_shaped_array,
@@ -99,9 +98,10 @@ def make_ipu_vector1d_worker_offsets(
     Returns:
         (6,) number of data vectors per thread.
     """
+
     def make_offsets_fn(sizes):
         sizes = [0] + sizes
-        offsets =  np.cumsum(np.array(sizes, wdtype), dtype=wdtype)
+        offsets = np.cumsum(np.array(sizes, wdtype), dtype=wdtype)
         return offsets
 
     assert size % vector_size == 0
@@ -117,7 +117,7 @@ def make_ipu_vector1d_worker_offsets(
     rem_worksize = rem_worksize // vector_size
     worker_sizes += [rem_worksize]
     # Fill the rest with zeros.
-    unused_workers = (num_workers - num_base_workers - 1)
+    unused_workers = num_workers - num_base_workers - 1
     worker_sizes += [0] * unused_workers
     return make_offsets_fn(worker_sizes)
 
@@ -127,9 +127,13 @@ def make_ipu_vector1d_worker_offsets(
 qr_householder_row_update_p = create_ipu_tile_primitive(
     "qr_householder_row_update",
     "QRHouseholderRowUpdateVertex",
-    inputs=["x", "v", "scale"],
+    inputs=["x", "v", "scale1", "scale2"],
     outputs={"x": 0},
-    constants={"worker_offsets": lambda inavals, *_: make_ipu_vector1d_worker_offsets(inavals[1].size, vector_size=2, wdtype=np.uint16)},
+    constants={
+        "worker_offsets": lambda inavals, *_: make_ipu_vector1d_worker_offsets(
+            inavals[1].size, vector_size=2, wdtype=np.uint16
+        )
+    },
     gp_filename=get_qr_vertex_gp_filename(),
     perf_estimate=1000,
 )
@@ -139,7 +143,7 @@ qr_correction_vector_p = create_ipu_tile_primitive(
     "qr_correction_vector",
     "QRCorrectionVectorVertex",
     inputs=["Rcol", "sdiag"],
-    outputs={"v": 0},
+    outputs={"v": 0, "vrescale": ShapedArray((1,), dtype=np.float32)},
     gp_filename=get_qr_vertex_gp_filename(),
     perf_estimate=1000,
 )
@@ -165,47 +169,56 @@ def ipu_qr(x: Array, xsdiag: Array) -> Tuple[Array, Array]:
 
     # TODO: on-device construction of identity
     Q = tile_put_sharded(np.identity(N, dtype=x.dtype), Q_tiles)
-    # TODO: shard R and Q on different tiles.
     RT = tile_put_sharded(x.T, R_tiles)
     # Replicate once on all tiles. Faster then for the looping.
     sdiag_full = tile_put_replicated(xsdiag, R_tiles)
 
     for cidx in range(N - 1):
+        # From which column to start computation: skipping zeros. Must be a multiple of 2 for proper vectorization.
+        start_idx = (cidx // 2) * 2
         # Extract the proper R column (no tile copy, pure view).
         Rcol = RT[cidx]
         sdiag = sdiag_full[cidx]
         # Correction vector. NOTE: computed on a single tile, changing at every loop.
-        v: TileShardedArray = tile_map_primitive(qr_correction_vector_p, Rcol, sdiag, col_idx=cidx)  # type:ignore
+        v, vrescale = tile_map_primitive(qr_correction_vector_p, Rcol, sdiag, col_idx=cidx)  # type:ignore
 
         # Replicate to all Q and R tiles.
         vQ = tile_put_replicated(v.array[0], Q_tiles)
         vR = tile_put_replicated(v.array[0], R_tiles)
+        # v normalization factor to pass to householder update.
+        vrescaleQ = tile_put_replicated(vrescale.array[0], Q_tiles)
+        vrescaleR = tile_put_replicated(vrescale.array[0], R_tiles)
 
+        # Using "smart" slicing to reduce compute to do.
         # w = R^T @ v
         w: TileShardedArray = tile_map_primitive(  # type:ignore
             dot_general_p,
-            vR,
-            RT,
+            vR[:, start_idx:],
+            RT[:, start_idx:],
             dimension_numbers=(([0], [0]), ([], [])),
             precision=None,
             preferred_element_type=None,
             ipu_vertex_type=IpuConvVertexType.ConvPartialHMAC,
         )
         # Inplace update of R.
-        RT = tile_map_primitive(scaled_sub_p, RT, vR, w)  # type:ignore
+        RT = tile_map_primitive(
+            qr_householder_row_update_p, RT, vR[:, start_idx:], w, vrescaleR, start_idx=start_idx
+        )  # type:ignore
 
         # w = Q @ v
         w: TileShardedArray = tile_map_primitive(  # type:ignore
             dot_general_p,
-            vQ,
-            Q,
+            vQ[:, start_idx:],
+            Q[:, start_idx:],
             dimension_numbers=(([0], [0]), ([], [])),
             precision=None,
             preferred_element_type=None,
             ipu_vertex_type=IpuConvVertexType.ConvPartialHMAC,
         )
         # Inplace update of Q.
-        Q = tile_map_primitive(scaled_sub_p, Q, vQ, w)  # type:ignore
+        Q = tile_map_primitive(
+            qr_householder_row_update_p, Q, vQ[:, start_idx:], w, vrescaleQ, start_idx=start_idx
+        )  # type:ignore
 
     # Return JAX arrays directly?
     return (Q, RT)

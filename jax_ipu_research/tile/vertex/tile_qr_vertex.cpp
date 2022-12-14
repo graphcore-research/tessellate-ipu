@@ -132,7 +132,11 @@ class QRCorrectionVectorVertex : public MultiVertex {
   using T = float;
   Input<Vector<T, poplar::VectorLayout::SPAN>> Rcol;      // (N,) R column.
   Input<Vector<T, poplar::VectorLayout::ONE_PTR>> sdiag;  // (N,) R diag. sign.
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> v;  // (N,) correction vec.
+
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR>>
+      v;  // (N,) QR correction vector (not normalized)
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR>>
+      vrescale;  // (1,) QR correction vector rescaling (2 / norm)
 
   const unsigned col_idx;  // R column index.
 
@@ -208,29 +212,8 @@ class QRCorrectionVectorVertex : public MultiVertex {
       norm_squared -= initial_rcol_val_sq;
       norm_squared += update_vidx_val * update_vidx_val;
 
-      // Updating scaling factor, including the Householder constant value.
-      const T inv_norm = T(1) / std::sqrt(norm_squared);
-      shared_updated_scale = std::sqrt(2.0f) * inv_norm;
-    }
-
-    // Wait until updated scale available to all threads.
-    volatile T* ptr_shared_updated_scale = &shared_updated_scale;
-    if (wid > 0) {
-      while (*ptr_shared_updated_scale == 0) {
-      }
-    }
-    // Rescaling float2 vector
-    const float2 rescale_vec{*ptr_shared_updated_scale,
-                             *ptr_shared_updated_scale};
-
-    // 64 bits aligned start idx/ptr (removing unnecessary zeros!)
-    ptr_outdata_f2 = reinterpret_cast<float2*>(&v[col_idx_mrem]) + wid;
-    ptr_outdata_end_f2 = reinterpret_cast<float2*>(&v[size]);
-    while (ptr_outdata_f2 < ptr_outdata_end_f2) {
-      ptr_indata_f2 = reinterpret_cast<const float2*>(ptr_outdata_f2);
-      // Load, rescale and store.
-      float2 v = ipu::load_postinc(&ptr_indata_f2, 0);
-      ipu::store_postinc(&ptr_outdata_f2, v * rescale_vec, num_workers);
+      // Vector rescaling for QR householder update.
+      vrescale[0] = T(2) / norm_squared;
     }
     return true;
   }
@@ -259,14 +242,19 @@ class[[poplar::constraint("elem(*x) != elem(*v)")]] QRHouseholderRowUpdateVertex
   InOut<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> x;  // (N,) row of Q or R
   Input<Vector<T, poplar::VectorLayout::SPAN, 8>>
       v;  // (M,) v correction vector
+
+  // Passing 2 scaling factors is more efficient for the QR implementation.
+  // Avoids another full pass on the v vector in the vertex it is constructed.
   Input<Vector<T, poplar::VectorLayout::ONE_PTR>>
-      scale;  // (1,) scaling factor.
+      scale1;  // (1,) first scaling factor.
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR>>
+      scale2;  // (1,) 2nd scaling factor.
 
   Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
       worker_offsets;  // (7,) threads work size.
 
   IndexType start_idx;  // X start idx. Must be a multiple of 4 (for bank
-                             // alignment aspects).
+                        // alignment aspects).
 
   bool compute(unsigned wid) {
     // Always assuming size % 2 == 0
@@ -274,9 +262,9 @@ class[[poplar::constraint("elem(*x) != elem(*v)")]] QRHouseholderRowUpdateVertex
     const IndexType wstart = worker_offsets[wid];
     const IndexType wend = worker_offsets[wid + 1];
     const IndexType wsize = wend - wstart;
-    
+
     // Set the $TAS register with the proper scale.
-    const T s = -scale[0];
+    const T s = -scale1[0] * scale2[0];
     __builtin_ipu_put_tas(s);
 
     // Nothing to do in this worker thread.
@@ -287,7 +275,8 @@ class[[poplar::constraint("elem(*x) != elem(*v)")]] QRHouseholderRowUpdateVertex
     const float2* ptr_inxdata_f2 =
         reinterpret_cast<const float2*>(&x[start_idx]) + wstart;
     float2* ptr_outxdata_f2 = reinterpret_cast<float2*>(&x[start_idx]) + wstart;
-    const float2* ptr_vdata_f2 = reinterpret_cast<const float2*>(&v[0]) + wstart;
+    const float2* ptr_vdata_f2 =
+        reinterpret_cast<const float2*>(&v[0]) + wstart;
 
     float2 xin, vin, rtmp, rout;
     // First vectors loading.

@@ -179,8 +179,15 @@ def create_ipu_tile_primitive(
     outputs_iotype = {v: get_iotype(v, IpuVertexIOType.Out) for v in outputs.keys()}
 
     def p_abstract_aval(*args, **kwargs):
+        def _get_output_aval(outinfo):
+            if isinstance(outinfo, int):
+                return args[outinfo]
+            elif isinstance(outinfo, ShapedArray):
+                return outinfo
+            raise ValueError(f"Unknown IPU vertex output descriptor: {outinfo}.")
+
         assert len(args) == num_inputs
-        out_avals = [args[idx] for idx in outputs.values()]
+        out_avals = [_get_output_aval(idx) for idx in outputs.values()]
         return tuple(out_avals) if p.multiple_results else out_avals[0]
 
     def p_impl(*args, **kwargs):
