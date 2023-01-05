@@ -5,7 +5,11 @@ import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
 
-from jax_ipu_research.tile.tile_array_primitives import tile_put_replicated_prim, tile_put_sharded_prim
+from jax_ipu_research.tile.tile_array_primitives import (
+    TileDataBarrierParams,
+    tile_put_replicated_prim,
+    tile_put_sharded_prim,
+)
 
 
 class TilePutShardedPrimTests(chex.TestCase, parameterized.TestCase):
@@ -54,3 +58,15 @@ def test__tile_put_replicated_prim__device_jitting(backend):
     output = jax.jit(tile_put_replicated_prim, static_argnums=1, backend=backend)(input, tiles)
     assert output.shape == (len(tiles), *input.shape)
     npt.assert_array_equal(output, tile_put_replicated_prim(input, tiles))
+
+
+def test__tile_data_barrier_params__init__proper_fields():
+    params = TileDataBarrierParams("vbarrier", [[0, 1], [3, 4, 5]], 5)
+    assert params.vname == "vbarrier"
+    assert params.inputs_tiles == [[0, 1], [3, 4, 5]]
+    assert params.max_tile == 5
+
+
+def test__tile_data_barrier_params__json__proper_value():
+    params = TileDataBarrierParams("vbarrier", [[0, 1], [3, 4, 5]], 5)
+    assert params.to_json_str() == '{"inputs_tiles":[[0,1],[3,4,5]],"max_tile":5,"vname":"vbarrier"}'

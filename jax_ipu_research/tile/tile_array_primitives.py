@@ -1,5 +1,6 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import json
+import os
 from typing import Tuple
 
 import cppimport.import_hook  # noqa: F401
@@ -7,6 +8,7 @@ import numpy as np
 from jax import core
 from jax.interpreters import xla
 from jax.interpreters.xla import ShapedArray
+from jax.lib import xla_client
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
 from jax_ipu_addons.utils import xla_shape_to_aval
 
@@ -14,9 +16,12 @@ from . import tile_array_primitives_impl  # type:ignore
 
 TilePutShardedPrimitive = tile_array_primitives_impl.TilePutShardedPrimitive
 TilePutReplicatedPrimitive = tile_array_primitives_impl.TilePutReplicatedPrimitive
+TileDataBarrierPrimitive = tile_array_primitives_impl.TileDataBarrierPrimitive
+TileDataBarrierParams = tile_array_primitives_impl.TileDataBarrierParams
 
 tile_put_sharded_prim_p = core.Primitive("tile_put_sharded")
 tile_put_replicated_prim_p = core.Primitive("tile_put_replicated")
+tile_data_barrier_prim_p = core.Primitive("tile_data_barrier")
 
 
 def make_tiles_raw_attributes(tiles: Tuple[int, ...]) -> str:
@@ -108,3 +113,63 @@ tile_put_replicated_prim_p.def_abstract_eval(tile_put_replicated_prim_abstract_e
 xla.backend_specific_translations["ipu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_ipu
 xla.backend_specific_translations["cpu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_default
 xla.backend_specific_translations["gpu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_default
+
+
+def tile_data_barrier_prim(inputs, inputs_tiles):
+    return tile_data_barrier_prim_p.bind(*inputs, inputs_tiles=list(inputs_tiles))
+
+
+def tile_data_barrier_prim_impl(*args, **params):
+    return tuple(args)
+
+
+def tile_data_barrier_prim_abstract_eval(*args: ShapedArray, **params) -> Tuple[ShapedArray, ...]:
+    return args
+
+
+def tile_data_barrier_prim_xla_translation_default(ctx, *args, **params):
+    """`tile_data_barrier_prim` default XLA translation, for CPU/GPU backends."""
+    # TODO: implementation from JAX?
+    raise NotImplementedError()
+
+
+def tile_data_barrier_prim_xla_translation_ipu(ctx, *args, **params):
+    """`tile_data_barrier_prim` IPU backend XLA translation, as a custom primitive."""
+    from .tile_interpreter_primitives import make_ipu_vertex_name_templated
+
+    inputs = list(args)
+    inputs_aval = [xla_shape_to_aval(ctx.get_shape(xc)) for xc in inputs]
+    dtypes = list({aval.dtype for aval in inputs_aval})
+    if len(dtypes) > 1:
+        raise TypeError(f"Only supporting a single common dtype in Tile data barrier: {dtypes}.")
+
+    inputs_tiles = params["inputs_tiles"]
+    max_tile = max([max(s) for s in inputs_tiles])
+    # Passing the tiles collections as a raw attributes to the C++ implementation.
+    vname = make_ipu_vertex_name_templated("TileDataBarrierVertex", dtypes[0])
+    barrier_params = TileDataBarrierParams(vname, inputs_tiles, max_tile)
+    raw_attributes = barrier_params.to_json_str()
+
+    gp_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "vertex", "tile_prim_vertex.cpp"))
+    outputs_aval = inputs_aval
+    outputs = ipu_xla_custom_primitive_call(
+        TileDataBarrierPrimitive,
+        ctx,
+        inputs,
+        outputs_aval,
+        attributes=raw_attributes,
+        ipu_gp_filename=gp_filename,
+    )
+    # Re-construct the XLA tuple (TODO: clean this back & forth mess!)
+    return xla_client.ops.Tuple(ctx, outputs)
+
+
+tile_data_barrier_prim_p.multiple_results = True
+# Register the primal implementation with JAX
+tile_data_barrier_prim_p.def_impl(tile_data_barrier_prim_impl)
+# Register the abstract evaluation with JAX
+tile_data_barrier_prim_p.def_abstract_eval(tile_data_barrier_prim_abstract_eval)
+# Register XLA translation, for different backends.
+xla.backend_specific_translations["ipu"][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_ipu
+xla.backend_specific_translations["cpu"][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_default
+xla.backend_specific_translations["gpu"][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_default

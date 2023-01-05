@@ -1,5 +1,5 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-from typing import Any, Tuple, Union
+from typing import Any, Sequence, Tuple, Union
 
 import chex
 import numpy as np
@@ -7,7 +7,7 @@ from jax.interpreters.xla import DeviceArray, ShapedArray
 
 from jax_ipu_research.utils import DTypeLike, Shape
 
-from .tile_array_primitives import tile_put_replicated_prim, tile_put_sharded_prim
+from .tile_array_primitives import tile_data_barrier_prim, tile_put_replicated_prim, tile_put_sharded_prim
 
 SliceType = Union[int, slice]
 MultiSliceType = Tuple[SliceType, ...]
@@ -154,7 +154,7 @@ class TileShardedArray:
         return TileShardedArray(array=self.array[key], tiles=self.tiles[key[0]])  # type:ignore
 
 
-def tile_put_sharded(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShardedArray:
+def tile_put_sharded(array: DeviceArray, tiles: Sequence[int]) -> TileShardedArray:
     """Shard a JAX array over tiles on the first axis.
 
     Args:
@@ -167,7 +167,7 @@ def tile_put_sharded(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShardedA
     return TileShardedArray(array=tile_put_sharded_prim(array, tiles), tiles=tiles)  # type:ignore
 
 
-def tile_put_replicated(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShardedArray:
+def tile_put_replicated(array: DeviceArray, tiles: Sequence[int]) -> TileShardedArray:
     """Replicate a JAX array over tiles on the first axis.
 
     Args:
@@ -178,3 +178,22 @@ def tile_put_replicated(array: DeviceArray, tiles: Tuple[int, ...]) -> TileShard
     """
     # TODO: support JAX pytrees.
     return TileShardedArray(array=tile_put_replicated_prim(array, tiles), tiles=tiles)  # type:ignore
+
+
+def tile_data_barrier(*args: TileShardedArray) -> Tuple[TileShardedArray, ...]:
+    """Tile sharded arrays data barrier: force aligning between tiles in the Poplar program.
+
+    Args:
+        *args: Input tile sharded arrays.
+    Returns:
+        Output tile arrays.
+    """
+    assert all([isinstance(v, TileShardedArray) for v in args])
+    # No need for a barrier when it is a single array.
+    if len(args) == 1:
+        return args[0]  # type:ignore
+
+    inputs_tiles = [v.tiles for v in args]
+    raw_inputs = [v.array for v in args]
+    raw_outputs = tile_data_barrier_prim(raw_inputs, inputs_tiles)
+    return tuple([TileShardedArray(output, input.tiles) for output, input in zip(raw_outputs, args)])  # type:ignore

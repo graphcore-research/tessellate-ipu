@@ -1,3 +1,6 @@
+from functools import partial
+from typing import Tuple
+
 import chex
 import jax
 import numpy as np
@@ -5,7 +8,7 @@ import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
 
-from jax_ipu_research.tile import TileShardedArray, tile_put_replicated, tile_put_sharded
+from jax_ipu_research.tile import TileShardedArray, tile_data_barrier, tile_put_replicated, tile_put_sharded
 from jax_ipu_research.tile.tile_array import check_tile_array_multi_slice
 
 
@@ -149,3 +152,58 @@ def test__tile_put_replicated__ipu_jitting(backend):
     assert output.tiles == tiles
     assert output.aval.shape == (len(tiles), *input.shape)
     npt.assert_array_equal(output.array, np.stack([input for _ in range(len(tiles))]))
+
+
+class TileDataBarrierTests(chex.TestCase, parameterized.TestCase):
+    @chex.variants(with_jit=True, without_jit=True)
+    def test__tile_data_barrier__jitting_test(self):
+        # Set of random tiles mapping.
+        inputs_tiles = [[0, 1], [2, 3]]
+
+        @self.variant
+        def tile_data_barrier_fn(data) -> Tuple[TileShardedArray, ...]:
+            inputs = [tile_put_replicated(data, tiles) for tiles in inputs_tiles]
+            outputs = tile_data_barrier(*inputs)
+            return outputs
+
+        data = np.asarray([1, 2, 5], np.float32)
+        tile_data_barrier_fn(data)
+
+    def test__tile_data_barrier__single_input__noop(self):
+        tiles = [0, 1]
+        data = np.asarray([1, 2, 5], np.float32)
+        t0 = tile_put_replicated(data, tiles)
+        t1 = tile_data_barrier(t0)
+        assert t1 is t0
+
+    def test__tile_data_barrier__not_supporting_multi_dtypes(self):
+        tiles = [0, 1]
+        data = np.asarray([1, 2, 5], np.float32)
+
+        @partial(jax.jit, backend="ipu")
+        def tile_data_barrier_fn(data) -> Tuple[TileShardedArray, ...]:
+            t0 = tile_put_replicated(data, tiles)
+            t1 = tile_put_replicated(data.astype(np.float16), tiles)
+            return tile_data_barrier(t0, t1)
+
+        with self.assertRaises(TypeError):
+            tile_data_barrier_fn(data)
+
+    @parameterized.parameters([np.float16, np.float32, np.int32])
+    def test__tile_data_barrier__dtypes__ipu_jitting(self, dtype):
+        # Set of random tiles mapping.
+        inputs_tiles = [[0, 1], [2, 3], [0, 1], [1, 4, 5]]
+
+        @partial(jax.jit, backend="ipu")
+        def tile_data_barrier_fn(data) -> Tuple[TileShardedArray, ...]:
+            inputs = [tile_put_replicated(data, tiles) for tiles in inputs_tiles]
+            outputs = tile_data_barrier(*inputs)
+            return outputs
+
+        data = np.asarray([1, 2, 5], dtype)
+        outputs = tile_data_barrier_fn(data)
+
+        assert len(outputs) == len(inputs_tiles)
+        outputs = [np.asarray(v) for v in outputs]
+        for idx in range(len(inputs_tiles)):
+            npt.assert_array_equal(outputs[idx][0], data)
