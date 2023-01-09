@@ -132,6 +132,37 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileDataBarrierParams, vname, inputs_tiles,
                                    max_tile)
 
 /**
+ * @brief Reinterpret tensor to a reference type used in the tile data barrier.
+ */
+poplar::Tensor tileBarrierReinterpretTensor(const poplar::Tensor& t) {
+  // 8 bits data types.
+  if (t.elementType() == poplar::BOOL)
+    return t.reinterpret(poplar::UNSIGNED_CHAR);
+  else if (t.elementType() == poplar::CHAR)
+    return t.reinterpret(poplar::UNSIGNED_CHAR);
+  else if (t.elementType() == poplar::SIGNED_CHAR)
+    return t.reinterpret(poplar::UNSIGNED_CHAR);
+  else if (t.elementType() == poplar::UNSIGNED_CHAR)
+    return t.reinterpret(poplar::UNSIGNED_CHAR);
+  // 16 bits data types.
+  else if (t.elementType() == poplar::SHORT)
+    return t.reinterpret(poplar::UNSIGNED_SHORT);
+  else if (t.elementType() == poplar::UNSIGNED_SHORT)
+    return t.reinterpret(poplar::UNSIGNED_SHORT);
+  else if (t.elementType() == poplar::HALF)
+    return t.reinterpret(poplar::UNSIGNED_SHORT);
+  // 32 bits data types.
+  else if (t.elementType() == poplar::INT)
+    return t.reinterpret(poplar::UNSIGNED_INT);
+  else if (t.elementType() == poplar::UNSIGNED_INT)
+    return t.reinterpret(poplar::UNSIGNED_INT);
+  else if (t.elementType() == poplar::FLOAT)
+    return t.reinterpret(poplar::UNSIGNED_INT);
+  // Can handle tensor :/
+  throw std::runtime_error("Unknown Poplar tensor type in tile data barrier.");
+}
+
+/**
  * @brief IPU tile array data barrier: force to introduce a barrier in Poplar
  * with a single compute set across tiles.
  */
@@ -166,10 +197,11 @@ class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
     std::vector<std::vector<poplar::Tensor>> tensors_per_tiles(params.max_tile +
                                                                1);
     for (size_t idx = 0; idx < inputs.size(); ++idx) {
-      const auto& in = inputs[idx];
+      // Reinterpret input tensor to a reference type.
+      const auto& in_reinterpret = tileBarrierReinterpretTensor(inputs[idx]);
       const auto& tiles = params.inputs_tiles[idx];
       for (size_t k = 0; k < tiles.size(); ++k) {
-        tensors_per_tiles[tiles[k]].push_back(in[k]);
+        tensors_per_tiles[tiles[k]].push_back(in_reinterpret[k]);
       }
     }
 

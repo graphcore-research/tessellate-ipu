@@ -1,7 +1,7 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import json
 import os
-from typing import Tuple
+from typing import Dict, Tuple
 
 import cppimport.import_hook  # noqa: F401
 import numpy as np
@@ -11,6 +11,8 @@ from jax.interpreters.xla import ShapedArray
 from jax.lib import xla_client
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
 from jax_ipu_addons.utils import xla_shape_to_aval
+
+from jax_ipu_research.utils import DType
 
 from . import tile_array_primitives_impl  # type:ignore
 
@@ -133,6 +135,23 @@ def tile_data_barrier_prim_xla_translation_default(ctx, *args, **params):
     raise NotImplementedError()
 
 
+_tile_barrier_dtype_mapping: Dict[DType, DType] = {
+    np.dtype(np.int8): np.dtype(np.uint8),
+    np.dtype(np.uint8): np.dtype(np.uint8),
+    np.dtype(np.int16): np.dtype(np.uint16),
+    np.dtype(np.uint16): np.dtype(np.uint16),
+    np.dtype(np.float16): np.dtype(np.uint16),
+    np.dtype(np.int32): np.dtype(np.uint32),
+    np.dtype(np.uint32): np.dtype(np.uint32),
+    np.dtype(np.float32): np.dtype(np.uint32),
+}
+
+
+def tile_data_barrier_refdtype(dtype: DType) -> DType:
+    """Find the reference dtype to use in IPU tile data barrier."""
+    return _tile_barrier_dtype_mapping[dtype]
+
+
 def tile_data_barrier_prim_xla_translation_ipu(ctx, *args, **params):
     """`tile_data_barrier_prim` IPU backend XLA translation, as a custom primitive."""
     from .tile_interpreter_primitives import make_ipu_vertex_name_templated
@@ -140,13 +159,15 @@ def tile_data_barrier_prim_xla_translation_ipu(ctx, *args, **params):
     inputs = list(args)
     inputs_aval = [xla_shape_to_aval(ctx.get_shape(xc)) for xc in inputs]
     dtypes = list({aval.dtype for aval in inputs_aval})
-    if len(dtypes) > 1:
-        raise TypeError(f"Only supporting a single common dtype in Tile data barrier: {dtypes}.")
+    dtypes_size = {dt.itemsize for dt in dtypes}
+    if len(dtypes_size) > 1:
+        raise TypeError(f"Only supporting dtypes of same size in Tile data barrier: {dtypes}.")
 
     inputs_tiles = params["inputs_tiles"]
     max_tile = max([max(s) for s in inputs_tiles])
     # Passing the tiles collections as a raw attributes to the C++ implementation.
-    vname = make_ipu_vertex_name_templated("TileDataBarrierVertex", dtypes[0])
+    refdtype = tile_data_barrier_refdtype(dtypes[0])
+    vname = make_ipu_vertex_name_templated("TileDataBarrierVertex", refdtype)
     barrier_params = TileDataBarrierParams(vname, inputs_tiles, max_tile)
     raw_attributes = barrier_params.to_json_str()
 

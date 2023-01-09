@@ -176,7 +176,7 @@ class TileDataBarrierTests(chex.TestCase, parameterized.TestCase):
         t1 = tile_data_barrier(t0)
         assert t1 is t0
 
-    def test__tile_data_barrier__not_supporting_multi_dtypes(self):
+    def test__tile_data_barrier__not_supporting_different_size_dtypes(self):
         tiles = [0, 1]
         data = np.asarray([1, 2, 5], np.float32)
 
@@ -188,6 +188,19 @@ class TileDataBarrierTests(chex.TestCase, parameterized.TestCase):
 
         with self.assertRaises(TypeError):
             tile_data_barrier_fn(data)
+
+    def test__tile_data_barrier__supporting_same_size_dtypes(self):
+        tiles = [0, 1]
+        data = np.asarray([1, 2, 5], np.float32)
+
+        @partial(jax.jit, backend="ipu")
+        def tile_data_barrier_fn(data) -> Tuple[TileShardedArray, ...]:
+            t0 = tile_put_replicated(data, tiles)
+            t1 = tile_put_replicated(data.astype(np.uint32), tiles)
+            t2 = tile_put_replicated(data.astype(np.int32), tiles)
+            return tile_data_barrier(t0, t1, t2)
+
+        tile_data_barrier_fn(data)
 
     @parameterized.parameters([np.float16, np.float32, np.int32])
     def test__tile_data_barrier__dtypes__ipu_jitting(self, dtype):
