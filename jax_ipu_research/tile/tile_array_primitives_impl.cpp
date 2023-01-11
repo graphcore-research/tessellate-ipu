@@ -108,7 +108,7 @@ class TilePutReplicatedPrimitive : public TilePutBase {
     auto output = createShardedVariable(graph, input.elementType(),
                                         input.shape(), tile_array);
     // Copy data tensor into the output.
-    auto prog = poplar::program::Copy(input_broadcasted, output);
+    auto prog = poplar::program::Copy(input_broadcasted, output, false);
     outputs.push_back(output);
     return prog;
   }

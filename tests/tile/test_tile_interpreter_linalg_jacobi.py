@@ -20,6 +20,7 @@ from jax_ipu_research.tile.tile_interpreter_linalg_jacobi import (
     jacobi_rotate_columns,
     jacobi_sort_columns,
     jacobi_sym_schur2_p,
+    jacobi_update_first_step_p,
 )
 
 
@@ -93,6 +94,35 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 
+    def test__jacobi_update_first_step_vertex__benchmark_performance(self):
+        N = 128
+        tiles = (0,)
+        pq = np.array([3, N // 2], dtype=np.uint32)
+        pcol = np.random.randn(N).astype(np.float32)
+        qcol = np.random.randn(N).astype(np.float32)
+
+        def jacobi_update_first_step_fn(pq, pcol, qcol):
+            pq = tile_put_replicated(pq, tiles)
+            pcol = tile_put_replicated(pcol, tiles)
+            qcol = tile_put_replicated(qcol, tiles)
+            # Force synchronization at this point, before cycle count.
+            pq, pcol, qcol = tile_data_barrier(pq, pcol, qcol)
+            pcol, start = ipu_hw_cycle_count(pcol)
+            cs, _, _ = tile_map_primitive(  # type:ignore
+                jacobi_update_first_step_p, pq, pcol, qcol, N=N
+            )
+            cs, end = ipu_hw_cycle_count(cs)
+            return cs, start, end
+
+        jacobi_update_first_step_fn = jax.jit(jacobi_update_first_step_fn, backend="ipu")
+        _, start, end = jacobi_update_first_step_fn(pq, pcol, qcol)
+
+        start, end = np.asarray(start)[0], np.asarray(end)[0]
+        qr_correction_cycle_count = end[0] - start[0]
+        assert qr_correction_cycle_count <= 1600
+        # print("CYCLE count:", qr_correction_cycle_count)
+        # assert False
+
     def test__jacobi_rotate_columns__proper_result(self):
         N = 8
         rot = jacobi_initial_rotation_set(N)
@@ -153,5 +183,5 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         A, _ = jacobi_eigh_fn(x, num_iters=5)
 
         eigvalues = np.diag(A)
-        expected_eigvalues, expected_eigvectors = np.linalg.eigh(x)
+        expected_eigvalues, _ = np.linalg.eigh(x)
         npt.assert_array_almost_equal(np.sort(eigvalues), expected_eigvalues, decimal=5)

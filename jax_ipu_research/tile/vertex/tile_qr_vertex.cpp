@@ -251,7 +251,7 @@ class[[poplar::constraint("elem(*x) != elem(*v)")]] QRHouseholderRowUpdateVertex
       scale2;  // (1,) 2nd scaling factor.
 
   Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
-      worker_offsets;  // (7,) threads work size.
+      worker_offsets;  // (7,) threads work size + 1.
 
   IndexType start_idx;  // X start idx. Must be a multiple of 4 (for bank
                         // alignment aspects).

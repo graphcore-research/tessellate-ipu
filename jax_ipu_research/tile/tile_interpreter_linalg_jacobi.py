@@ -10,6 +10,7 @@ from jax_ipu_research.utils import Array
 
 from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive
+from .tile_interpreter_linalg import make_ipu_vector1d_worker_offsets
 
 
 def get_jacobi_vertex_gp_filename() -> str:
@@ -31,6 +32,11 @@ jacobi_update_first_step_p = create_ipu_tile_primitive(
     "JacobiUpdateFirstStep",
     inputs=["rotset", "pcol", "qcol"],
     outputs={"cs": ShapedArray((2,), dtype=np.float32), "pcol_updated": 1, "qcol_updated": 2},
+    constants={
+        "worker_offsets": lambda inavals, *_: make_ipu_vector1d_worker_offsets(
+            inavals[1].size, vector_size=2, wdtype=np.uint16
+        )
+    },
     gp_filename=get_jacobi_vertex_gp_filename(),
     perf_estimate=200,
 )
@@ -41,6 +47,11 @@ jacobi_update_second_step_p = create_ipu_tile_primitive(
     "JacobiUpdateSecondStep",
     inputs=["cs_arr", "rotset_arr", "rotset_idx_ignored", "pcol", "qcol"],
     outputs={"cs_arr": 0, "pcol_updated": 3, "qcol_updated": 4},
+    constants={
+        "worker_offsets": lambda inavals, *_: make_ipu_vector1d_worker_offsets(
+            inavals[3].size, vector_size=2, wdtype=np.uint16
+        )
+    },
     gp_filename=get_jacobi_vertex_gp_filename(),
     perf_estimate=200,
 )
@@ -129,13 +140,20 @@ def jacobi_sort_columns(
         if p < q:
             # Keep same ordering.
             rot_sorted.append((p, q))
-            pcols_sorted.append(jax.lax.slice_in_dim(pcols.array, idx, idx + 1))
-            qcols_sorted.append(jax.lax.slice_in_dim(qcols.array, idx, idx + 1))
+            # pcols_sorted.append(jax.lax.slice_in_dim(pcols.array, idx, idx + 1))
+            # qcols_sorted.append(jax.lax.slice_in_dim(qcols.array, idx, idx + 1))
+            pcols_sorted.append(pcols.array[idx])
+            qcols_sorted.append(qcols.array[idx])
         else:
             # Swap p and q (on the same tile).
             rot_sorted.append((q, p))
-            pcols_sorted.append(jax.lax.slice_in_dim(qcols.array, idx, idx + 1))
-            qcols_sorted.append(jax.lax.slice_in_dim(pcols.array, idx, idx + 1))
+            # pcols_sorted.append(jax.lax.slice_in_dim(qcols.array, idx, idx + 1))
+            # qcols_sorted.append(jax.lax.slice_in_dim(pcols.array, idx, idx + 1))
+            pcols_sorted.append(qcols.array[idx])
+            qcols_sorted.append(pcols.array[idx])
+
+    pcols_sorted = [jax.lax.expand_dims(t, (0,)) for t in pcols_sorted]
+    qcols_sorted = [jax.lax.expand_dims(t, (0,)) for t in qcols_sorted]
 
     rot_sorted_arr = np.array(rot_sorted, np.uint32)
     pcols_sorted_arr = TileShardedArray(jax.lax.concatenate(pcols_sorted, dimension=0), pcols.tiles)  # type:ignore
@@ -193,11 +211,13 @@ def ipu_jacobi_eigh(x: Array, num_iters: int = 1) -> Tuple[Array, Array]:
             )
 
             # Unsort to keep the pure functional flow. No copy.
+            # pcols, qcols = pcols_sorted, qcols_sorted
             _, pcols, qcols = jacobi_sort_columns(rotset, pcols_sorted, qcols_sorted)
 
             # Update rotation and columns.
             rotset = jacobi_next_rotation_set(rotset)
             # Move columns between tiles. 2*N commns per tile.
+            # pcols, qcols = tile_rotate_columns(pcols, qcols)
             pcols_array, qcols_array = jacobi_rotate_columns(pcols.array, qcols.array)
             pcols = tile_put_sharded(pcols_array, tiles=tiles)
             qcols = tile_put_sharded(qcols_array, tiles=tiles)
@@ -209,3 +229,55 @@ def ipu_jacobi_eigh(x: Array, num_iters: int = 1) -> Tuple[Array, Array]:
         result_rows[q] = jax.lax.slice_in_dim(qcols.array, start_index=idx, limit_index=idx + 1)
     A = jax.lax.concatenate(result_rows, dimension=0)
     return A, None
+
+
+def tile_rotate_columns(pcols: TileShardedArray, qcols: TileShardedArray) -> Tuple[TileShardedArray, TileShardedArray]:
+    pass
+
+    assert pcols.shape == qcols.shape
+    assert pcols.tiles == qcols.tiles
+    tiles = pcols.tiles
+    halfN = pcols.shape[0]
+
+    # NOTE:
+    # p-columns rotation.
+    pcols_rot_list = [pcols.array[0], qcols.array[0]]
+    pcols_rot_list += [pcols.array[idx] for idx in range(2, halfN)]
+    pcols_rot_list = [jax.lax.expand_dims(t, (0,)) for t in pcols_rot_list]
+    pcols_rotated = tile_put_sharded(jax.lax.concatenate(pcols_rot_list, dimension=0), tiles=tiles)
+
+    # pcols_rot0 = jax.lax.slice_in_dim(pcols.array, start_index=0, limit_index=1)
+    # pcols_rot1 = tile_put_sharded(jax.lax.slice_in_dim(qcols.array, start_index=0, limit_index=1), tiles[1:2])
+    # pcols_rot2 = tile_put_sharded(jax.lax.slice_in_dim(pcols.array, start_index=1, limit_index=halfN - 1), tiles[2:])
+    # pcols_rotated = TileShardedArray(
+    #     jax.lax.concatenate(
+    #         [
+    #             pcols_rot0,
+    #             pcols_rot1.array,
+    #             pcols_rot2.array,
+    #         ],
+    #         dimension=0,
+    #     ),
+    #     tiles=tiles,
+    # )
+
+    # q-columns rotation.
+    qcols_rot_list = [qcols.array[idx] for idx in range(1, halfN)] + [pcols.array[halfN - 1]]
+    qcols_rot_list = [jax.lax.expand_dims(t, (0,)) for t in qcols_rot_list]
+    qcols_rotated = tile_put_sharded(jax.lax.concatenate(qcols_rot_list, dimension=0), tiles=tiles)
+
+    # qcols_rot0 = tile_put_sharded(jax.lax.slice_in_dim(qcols.array, start_index=1, limit_index=halfN), tiles[0:-1])
+    # qcols_rot1 = jax.lax.slice_in_dim(pcols.array, start_index=halfN-1, limit_index=halfN)
+    # qcols_rotated = TileShardedArray(
+    #     jax.lax.concatenate(
+    #         [
+    #             qcols_rot0.array,
+    #             qcols_rot1,
+    #         ],
+    #         dimension=0,
+    #     ),
+    #     tiles=tiles,
+    # )
+    assert pcols_rotated.shape == qcols_rotated.shape
+    # print(pcols_rotated.shape)
+    return pcols_rotated, qcols_rotated
