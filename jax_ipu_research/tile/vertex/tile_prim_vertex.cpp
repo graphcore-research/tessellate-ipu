@@ -12,6 +12,8 @@ using namespace poplar;
  *
  * TODO: support multiple tensor datatypes. Issue: Poplar general reinterpret
  * cast.
+ * Compilation for all supported targets:
+ *      popc -O2 jax_ipu_research/tile/vertex/tile_prim_vertex.cpp -I./jax_ipu_research/tile/vertex -o jax_ipu_research/tile/vertex/tile_prim_vertex.gp
  */
 template <typename T>
 class TileDataBarrierVertex : public SupervisorVertex {

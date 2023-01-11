@@ -18,18 +18,21 @@
 #define SUPERVISOR_TARGET
 #endif
 
+// #define ALWAYS_INLINE __attribute__((always_inline))
+#define ALWAYS_INLINE inline
+
 /**
  * @brief Efficient division by 6, on IPU hardware. Up to 98,304.
  */
 template <typename T>
-inline T ipu_div_by_6(T n) noexcept {
+ALWAYS_INLINE T ipu_div_by_6(T n) noexcept {
   return (n * 0xaaab) >> 18;
 }
 
 /**
  * @brief IPU intrinsics, for setting up the $TAS register.
  */
-inline void __builtin_ipu_put_tas(float v) noexcept {
+ALWAYS_INLINE void __builtin_ipu_put_tas(float v) noexcept {
   // TAS register, used for __builtin_ipu_f32v2axpy.
   asm volatile(
       R"l( uput $TAS, %[sv]
@@ -37,4 +40,17 @@ inline void __builtin_ipu_put_tas(float v) noexcept {
       :
       : [sv] "r"(v)
       :);
+}
+
+template <typename T>
+ALWAYS_INLINE float ld32(const T* address, unsigned offset) {
+  float result;
+  // TODO - Use intrinsic/builtin for this when one becomes available
+  asm volatile(
+      R"l(  ld32 %[result], %[address], %[offset]
+      )l"
+      : [result] "=r"(result)
+      : [address] "r"(address), [offset] "r"(offset)
+      :);
+  return result;
 }
