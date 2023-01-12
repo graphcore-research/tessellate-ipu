@@ -115,6 +115,83 @@ class TilePutReplicatedPrimitive : public TilePutBase {
 };
 
 /**
+ * @brief IPU tile gather op parameters.
+ */
+struct TileGatherParams {
+  using TileIndexType = int32_t;
+  using TileArrayType = std::vector<TileIndexType>;
+
+  /** Previous input tile mapping (if existing). */
+  TileArrayType previous_tiles;
+  /** Gather indices. */
+  TileArrayType indices;
+  /** New tile mapping */
+  TileArrayType tiles;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileGatherParams, previous_tiles, indices,
+                                   tiles)
+/**
+ * @brief IPU tile array (general) gather op across tiles.
+ */
+class TileGatherPrimitive : public jax::ipu::PrimitiveInterface {
+ public:
+  using TileIndexType = TileGatherParams::TileIndexType;
+
+  static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
+    return jax::ipu::PrimitiveMetadata{
+        .num_inputs = num_inputs,
+        .is_elementwise = true,  // Broadcasting over the first axis.
+        .is_stateless = true,
+        .is_hashable = true,
+        .input_to_output_tensor_aliasing = {{}},
+        .allocating_indices = {}};
+  }
+
+  static poplar::program::Program program(
+      poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+      std::vector<poplar::Tensor>& outputs, const std::string& attributes,
+      const std::string& debug_prefix) {
+    const auto debug_context = poplar::DebugContext(debug_prefix);
+    if (inputs.size() != 1) {
+      throw poputil::poplibs_error(
+          "IPU tile gather expecting a single input tensor.");
+    }
+    const auto& input = inputs[0];
+    const auto item_shape = input[0].shape();
+    const auto item_type = input.elementType();
+
+    // Tile gather parameters.
+    const auto params = ipu::from_json_str<TileGatherParams>(attributes);
+    // Create the output tensor per gather index, then concat.
+    auto seq = poplar::program::Sequence();
+    std::vector<poplar::Tensor> output_slices;
+    for (std::size_t idx = 0; idx < params.tiles.size(); ++idx) {
+      const auto gather_idx = params.indices[idx];
+      // Get the proper item at the gather index.
+      const auto input_item = input[gather_idx];
+      const auto input_tile = params.previous_tiles[gather_idx];
+      const auto output_tile = params.tiles[idx];
+      if (input_tile == output_tile)
+      {
+        // No copy => using directly the existing data on the tile.
+        output_slices.push_back(input_item.expand({0}));
+      }
+      else
+      {
+        // New Poplar tensor + copy to the proper tile.
+        auto output_item = graph.addVariable(item_type, item_shape, debug_context);
+        graph.setTileMapping(output_item, output_tile);
+        seq.add(poplar::program::Copy(input_item, output_item));
+        output_slices.push_back(output_item.expand({0}));
+      }
+    }
+    auto output = poplar::concat(output_slices);
+    outputs.push_back(output);
+    return seq;
+  }
+};
+
+/**
  * @brief Tile data Poplar barrier parameters.
  */
 struct TileDataBarrierParams {
@@ -230,10 +307,30 @@ class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
 // Export the IPU JAX primitives in the shared library.
 EXPORT_IPU_JAX_PRIMITIVE(TilePutShardedPrimitive);
 EXPORT_IPU_JAX_PRIMITIVE(TilePutReplicatedPrimitive);
+EXPORT_IPU_JAX_PRIMITIVE(TileGatherPrimitive);
 EXPORT_IPU_JAX_PRIMITIVE(TileDataBarrierPrimitive);
 
 // Declare a pybind11, to provide easy compilation & import from Python.
 PYBIND11_MODULE(tile_array_primitives_impl, m) {
+  using TileIndexType = TileGatherParams::TileIndexType;
+  using TileArrayType = TileGatherParams::TileArrayType;
+
+  pybind11::class_<TileGatherParams>(m, "TileGatherParams")
+      .def(pybind11::init<>())
+      .def(pybind11::init<const TileArrayType&, const TileArrayType&,
+                          const TileArrayType&>(),
+           pybind11::arg("previous_tiles"), pybind11::arg("indices"),
+           pybind11::arg("tiles"))
+      .def("to_json_str",
+           [](const TileGatherParams& v) { return to_json_str(v); })
+      .def_static("from_json_str",
+                  [](const std::string& j) {
+                    return from_json_str<TileGatherParams>(j);
+                  })
+      .def_readwrite("previous_tiles", &TileGatherParams::previous_tiles)
+      .def_readwrite("indices", &TileGatherParams::indices)
+      .def_readwrite("tiles", &TileGatherParams::tiles);
+
   pybind11::class_<TileDataBarrierParams>(m, "TileDataBarrierParams")
       .def(pybind11::init<>())
       .def(pybind11::init<
@@ -257,6 +354,9 @@ PYBIND11_MODULE(tile_array_primitives_impl, m) {
                   pybind11::arg("num_inputs"));
   pybind11::class_<TilePutReplicatedPrimitive>(m, "TilePutReplicatedPrimitive")
       .def_static("metadata", &TilePutReplicatedPrimitive::metadata,
+                  pybind11::arg("num_inputs"));
+  pybind11::class_<TileGatherPrimitive>(m, "TileGatherPrimitive")
+      .def_static("metadata", &TileGatherPrimitive::metadata,
                   pybind11::arg("num_inputs"));
   pybind11::class_<TileDataBarrierPrimitive>(m, "TileDataBarrierPrimitive")
       .def_static("metadata", &TileDataBarrierPrimitive::metadata,

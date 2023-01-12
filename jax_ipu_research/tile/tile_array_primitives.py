@@ -18,11 +18,14 @@ from . import tile_array_primitives_impl  # type:ignore
 
 TilePutShardedPrimitive = tile_array_primitives_impl.TilePutShardedPrimitive
 TilePutReplicatedPrimitive = tile_array_primitives_impl.TilePutReplicatedPrimitive
+TileGatherPrimitive = tile_array_primitives_impl.TileGatherPrimitive
+TileGatherParams = tile_array_primitives_impl.TileGatherParams
 TileDataBarrierPrimitive = tile_array_primitives_impl.TileDataBarrierPrimitive
 TileDataBarrierParams = tile_array_primitives_impl.TileDataBarrierParams
 
 tile_put_sharded_prim_p = core.Primitive("tile_put_sharded")
 tile_put_replicated_prim_p = core.Primitive("tile_put_replicated")
+tile_gather_prim_p = core.Primitive("tile_gather")
 tile_data_barrier_prim_p = core.Primitive("tile_data_barrier")
 
 
@@ -115,6 +118,51 @@ tile_put_replicated_prim_p.def_abstract_eval(tile_put_replicated_prim_abstract_e
 xla.backend_specific_translations["ipu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_ipu
 xla.backend_specific_translations["cpu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_default
 xla.backend_specific_translations["gpu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_default
+
+
+def tile_gather_prim(x, previous_tiles, indices, tiles):
+    return tile_gather_prim_p.bind(x, previous_tiles=previous_tiles, indices=indices, tiles=tiles)
+
+
+def tile_gather_prim_impl(x, previous_tiles, indices, tiles):
+    # Numpy basic gather on axis=0
+    return x[list(indices)]
+
+
+def tile_gather_prim_abstract_eval(xs, previous_tiles, indices, tiles) -> ShapedArray:
+    item_shape = xs.shape[1:]
+    outshape = (len(tiles), *item_shape)
+    return ShapedArray(outshape, xs.dtype, xs.weak_type)
+
+
+def tile_gather_prim_xla_translation_default(ctx, xc, previous_tiles, indices, tiles):
+    """`tile_gather_prim` default XLA translation, for CPU/GPU backends: simple JAX static gather"""
+    # TODO: implementation from JAX?
+    raise NotImplementedError()
+
+
+def tile_gather_prim_xla_translation_ipu(ctx, xc, previous_tiles, indices, tiles):
+    """`tile_gather_prim` IPU backend XLA translation, as a custom primitive."""
+    inputs = [xc]
+    # Til gather parameters, to pass to the XLA op.
+    gather_params = TileGatherParams(previous_tiles, indices, tiles)
+    raw_attributes = gather_params.to_json_str()
+    outputs_aval = [
+        tile_gather_prim_abstract_eval(xla_shape_to_aval(ctx.get_shape(xc)), previous_tiles, indices, tiles)
+    ]
+    outputs = ipu_xla_custom_primitive_call(TileGatherPrimitive, ctx, inputs, outputs_aval, attributes=raw_attributes)
+    return outputs[0]
+    return None
+
+
+# Register the primal implementation with JAX
+tile_gather_prim_p.def_impl(tile_gather_prim_impl)
+# Register the abstract evaluation with JAX
+tile_gather_prim_p.def_abstract_eval(tile_gather_prim_abstract_eval)
+# Register XLA translation, for different backends.
+xla.backend_specific_translations["ipu"][tile_gather_prim_p] = tile_gather_prim_xla_translation_ipu
+xla.backend_specific_translations["cpu"][tile_gather_prim_p] = tile_gather_prim_xla_translation_default
+xla.backend_specific_translations["gpu"][tile_gather_prim_p] = tile_gather_prim_xla_translation_default
 
 
 def tile_data_barrier_prim(inputs, inputs_tiles):

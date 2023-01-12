@@ -7,8 +7,16 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
+from jax.lax import add_p, sub_p
 
-from jax_ipu_research.tile import TileShardedArray, tile_data_barrier, tile_put_replicated, tile_put_sharded
+from jax_ipu_research.tile import (
+    TileShardedArray,
+    tile_data_barrier,
+    tile_gather,
+    tile_map_primitive,
+    tile_put_replicated,
+    tile_put_sharded,
+)
 from jax_ipu_research.tile.tile_array import check_tile_array_multi_slice
 
 
@@ -152,6 +160,64 @@ def test__tile_put_replicated__ipu_jitting(backend):
     assert output.tiles == tiles
     assert output.aval.shape == (len(tiles), *input.shape)
     npt.assert_array_equal(output.array, np.stack([input for _ in range(len(tiles))]))
+
+
+class TileGatherTests(chex.TestCase, parameterized.TestCase):
+    @chex.variants(with_jit=True, without_jit=True)
+    def test__tile_gather__simple_jitting_test(self):
+        data = np.random.rand(1, 10)
+        indices = (0, 0)
+        tiles = (1, 3)
+
+        @self.variant
+        def tile_gather_fn(data) -> Tuple[TileShardedArray]:
+            return tile_gather(data, indices, tiles)  # type:ignore
+
+        output = tile_gather_fn(data)
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        assert output.shape == (len(tiles), *data[0].shape)
+        npt.assert_array_almost_equal(output, data[list(indices)])
+
+    @parameterized.parameters(
+        [
+            {"N": 1, "indices": [0, 0, 0]},  # replicate
+            {"N": 3, "indices": [0, 1, 2]},  # shard
+            {"N": 3, "indices": [0, 0, 2]},  # mix
+        ]
+    )
+    def test__tile_gather__different_patterns__proper_gather_result(self, N, indices):
+        data = np.random.rand(N, 8)
+        tiles = tuple(range(len(indices)))
+
+        @partial(jax.jit, backend="ipu")
+        def tile_gather_fn(data) -> Tuple[TileShardedArray]:
+            return tile_gather(data, indices, tiles)  # type:ignore
+
+        output = tile_gather_fn(data)
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        assert output.shape == (len(tiles), *data[0].shape)
+        npt.assert_array_almost_equal(output, data[list(indices)])
+
+    def test__tile_gather__complex_rotation_pattern(self):
+        tiles = (0, 1, 2, 3)
+        data = np.random.rand(len(tiles), 8)
+
+        @partial(jax.jit, backend="ipu")
+        def tile_gather_fn(data) -> Tuple[TileShardedArray]:
+            x = tile_put_sharded(data, tiles)
+            x = tile_map_primitive(add_p, x, x)  # type:ignore
+            # Complex rotation: partially keep inplace + rotation.
+            x = tile_gather(x, (0, 2, 3, 1), tiles)
+            x = tile_map_primitive(sub_p, x, x)  # type:ignore
+            return x  # type:ignore
+
+        output = tile_gather_fn(data)
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        # Need to check in Popvision no extra copy is added by Poplar...
+        # TODO: use some inplace vertex to test there is no tile copy inserted.
 
 
 class TileDataBarrierTests(chex.TestCase, parameterized.TestCase):

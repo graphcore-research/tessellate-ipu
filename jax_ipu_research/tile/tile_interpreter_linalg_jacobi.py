@@ -8,7 +8,7 @@ from jax.core import ShapedArray
 
 from jax_ipu_research.utils import Array
 
-from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
+from .tile_array import TileShardedArray, tile_gather, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_linalg import make_ipu_vector1d_worker_offsets
 
@@ -211,16 +211,15 @@ def ipu_jacobi_eigh(x: Array, num_iters: int = 1) -> Tuple[Array, Array]:
             )
 
             # Unsort to keep the pure functional flow. No copy.
-            # pcols, qcols = pcols_sorted, qcols_sorted
             _, pcols, qcols = jacobi_sort_columns(rotset, pcols_sorted, qcols_sorted)
 
             # Update rotation and columns.
             rotset = jacobi_next_rotation_set(rotset)
             # Move columns between tiles. 2*N commns per tile.
-            # pcols, qcols = tile_rotate_columns(pcols, qcols)
-            pcols_array, qcols_array = jacobi_rotate_columns(pcols.array, qcols.array)
-            pcols = tile_put_sharded(pcols_array, tiles=tiles)
-            qcols = tile_put_sharded(qcols_array, tiles=tiles)
+            pcols, qcols = tile_rotate_columns(pcols, qcols)
+            # pcols_array, qcols_array = jacobi_rotate_columns(pcols.array, qcols.array)
+            # pcols = tile_put_sharded(pcols_array, tiles=tiles)
+            # qcols = tile_put_sharded(qcols_array, tiles=tiles)
 
     # Re-organize pcols and qcols into the result matrix.
     result_rows = [None] * N
@@ -232,52 +231,18 @@ def ipu_jacobi_eigh(x: Array, num_iters: int = 1) -> Tuple[Array, Array]:
 
 
 def tile_rotate_columns(pcols: TileShardedArray, qcols: TileShardedArray) -> Tuple[TileShardedArray, TileShardedArray]:
-    pass
-
+    """Rotate columns between tiles using a static `tile_gather`."""
     assert pcols.shape == qcols.shape
     assert pcols.tiles == qcols.tiles
-    tiles = pcols.tiles
     halfN = pcols.shape[0]
-
-    # NOTE:
-    # p-columns rotation.
-    pcols_rot_list = [pcols.array[0], qcols.array[0]]
-    pcols_rot_list += [pcols.array[idx] for idx in range(2, halfN)]
-    pcols_rot_list = [jax.lax.expand_dims(t, (0,)) for t in pcols_rot_list]
-    pcols_rotated = tile_put_sharded(jax.lax.concatenate(pcols_rot_list, dimension=0), tiles=tiles)
-
-    # pcols_rot0 = jax.lax.slice_in_dim(pcols.array, start_index=0, limit_index=1)
-    # pcols_rot1 = tile_put_sharded(jax.lax.slice_in_dim(qcols.array, start_index=0, limit_index=1), tiles[1:2])
-    # pcols_rot2 = tile_put_sharded(jax.lax.slice_in_dim(pcols.array, start_index=1, limit_index=halfN - 1), tiles[2:])
-    # pcols_rotated = TileShardedArray(
-    #     jax.lax.concatenate(
-    #         [
-    #             pcols_rot0,
-    #             pcols_rot1.array,
-    #             pcols_rot2.array,
-    #         ],
-    #         dimension=0,
-    #     ),
-    #     tiles=tiles,
-    # )
-
-    # q-columns rotation.
-    qcols_rot_list = [qcols.array[idx] for idx in range(1, halfN)] + [pcols.array[halfN - 1]]
-    qcols_rot_list = [jax.lax.expand_dims(t, (0,)) for t in qcols_rot_list]
-    qcols_rotated = tile_put_sharded(jax.lax.concatenate(qcols_rot_list, dimension=0), tiles=tiles)
-
-    # qcols_rot0 = tile_put_sharded(jax.lax.slice_in_dim(qcols.array, start_index=1, limit_index=halfN), tiles[0:-1])
-    # qcols_rot1 = jax.lax.slice_in_dim(pcols.array, start_index=halfN-1, limit_index=halfN)
-    # qcols_rotated = TileShardedArray(
-    #     jax.lax.concatenate(
-    #         [
-    #             qcols_rot0.array,
-    #             qcols_rot1,
-    #         ],
-    #         dimension=0,
-    #     ),
-    #     tiles=tiles,
-    # )
-    assert pcols_rotated.shape == qcols_rotated.shape
-    # print(pcols_rotated.shape)
-    return pcols_rotated, qcols_rotated
+    # Concat all columns, in order to perform a single gather.
+    all_cols = TileShardedArray(  # type:ignore
+        jax.lax.concatenate([pcols.array, qcols.array], dimension=0), (*pcols.tiles, *qcols.tiles)
+    )
+    # Express rotation as indices for a gather op.
+    pcols_indices = (0, halfN, *range(1, halfN - 1))
+    qcols_indices = (*range(halfN + 1, 2 * halfN), halfN - 1)
+    all_indices = (*pcols_indices, *qcols_indices)
+    # Move columns around + re-split between pcols and qcols.
+    all_cols_updated = tile_gather(all_cols, all_indices, all_cols.tiles)
+    return all_cols_updated[:halfN], all_cols_updated[halfN:]

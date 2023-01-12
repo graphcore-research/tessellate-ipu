@@ -7,7 +7,12 @@ from jax.interpreters.xla import DeviceArray, ShapedArray
 
 from jax_ipu_research.utils import DTypeLike, Shape
 
-from .tile_array_primitives import tile_data_barrier_prim, tile_put_replicated_prim, tile_put_sharded_prim
+from .tile_array_primitives import (
+    tile_data_barrier_prim,
+    tile_gather_prim,
+    tile_put_replicated_prim,
+    tile_put_sharded_prim,
+)
 
 SliceType = Union[int, slice]
 MultiSliceType = Tuple[SliceType, ...]
@@ -132,6 +137,9 @@ class TileShardedArray:
             squeezed_array = squeezed_array.reshape((1, *squeezed_array.shape))
         return TileShardedArray(array=squeezed_array, tiles=self.tiles)  # type:ignore
 
+    def __len__(self) -> int:
+        return len(self.array)
+
     def __array__(self, dtype: DTypeLike = None):
         # Force converting to Numpy array.
         return np.asarray(self.array, dtype=dtype)
@@ -197,3 +205,38 @@ def tile_data_barrier(*args: TileShardedArray) -> Tuple[TileShardedArray, ...]:
     raw_inputs = [v.array for v in args]
     raw_outputs = tile_data_barrier_prim(raw_inputs, inputs_tiles)
     return tuple([TileShardedArray(output, input.tiles) for output, input in zip(raw_outputs, args)])  # type:ignore
+
+
+tile_barrier = tile_data_barrier
+
+
+def tile_gather(
+    arr: Union[DeviceArray, TileShardedArray], indices: Sequence[int], tiles: Sequence[int], copy: bool = False
+) -> TileShardedArray:
+    """Gather a JAX array over tiles on the first axis.
+
+    By default, if a slice of an input sharded array is already located on the proper tile,
+    data will not be copied (no `Memcpy` vertex inserted).
+
+    Args:
+        arr: Array. Generic, or already tile sharded.
+        indices: Gather (static) indices.
+        tiles: IPU tiles sharding.
+        copy: If True, data is always copied, even when already properly tile mapped.
+    Returns:
+        Sharded array over IPU tiles.
+    """
+    assert len(indices) == len(tiles)
+    assert min(indices) >= 0
+    assert max(indices) <= len(arr) - 1
+    # Existing tile mapping? -1 by default when none.
+    previous_tiles = tuple([-1] * len(arr))
+    if isinstance(arr, TileShardedArray):
+        previous_tiles = arr.tiles
+    # Force copy => act like there is no pre-existing tile mapping.
+    if copy:
+        previous_tiles = tuple([-1] * len(previous_tiles))
+
+    data_arr = arr.array if isinstance(arr, TileShardedArray) else arr
+    gather_arr = tile_gather_prim(data_arr, previous_tiles, indices, tiles)
+    return TileShardedArray(array=gather_arr, tiles=tiles)  # type:ignore
