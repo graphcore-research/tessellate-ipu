@@ -235,3 +235,60 @@ class JacobiUpdateSecondStep : public MultiVertex {
     return true;
   }
 };
+
+/**
+ * @brief Jacobi algorithm, update of eigen vectors matrix.
+ *
+ * See:  Gene H. Golub, Charles F. Van Loan, MATRIX COMPUTATIONS, 3rd edition,
+ * Johns Hopkins Chapter 8.
+ */
+class[[poplar::constraint(
+    "elem(*vpcol) != elem(*vqcol)")]] JacobiUpdateEigenvectors
+    : public MultiVertex {
+ public:
+  using T = float;
+  using T2 = float2;
+  // Using `uint16` seems to be generating more efficient loops?
+  using IndexType = unsigned short;
+
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>>
+      cs;  // (2,) (c, s) Schur decomposition values
+  InOut<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vpcol;  // (N,) p column
+  InOut<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vqcol;  // (N,) q column
+
+  Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
+      worker_offsets;  // (7,) threads work size + 1.
+
+  JacobiUpdateEigenvectors();
+
+  bool compute(unsigned wid) {
+    const T c = cs[0];
+    const T s = cs[1];
+    const T2 cvec = T2{c, c};
+    const T2 svec = T2{s, s};
+
+    // Worker load: start + end vectorized indexes.
+    constexpr unsigned ptr_step = 1;
+    const IndexType wstart = worker_offsets[wid];
+    const IndexType wend = worker_offsets[wid + 1];
+    const IndexType wsize = wend - wstart;
+
+    // pcol, qcol and results pointers.
+    const T2* ptr_pcol = reinterpret_cast<const T2*>(vpcol.data()) + wstart;
+    const T2* ptr_qcol = reinterpret_cast<const T2*>(vqcol.data()) + wstart;
+    T2* ptr_pcol_updated = reinterpret_cast<T2*>(vpcol.data()) + wstart;
+    T2* ptr_qcol_updated = reinterpret_cast<T2*>(vqcol.data()) + wstart;
+
+    for (IndexType idx = 0; idx != wsize; ++idx) {
+      const T2 vpvec = ipu::load_postinc(&ptr_pcol, 1);
+      const T2 vqvec = ipu::load_postinc(&ptr_qcol, 1);
+
+      const T2 vpvec_updated = cvec * vpvec - svec * vqvec;
+      const T2 vqvec_updated = svec * vpvec + cvec * vqvec;
+
+      ipu::store_postinc(&ptr_qcol_updated, vqvec_updated, 1);
+      ipu::store_postinc(&ptr_pcol_updated, vpvec_updated, 1);
+    }
+    return true;
+  }
+};
