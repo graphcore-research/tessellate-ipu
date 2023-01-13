@@ -14,6 +14,7 @@ from jax_ipu_research.tile import (
     tile_put_sharded,
 )
 from jax_ipu_research.tile.tile_interpreter_linalg_jacobi import (
+    ipu_eigh,
     ipu_jacobi_eigh,
     jacobi_initial_rotation_set,
     jacobi_next_rotation_set,
@@ -210,7 +211,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # Same eigenvalues.
         npt.assert_array_almost_equal(np.linalg.eigh(A)[0], np.linalg.eigh(x)[0])
 
-    def test__jacobi_eigh__proper_eigh_result(self):
+    def test__jacobi_eigh_raw__proper_eigh_result(self):
         N = 8
         x = np.random.randn(N, N).astype(np.float32)
         x = (x + x.T) / 2.0
@@ -230,3 +231,39 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         eigvectors_sorted = VT[indices].T
         npt.assert_array_almost_equal(eigvalues_sorted, expected_eigvalues, decimal=5)
         npt.assert_array_almost_equal(np.abs(eigvectors_sorted), np.abs(expected_eigvectors), decimal=5)
+
+    def test__jacobi_eigh__not_sorting(self):
+        N = 8
+        x = np.random.randn(N, N).astype(np.float32)
+        x = (x + x.T) / 2.0
+
+        ipu_eigh_fn = jax.jit(lambda x: ipu_eigh(x, sort_eigenvalues=False, num_iters=5), backend="ipu")
+        # Should be enough iterations...
+        eigvectors, eigvalues = ipu_eigh_fn(x)
+        eigvalues = np.asarray(eigvalues)
+        eigvectors = np.asarray(eigvectors)
+        # Expected eigen values and vectors (from Lapack?)
+        expected_eigvalues, expected_eigvectors = np.linalg.eigh(x)
+
+        # Order raw outputs.
+        indices = np.argsort(eigvalues)
+        eigvalues_sorted = eigvalues[indices]
+        eigvectors_sorted = eigvectors.T[indices].T
+        npt.assert_array_almost_equal(eigvalues_sorted, expected_eigvalues, decimal=5)
+        npt.assert_array_almost_equal(np.abs(eigvectors_sorted), np.abs(expected_eigvectors), decimal=5)
+
+    def test__jacobi_eigh__sorting(self):
+        N = 8
+        x = np.random.randn(N, N).astype(np.float32)
+        x = (x + x.T) / 2.0
+
+        ipu_eigh_fn = jax.jit(lambda x: ipu_eigh(x, sort_eigenvalues=True, num_iters=5), backend="ipu")
+        # Should be enough iterations...
+        eigvectors, eigvalues = ipu_eigh_fn(x)
+        eigvalues = np.asarray(eigvalues)
+        eigvectors = np.asarray(eigvectors)
+        # Expected eigen values and vectors (from Lapack?)
+        expected_eigvalues, expected_eigvectors = np.linalg.eigh(x)
+
+        npt.assert_array_almost_equal(eigvalues, expected_eigvalues, decimal=5)
+        npt.assert_array_almost_equal(np.abs(eigvectors), np.abs(expected_eigvectors), decimal=5)

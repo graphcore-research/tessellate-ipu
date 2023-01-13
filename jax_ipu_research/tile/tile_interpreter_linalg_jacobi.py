@@ -3,6 +3,7 @@ import os
 from typing import Tuple
 
 import jax.lax
+import jax.numpy as jnp
 import numpy as np
 from jax.core import ShapedArray
 
@@ -10,6 +11,7 @@ from jax_ipu_research.utils import Array
 
 from .tile_array import TileShardedArray, tile_data_barrier, tile_gather, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive
+from .tile_interpreter_lax_sort import ipu_argsort_quadratic_unique
 from .tile_interpreter_linalg import make_ipu_vector1d_worker_offsets
 
 
@@ -284,3 +286,34 @@ def tile_rotate_columns(pcols: TileShardedArray, qcols: TileShardedArray) -> Tup
     # Move columns around + re-split between pcols and qcols.
     all_cols_updated = tile_gather(all_cols, all_indices, all_cols.tiles)
     return all_cols_updated[:halfN], all_cols_updated[halfN:]
+
+
+def ipu_eigh(
+    x: Array, *, lower: bool = True, symmetrize_input: bool = False, sort_eigenvalues: bool = True, num_iters: int = 1
+) -> Tuple[Array, Array]:
+    """IPU (optimized) eigh implementation.
+
+    Args:
+        x: Input matrix (N,N) (Nd not supported).
+        lower: Not supported.
+        symmetrize_input: Not supported, must be false.
+        sort_eigenvalues: Sort in ascending order.
+    Returns:
+        Tuple of eigenvectors (N, N), eigenvalues (N,)
+    """
+    assert x.ndim == 2
+    assert x.shape[0] == x.shape[1]
+    N = x.shape[0]
+    assert N % 2 == 0
+    assert N <= 1024
+    assert not symmetrize_input
+
+    A, VT = ipu_jacobi_eigh(x, num_iters=num_iters)
+    eigvalues = jnp.diag(A)
+    eigvectors_tr = VT
+    # Sorting eigen values, assuming uniqueness!
+    if sort_eigenvalues:
+        indices = ipu_argsort_quadratic_unique(eigvalues)
+        eigvalues = eigvalues[indices]
+        eigvectors_tr = eigvectors_tr[indices]
+    return eigvectors_tr.T, eigvalues
