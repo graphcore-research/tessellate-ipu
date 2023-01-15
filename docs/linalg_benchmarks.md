@@ -1,25 +1,31 @@
 # Linear Algebra algorithms benchmarking
 
+GPU benchmarks ran on Google Colab A100(40GB).
+
 # QR algorithm
 
-| Size  | PyTorch (A100) | JAX IPU Mk2 Bow
-| ----- | ------------:  | -------------:
-| 32    | 0.17ms         | -
-| 64    | 0.36ms         |
-| 128   | 0.84ms         |
-| 256   | 1.20ms         |
-| 512   | 2.88ms         |
-| 1024  | 6.92ms         |
-| 2048  | 17.7ms         |
+| Size  | PyTorch (A100) | JAX (A100) | JAX IPU Mk2 Bow | Poplibs IPU Mk2 Bow |
+| ----- | ------------:  | --------:  | -------------:  | ------------------: |
+| 32    | 0.14ms         | 0.19ms     | 0.033ms (60k)   |
+| 64    | 0.30ms         | 0.33ms     | 0.11ms (204k)   |
+| 128   | 0.75ms         | 0.79ms     | 0.22ms (400k)   |
+| 256   | 1.20ms         | 1.28ms     | 0.42ms (758k)   |
+| 512   | 2.88ms         | 2.98ms     | 1.18ms (2120k)  |
+| 1024  | 6.92ms         | 7.16ms     | -
+| 2048  | 17.7ms         | 18.0ms     | -
+
+Initial input matrix sharding across tiles: additional ~10%.
 
 # Eigh algorithm
 
-| Size  | PyTorch (A100) | JAX IPU Mk2 Bow
-| ----- | ------------:  | -------------:
-| 32    | 0.61ms         | -
-| 64    | 1.09ms         |
-| 128   | 2.45ms         |
-| 256   | 6.58ms         |
-| 512   | 18.3ms         |
-| 1024  | 18.4ms         |
-| 2048  | 41.6ms         |
+Testing 6 iterations of Jacobi algorithm on IPU.
+
+| Size  | PyTorch (A100) | JAX (A100) | JAX IPU Mk2 Bow
+| ----- | ------------:  | ---------: | -------------:
+| 32    | 0.53ms         | 0.78ms     | 0.19ms (335k)
+| 64    | 1.01ms         | 2.18ms     | 0.53ms (960k)
+| 128   | 2.45ms         | 4.49ms     | 1.55ms (2.8M)
+| 256   | 6.58ms         | 8.46ms     | 5.33ms (9.6M)
+| 512   | 18.3ms         | 25.4ms     | -
+| 1024  | 18.4ms         | 67.1ms     | -
+| 2048  | 41.6ms         | 147ms      | -

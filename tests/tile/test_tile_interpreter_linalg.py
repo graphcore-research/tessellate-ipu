@@ -9,12 +9,15 @@ from jax.lax.linalg import qr_p
 from jax_ipu_research.tile import (
     TileShardedArray,
     ipu_hw_cycle_count,
+    tile_data_barrier,
     tile_map_primitive,
     tile_put_replicated,
     tile_put_sharded,
 )
 from jax_ipu_research.tile.tile_interpreter_linalg import (
     ipu_qr,
+    ipu_qr_iterations,
+    ipu_qr_shard_inputs,
     make_ipu_vector1d_worker_offsets,
     qr_correction_vector_p,
     qr_householder_row_update_p,
@@ -202,3 +205,32 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
 
         npt.assert_array_almost_equal(np.abs(Q.array), np.abs(Qexp), decimal=5)
         npt.assert_array_almost_equal(np.abs(RT.array), np.abs(Rexp.T), decimal=5)
+
+    def test__linalg_qr_ipu__benchmark(self):
+        N = 32
+        # Random symmetric matrix...
+        x = np.random.randn(N, N).astype(np.float32)
+        x = (x + x.T) / 2
+        xsdiag = np.sign(np.diag(x)).astype(x.dtype)
+
+        def qr_decomposition_fn(x, xsdiag):
+            # Shard inputs, and wait!
+            Q, RT, sdiag = ipu_qr_shard_inputs(x, xsdiag)
+            Q, RT, sdiag = tile_data_barrier(Q, RT, sdiag)
+            # Benchmark QR main iterations.
+            Q, start = ipu_hw_cycle_count(Q)
+            Q, RT = ipu_qr_iterations(Q, RT, sdiag)
+            Q, end = ipu_hw_cycle_count(Q)
+            return Q, RT, start, end
+
+        qr_decomposition_fn_ipu = jax.jit(qr_decomposition_fn, backend="ipu")
+        _, _, start, end = qr_decomposition_fn_ipu(x, xsdiag)
+
+        start, end = np.asarray(start)[0], np.asarray(end)[0]
+        qr_cycle_count = end[0] - start[0]
+        assert qr_cycle_count <= 60000
+
+        # ipu_frequency = 1.8 * 1e9
+        # timing = qr_cycle_count / ipu_frequency
+        # print("CYCLE COUNT, TIMING:", qr_cycle_count, timing * 1000)
+        # assert False

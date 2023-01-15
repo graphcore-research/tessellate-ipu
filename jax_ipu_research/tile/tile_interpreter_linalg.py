@@ -149,20 +149,17 @@ qr_correction_vector_p = create_ipu_tile_primitive(
 )
 
 
-def ipu_qr(x: Array, xsdiag: Array) -> Tuple[Array, Array]:
-    """IPU implementation of the QR algorithm.
-
-    This implementation is returing R^T instead of R, as it is more
-    efficient to store the former while iterating.
+def ipu_qr_shard_inputs(x: Array, xsdiag: Array) -> Tuple[TileShardedArray, TileShardedArray, TileShardedArray]:
+    """IPU QR initial sharding of input arrays across IPU tiles.
 
     Args:
-        x: Symmetric matrix.
+        x: X array.
+        sdiag: X diagonal sign.
     Returns:
-        Q, R^T matrices.
+        Tile sharded Q, RT, sdiag.
     """
     assert x.shape[0] == x.shape[1]
     N = x.shape[0]
-
     # Sharding R and Q
     Q_tiles = tuple(range(0, N))
     R_tiles = tuple(range(N, 2 * N))
@@ -172,6 +169,26 @@ def ipu_qr(x: Array, xsdiag: Array) -> Tuple[Array, Array]:
     RT = tile_put_sharded(x.T, R_tiles)
     # Replicate once on all tiles. Faster then for the looping.
     sdiag_full = tile_put_replicated(xsdiag, R_tiles)
+    return Q, RT, sdiag_full
+
+
+def ipu_qr_iterations(
+    Q: TileShardedArray, RT: TileShardedArray, sdiag_full: TileShardedArray
+) -> Tuple[TileShardedArray, TileShardedArray]:
+    """IPU QR algorithm iterations.
+
+    Args:
+        Q: Initial Q sharded array.
+        RT: Initial R.T sharded array.
+        sdiag_full: Diagonal sign (replicated).
+    Returns:
+        (Q, RT) after N-1 iterations.
+    """
+    assert len(Q) == len(RT)
+    N = len(Q)
+    # Sharding of R and Q on tiles.
+    Q_tiles = Q.tiles
+    R_tiles = RT.tiles
 
     for cidx in range(N - 1):
         # From which column to start computation: skipping zeros. Must be a multiple of 2 for proper vectorization.
@@ -220,5 +237,21 @@ def ipu_qr(x: Array, xsdiag: Array) -> Tuple[Array, Array]:
             qr_householder_row_update_p, Q, vQ[:, start_idx:], w, vrescaleQ, start_idx=start_idx
         )  # type:ignore
 
-    # Return JAX arrays directly?
     return (Q, RT)
+
+
+def ipu_qr(x: Array, xsdiag: Array) -> Tuple[Array, Array]:
+    """IPU implementation of the QR algorithm.
+
+    This implementation is returing R^T instead of R, as it is more
+    efficient to store the former while iterating.
+
+    Args:
+        x: Symmetric matrix.
+    Returns:
+        Q, R^T matrices (as tile sharded arrays).
+    """
+    # Initialize Q, RT, sdiag.
+    Q, RT, sdiag_full = ipu_qr_shard_inputs(x, xsdiag)
+    # IPU QR iterations.
+    return ipu_qr_iterations(Q, RT, sdiag_full)
