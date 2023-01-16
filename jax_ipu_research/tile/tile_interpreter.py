@@ -140,7 +140,7 @@ def create_ipu_tile_primitive(
     inputs: List[str],
     outputs: Dict[str, int],
     constants: Optional[Dict[str, IpuVertexConstantFactory]] = None,
-    tmp_space_input_idx: Optional[int] = None,
+    tmp_space: Optional[Union[int, ShapedArray]] = None,
     gp_filename: Optional[str] = None,
     perf_estimate: int = 0,
 ) -> Primitive:
@@ -156,7 +156,7 @@ def create_ipu_tile_primitive(
         inputs: Set of input names.
         outputs: Set output names (with input index for aval).
         constants: Vertex constants factory function: (inavals, outavals, attrs) -> np.ndarray
-        tmp_space_input_idx: Optional tmp space (allocating the same size as input referenced)
+        tmp_space: Optional tmp space. Either index refering an input array, or a static shaped array.
         gp_filename: Optional IPU gp filename.
         perf_estimate: Optional performance estimate.
     Returns:
@@ -243,10 +243,16 @@ def create_ipu_tile_primitive(
             gp_filename=gp_filename,
             perf_estimate=perf_estimate,
         )
-        if tmp_space_input_idx is not None:
+        if tmp_space is not None:
             # Temporary scratch space to use by the vertex (zero=unused).
-            inaval = inavals[tmp_space_input_idx]
-            ipu_prim_info.tmp_space_aval = make_ipu_shaped_array(inaval.shape, inaval.dtype)
+            tmp_inaval = None
+            if isinstance(tmp_space, int):
+                tmp_inaval = inavals[tmp_space]
+            elif isinstance(tmp_space, ShapedArray):
+                tmp_inaval = tmp_space
+            else:
+                raise ValueError(f"Unknown IPU vertex primitive tmp space: '{tmp_space}'.")
+            ipu_prim_info.tmp_space_aval = make_ipu_shaped_array(tmp_inaval.shape, tmp_inaval.dtype)
         return ipu_prim_info
 
     # Register the primal implementation with JAX

@@ -8,121 +8,50 @@ using namespace poplar;
 
 // popc -O2 jax_ipu_research/tile/vertex/tile_qr_vertex.cpp -o
 // jax_ipu_research/tile/vertex/tile_qr_vertex.gp
-/**
- * Compilation for all supported targets:
- *      popc -O2 jax_ipu_research/tile/vertex/tile_qr_vertex.cpp -o
- * jax_ipu_research/tile/vertex/tile_qr_vertex.gp
- */
-template <typename T>
-class LinalgQRVertex : public Vertex {
+
+class[[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex
+    : public MultiVertex {
  public:
-  Input<Vector<T, poplar::VectorLayout::SPAN>> x;      // flatten (N,     N)
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> Q;  // flatten (N, N) Q
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> R;  // flatten (N, N) R
+  using T = float;
+  using T2 = float2;
+  // Using `uint16` seems to be generating more efficient loops?
+  using IndexType = unsigned short;
 
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>>
-      tmp;  // (N, 3) tmp scratch space.
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> x;     // (N,) x vector
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> y;  // (N,) y vector
 
-  bool compute() {
-    // Assumes square input matrix.
-    std::size_t R_shape = std::sqrt(x.size());
-    std::size_t num_cols = std::sqrt(x.size());
+  Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
+      worker_offsets;  // (7,) number threads + 1.
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> partials;  // float result.
 
-    T* diag = &tmp[0];
-    T* v = &tmp[num_cols];
-    T* intermediary = &tmp[num_cols * 2];
+  bool compute(unsigned wid) {
+    // Always assuming size % 2 == 0
+    const IndexType wstart = worker_offsets[wid];
+    const IndexType wend = worker_offsets[wid + 1];
+    const IndexType wsize = wend - wstart;
 
-    // Copy input x into matrix R
-    // Zero out matrix Q (may have -infs at init).
-    for (std::size_t i = 0; i < x.size(); i++) {
-      R[i] = x[i];
-      Q[i] = 0;
+    T2* ptr_tmp_partials_f2 = reinterpret_cast<T2*>(partials.data()) + wid;
+    // Nothing to do in this worker thread.
+    if (wstart == wend) {
+      ipu::store_postinc(&ptr_tmp_partials_f2, T2{0, 0}, 1);
+      return true;
     }
+    // X and Y input pointers.
+    const T2* ptr_inxdata_f2 = reinterpret_cast<const T2*>(x.data()) + wstart;
+    const T2* ptr_inydata_f2 = reinterpret_cast<const T2*>(y.data()) + wstart;
+    T2 partial = T2{0, 0};
 
-    // Initialize Q as the identity.
-    for (std::size_t i = 0; i < R_shape; ++i) Q[i * num_cols + i] = 1.;
-
-    // Save diagonal entries of R:
-    //    diag[i] = R[i,i]
-    for (std::size_t i = 0; i < R_shape; ++i) diag[i] = R[i * num_cols + i];
-
-    // Main for loop of QR deceomposition.
-    // Each iteration zero's out a column of R.
-    for (std::size_t i = 0; i < R_shape - 1; ++i) {
-      // Copy the elements of R into x, but zero out elements above diagonal.
-      for (std::size_t k = 0; k < i; ++k) v[k] = 0;
-      for (std::size_t k = i; k < R_shape; ++k) v[k] = R[k * num_cols + i];
-
-      // Compute the l2 norm ||v||=sqrt(sum_i v_i**2).
-      float norm = 0.;
-      for (std::size_t k = 0; k < R_shape; ++k) {
-        norm += v[k] * v[k];
-      }
-      norm = std::sqrt(norm);
-
-      // Change the entry of v that corresponds to the diagonal element of R.
-      v[i] -= norm * diag[i] / std::abs(diag[i]);  // TODO: using sign(x)=x/|x|
-
-      // Compute the l2 norm ||v||=sqrt(sum_i v_i**2).
-      norm = 0.;
-      for (std::size_t k = 0; k < R_shape; ++k) norm += v[k] * v[k];
-      norm = std::sqrt(norm);
-
-      // Normalize v by the new norm.
-      for (std::size_t k = 0; k < R_shape; ++k) v[k] = v[k] / norm;
-
-      // use row 10 for intermediary
-      // intermediary *= 0
-      // for (std::size_t k = 0; k < R_shape; ++k) { out[4*10+k] = 0.; }
-      // for i in range(R.shape[0]):
-      //        for j in range(R.shape[1]):
-      //                intermediary[i] += R[j,i] * v[j]
-      for (std::size_t l = 0; l < R_shape; l++) {
-        intermediary[l] = 0.;
-        for (std::size_t k = 0; k < R_shape; k++) {
-          intermediary[l] += R[k * num_cols + l] * v[k];
-        }
-      }
-
-      // R[,] is stored in out[16:15+16]
-      // for i in range(R.shape[0]):
-      //        for j in range(R.shape[1]):
-      //                R[i,j] = R[i,j] - 2 * v[i] * intermediary[j]
-      // zero out intermediary vector, the 10th row
-      for (std::size_t l = 0; l < R_shape; l++) {
-        for (std::size_t k = 0; k < R_shape; k++) {
-          R[l * num_cols + k] -= 2 * v[l] * intermediary[k];
-        }
-      }
-
-      // Q = Q - 2 * (Q @ v.reshape(-1, 1)) @ v.reshape(1, -1)
-      // use row 10 for intermediary
-      // intermediary *= 0
-      // for i in range(Q.shape[0]):
-      //        for j in range(Q.shape[1]):
-      //                intermediary[i] += Q[i,j] * v[j]
-      for (std::size_t l = 0; l < R_shape; l++) {  // Q is out[:16]
-        intermediary[l] = 0.;
-        for (std::size_t k = 0; k < R_shape; k++) {
-          intermediary[l] += Q[l * num_cols + k] * v[k];
-        }
-      }
-      // for i in range(Q.shape[0]):
-      //        for j in range(Q.shape[1]):
-      //                Q[i,j] -= 2  *intermediary[i] * v[j]
-      for (std::size_t l = 0; l < R_shape; l++) {
-        for (std::size_t k = 0; k < R_shape; k++) {
-          Q[l * num_cols + k] -= 2 * intermediary[l] * v[k];
-        }
-      }
+    for (IndexType idx = 0; idx != wsize; ++idx) {
+      // TODO: use ld2x64pace + tapack instructions?
+      const T2 xin = ipu::load_postinc(&ptr_inxdata_f2, 1);
+      const T2 yin = ipu::load_postinc(&ptr_inydata_f2, 1);
+      // popc seems to recognize this pattern and optimize it.
+      partial += xin * yin;
     }
-
+    ipu::store_postinc(&ptr_tmp_partials_f2, partial, 1);
     return true;
   }
 };
-
-// explicit instantiations
-template class LinalgQRVertex<float>;
 
 /**
  * @brief Vertex computing the correction vector in the QR algorithm.
@@ -143,7 +72,6 @@ class QRCorrectionVectorVertex : public MultiVertex {
   // Use static variables as easy sync. mechanisms between worker threads.
   // see: https://graphcore.slack.com/archives/C013LPHPX61/p1647443852989259
   static T shared_partial_sqnorms[6];
-  static T shared_updated_scale;
 
   QRCorrectionVectorVertex();
 
@@ -161,7 +89,6 @@ class QRCorrectionVectorVertex : public MultiVertex {
 
     // FIRST: SET SHARED STATE between workers.
     shared_partial_sqnorms[wid] = -1;
-    shared_updated_scale = 0;
 
     const float2 zeros_f2{0, 0};
     float2* ptr_outdata_f2 = reinterpret_cast<float2*>(v.data()) + wid;
@@ -220,7 +147,6 @@ class QRCorrectionVectorVertex : public MultiVertex {
 };
 
 float QRCorrectionVectorVertex::shared_partial_sqnorms[6] = {-1};
-float QRCorrectionVectorVertex::shared_updated_scale = 0;
 
 /**
  * @brief Vertex implementing the inplace householder (row) update in the QR

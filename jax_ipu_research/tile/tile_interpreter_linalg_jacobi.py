@@ -12,7 +12,7 @@ from jax_ipu_research.utils import Array
 from .tile_array import TileShardedArray, tile_data_barrier, tile_gather, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_lax_sort import ipu_argsort_quadratic_unique
-from .tile_interpreter_linalg import make_ipu_vector1d_worker_offsets
+from .tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
 
 
 def get_jacobi_vertex_gp_filename() -> str:

@@ -42,6 +42,18 @@ ALWAYS_INLINE void __builtin_ipu_put_tas(float v) noexcept {
       :);
 }
 
+/**
+ * @brief IPU cmac f32 instruction.
+ */
+ALWAYS_INLINE void __builtin_ipu_f32v2cmac(float2 x, float2 y) noexcept {
+  asm volatile(
+      R"l( f32v2mac %[x], %[y]
+        )l"
+      :
+      : [x] "r"(x), [y] "r"(y)
+      :);
+}
+
 template <typename T>
 ALWAYS_INLINE float ld32(const T* address, unsigned offset) {
   float result;

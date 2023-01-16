@@ -96,7 +96,7 @@ custom_multi_out_p = create_ipu_tile_primitive(
     inputs=["in"],
     outputs={"out0": 0, "out1": 0},
     constants={"constant_scale": lambda ins, *_: np.array([ins[0].size], ins[0].dtype)},
-    tmp_space_input_idx=0,
+    tmp_space=0,
     gp_filename=os.path.join(os.path.dirname(__file__), "custom_arange_vertex.cpp"),
     perf_estimate=100,
 )

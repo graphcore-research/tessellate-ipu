@@ -6,7 +6,7 @@ from . import (
     tile_interpreter_lax_dot,
     tile_interpreter_lax_reduce,
     tile_interpreter_lax_unary,
-    tile_interpreter_linalg,
+    tile_interpreter_linalg_qr,
 )
 from .tile_array import (
     TileShardedArray,
@@ -20,8 +20,8 @@ from .tile_interpreter import create_ipu_tile_primitive, register_ipu_tile_primi
 from .tile_interpreter_hw_primitives import hw_cycle_count_p, ipu_hw_cycle_count
 from .tile_interpreter_lax_binary import scaled_add_p, scaled_sub_p
 from .tile_interpreter_lax_dot import IpuConvVertexType
-from .tile_interpreter_linalg import ipu_qr
 from .tile_interpreter_linalg_jacobi import ipu_eigh
+from .tile_interpreter_linalg_qr import ipu_qr
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
     IpuVertexIOType,
