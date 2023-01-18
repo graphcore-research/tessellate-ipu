@@ -1,9 +1,11 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+from dataclasses import dataclass
 from typing import Any, Sequence, Tuple, Union
 
 import chex
 import numpy as np
 from jax.interpreters.xla import DeviceArray, ShapedArray
+from jax.tree_util import register_pytree_node_class
 
 from jax_ipu_research.utils import DTypeLike, Shape
 
@@ -14,6 +16,7 @@ from .tile_array_primitives import (
     tile_put_sharded_prim,
 )
 
+TilesType = Tuple[int, ...]
 SliceType = Union[int, slice]
 MultiSliceType = Tuple[SliceType, ...]
 
@@ -55,7 +58,8 @@ def check_tile_array_multi_slice(slices: MultiSliceType, shape: Shape) -> bool:
     return True
 
 
-@chex.dataclass(frozen=True, mappable_dataclass=False)
+@register_pytree_node_class
+@dataclass(frozen=True)
 class TileShardedArray:
     """JAX array sharded over (IPU) tiles.
 
@@ -71,11 +75,11 @@ class TileShardedArray:
 
     Args:
         array: Underlying JAX array.
-        tiles: List of tiles on which the array is sharded.
+        tiles: Tuple of tiles on which the array is sharded.
     """
 
     array: chex.ArrayDevice
-    tiles: Tuple[int, ...]
+    tiles: TilesType
 
     def __post_init__(self):
         # Check consistent array and collection of tiles.
@@ -83,6 +87,21 @@ class TileShardedArray:
             raise ValueError(
                 f"Inconsistent IPU sharded array shape '{self.array.shape}' and number of tiles {len(self.tiles)}."
             )
+        # Make sure we have a tuple of ints.
+        tiles = tuple([int(v) for v in self.tiles])
+        object.__setattr__(self, "tiles", tiles)
+
+    def tree_flatten(self):
+        # See official JAX documentation on extending PyTrees. Tile mapping is static, hence metadata.
+        children = (self.array,)
+        aux_data = self.tiles
+        return (children, aux_data)
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        # See official JAX documentation on extending PyTrees. Tile mapping is static, hence metadata.
+        assert len(children) == 1
+        return cls(children[0], aux_data)
 
     @property
     def dtype(self) -> Any:
@@ -125,7 +144,7 @@ class TileShardedArray:
         if d0 != -1 and d0 != self.num_tiles:
             raise ValueError(f"Can not reshape '{shape}' the tile sharding axis in a TileShardedArray.")
         shape = (self.num_tiles, *shape[1:])
-        return TileShardedArray(array=self.array.reshape(shape), tiles=self.tiles)  # type:ignore
+        return TileShardedArray(array=self.array.reshape(shape), tiles=self.tiles)
 
     def tile_reshape(self, shape: Shape) -> "TileShardedArray":
         return self.reshape((self.num_tiles, *shape))
@@ -135,7 +154,7 @@ class TileShardedArray:
         has_single_tile = self.num_tiles == 1
         if has_single_tile:
             squeezed_array = squeezed_array.reshape((1, *squeezed_array.shape))
-        return TileShardedArray(array=squeezed_array, tiles=self.tiles)  # type:ignore
+        return TileShardedArray(array=squeezed_array, tiles=self.tiles)
 
     def __len__(self) -> int:
         return len(self.array)
@@ -204,7 +223,7 @@ def tile_data_barrier(*args: TileShardedArray) -> Tuple[TileShardedArray, ...]:
     inputs_tiles = [v.tiles for v in args]
     raw_inputs = [v.array for v in args]
     raw_outputs = tile_data_barrier_prim(raw_inputs, inputs_tiles)
-    return tuple([TileShardedArray(output, input.tiles) for output, input in zip(raw_outputs, args)])  # type:ignore
+    return tuple([TileShardedArray(output, input.tiles) for output, input in zip(raw_outputs, args)])
 
 
 tile_barrier = tile_data_barrier

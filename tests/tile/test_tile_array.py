@@ -21,6 +21,36 @@ from jax_ipu_research.tile.tile_array import check_tile_array_multi_slice
 
 
 class TileShardedArrayTests(chex.TestCase, parameterized.TestCase):
+    def test__tile_sharded_array__static_tiles(self):
+        @partial(jax.jit, backend="cpu")
+        def tile_put_sharded_fn(arr) -> TileShardedArray:
+            return tile_put_sharded(arr, (3, 4, 5))
+
+        input = np.asarray([1, 2, 3], np.float32)
+        output = tile_put_sharded_fn(input)
+        assert isinstance(output.tiles, tuple)
+        assert all([isinstance(v, int) for v in output.tiles])
+
+    def test__tile_sharded_array__input_types(self):
+        data = np.array([1, 2, 3], np.float32)
+        arr = TileShardedArray(data, (1, 2, 3))
+        assert arr.array is data
+        assert isinstance(arr.tiles, tuple)
+
+    @parameterized.parameters(
+        [
+            {"tiles": (1, 3, 7)},
+            {"tiles": [1, 3, 7]},
+            {"tiles": np.array([1, 3, 7])},
+        ]
+    )
+    def test__tile_sharded_array__tiles_cast_to_tuple_int(self, tiles):
+        data = np.array([1, 2, 3], np.float32)
+        arr = TileShardedArray(data, tiles)
+        assert isinstance(arr.tiles, tuple)
+        assert all([isinstance(v, int) for v in arr.tiles])
+        assert arr.tiles == (1, 3, 7)
+
     @chex.variants(with_jit=True, without_jit=True)
     def test__tile_sharded_array__shape_dtype(self):
         @self.variant

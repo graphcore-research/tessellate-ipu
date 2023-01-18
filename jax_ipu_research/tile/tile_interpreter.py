@@ -106,7 +106,7 @@ def tile_map_primitive(
             tile_map_eqn_json=tile_map_eqn_json,
             **attributes,
         )
-        return tuple([TileShardedArray(v, tiles) for v in outputs])  # type:ignore
+        return tuple([TileShardedArray(v, tiles) for v in outputs])
     else:
         output = tile_map_equation_call_single_out(
             [v.device_array for v in inputs],
@@ -115,7 +115,7 @@ def tile_map_primitive(
             tile_map_eqn_json=tile_map_eqn_json,
             **attributes,
         )
-        return TileShardedArray(output, tiles)  # type:ignore
+        return TileShardedArray(output, tiles)
 
 
 def register_ipu_tile_primitive(primitive: Primitive, translation: IpuVertexTranslation):

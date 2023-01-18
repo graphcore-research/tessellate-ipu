@@ -172,8 +172,8 @@ def jacobi_sort_columns(
     qcols_sorted = [jax.lax.expand_dims(t, (0,)) for t in qcols_sorted]
 
     rot_sorted_arr = np.array(rot_sorted, np.uint32)
-    pcols_sorted_arr = TileShardedArray(jax.lax.concatenate(pcols_sorted, dimension=0), pcols.tiles)  # type:ignore
-    qcols_sorted_arr = TileShardedArray(jax.lax.concatenate(qcols_sorted, dimension=0), qcols.tiles)  # type:ignore
+    pcols_sorted_arr = TileShardedArray(jax.lax.concatenate(pcols_sorted, dimension=0), pcols.tiles)
+    qcols_sorted_arr = TileShardedArray(jax.lax.concatenate(qcols_sorted, dimension=0), qcols.tiles)
     return (rot_sorted_arr, pcols_sorted_arr, qcols_sorted_arr)
 
 
@@ -276,7 +276,7 @@ def tile_rotate_columns(pcols: TileShardedArray, qcols: TileShardedArray) -> Tup
     assert pcols.tiles == qcols.tiles
     halfN = pcols.shape[0]
     # Concat all columns, in order to perform a single gather.
-    all_cols = TileShardedArray(  # type:ignore
+    all_cols = TileShardedArray(
         jax.lax.concatenate([pcols.array, qcols.array], dimension=0), (*pcols.tiles, *qcols.tiles)
     )
     # Express rotation as indices for a gather op.

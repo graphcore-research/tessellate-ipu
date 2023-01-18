@@ -1,7 +1,9 @@
 from functools import partial
+
 import jax
 import numpy as np
-from jax_ipu_research.tile import tile_put_replicated, tile_put_sharded, tile_map_primitive
+
+from jax_ipu_research.tile import tile_map_primitive, tile_put_replicated, tile_put_sharded
 
 N = 5
 tiles = (0, 2, 5)
@@ -16,7 +18,7 @@ def compute_fn(input0, input1):
     input1 = tile_put_replicated(input1, (0, 1, 3))
     input1 = tile_map_primitive(jax.lax.neg_p, input1)
     input1 = tile_put_sharded(input1.array, tiles)
-    
+
     return tile_map_primitive(jax.lax.add_p, input0, input1)
 
 
