@@ -9,9 +9,11 @@ tiles = (0, 2, 5)
 
 @partial(jax.jit, backend="ipu")
 def compute_fn(input):
-    input = tile_put_sharded(input, (0, 2, 5))
+    input = tile_put_sharded(input, tiles)
+    # input = tile_put_replicated(input, tiles)
     return tile_map_primitive(jax.lax.neg_p, input)
 
 output = compute_fn(data)
-print(output)
-print(output.array)
+print(output, output.array.device())
+print("SHAPE:", output.shape)
+print("RESULT:", output.array)
