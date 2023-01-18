@@ -1,12 +1,14 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import json
 import os
-from typing import Dict, Tuple
+from typing import Dict, Sequence, Tuple, Union
 
 import cppimport.import_hook  # noqa: F401
+import jax.lax
 import numpy as np
 from jax import core
-from jax.interpreters import xla
+from jax.interpreters import mlir, xla
+from jax.interpreters.mlir import LoweringRuleContext, ir
 from jax.interpreters.xla import ShapedArray
 from jax.lib import xla_client
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
@@ -27,6 +29,8 @@ tile_put_sharded_prim_p = core.Primitive("tile_put_sharded")
 tile_put_replicated_prim_p = core.Primitive("tile_put_replicated")
 tile_gather_prim_p = core.Primitive("tile_gather")
 tile_data_barrier_prim_p = core.Primitive("tile_data_barrier")
+
+default_backends = ["cpu", "cuda", "tpu", "rocm"]
 
 
 def make_tiles_raw_attributes(tiles: Tuple[int, ...]) -> str:
@@ -75,8 +79,8 @@ tile_put_sharded_prim_p.def_impl(tile_put_sharded_prim_impl)
 tile_put_sharded_prim_p.def_abstract_eval(tile_put_sharded_prim_abstract_eval)
 # Register XLA translation, for different backends.
 xla.backend_specific_translations["ipu"][tile_put_sharded_prim_p] = tile_put_sharded_prim_xla_translation_ipu
-xla.backend_specific_translations["cpu"][tile_put_sharded_prim_p] = tile_put_sharded_prim_xla_translation_default
-xla.backend_specific_translations["gpu"][tile_put_sharded_prim_p] = tile_put_sharded_prim_xla_translation_default
+for b in default_backends:
+    xla.backend_specific_translations[b][tile_put_sharded_prim_p] = tile_put_sharded_prim_xla_translation_default
 
 
 def tile_put_replicated_prim(x, tiles):
@@ -92,10 +96,21 @@ def tile_put_replicated_prim_abstract_eval(xs, tiles) -> ShapedArray:
     return ShapedArray(outshape, xs.dtype, xs.weak_type)
 
 
-def tile_put_replicated_prim_xla_translation_default(ctx, xc, tiles):
-    """`tile_put_replicated_prim` default XLA translation, for CPU/GPU backends: simple concat"""
-    # TODO: implementation from JAX?
-    raise NotImplementedError()
+def tile_put_replicated_prim_mlir_translation_default(
+    ctx: LoweringRuleContext, *args: Union[ir.Value, Sequence[ir.Value]], **params
+) -> Sequence[Union[ir.Value, Sequence[ir.Value]]]:
+    """`tile_put_replicated_prim` default MLIR translation, for CPU/GPU backends: simple concat."""
+    tiles = params["tiles"]
+
+    # Not sure using a local function is a good idea?
+    def tile_replicated_fn(input):
+        N = len(tiles)
+        input = jax.lax.expand_dims(input, dimensions=(0,))
+        return jax.lax.concatenate([input] * N, dimension=0)
+
+    # Lower to MLIR using JAX tooling. TODO: cache lowering?
+    tile_replicated_lower_fn = mlir.lower_fun(tile_replicated_fn, multiple_results=False)
+    return tile_replicated_lower_fn(ctx, *args)
 
 
 def tile_put_replicated_prim_xla_translation_ipu(ctx, xc, tiles):
@@ -116,8 +131,9 @@ tile_put_replicated_prim_p.def_impl(tile_put_replicated_prim_impl)
 tile_put_replicated_prim_p.def_abstract_eval(tile_put_replicated_prim_abstract_eval)
 # Register XLA translation, for different backends.
 xla.backend_specific_translations["ipu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_ipu
-xla.backend_specific_translations["cpu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_default
-xla.backend_specific_translations["gpu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_default
+# Register MLIR translation for other backends.
+for b in default_backends:
+    mlir.register_lowering(tile_put_replicated_prim_p, tile_put_replicated_prim_mlir_translation_default, b)
 
 
 def tile_gather_prim(x, previous_tiles, indices, tiles):
@@ -152,7 +168,6 @@ def tile_gather_prim_xla_translation_ipu(ctx, xc, previous_tiles, indices, tiles
     ]
     outputs = ipu_xla_custom_primitive_call(TileGatherPrimitive, ctx, inputs, outputs_aval, attributes=raw_attributes)
     return outputs[0]
-    return None
 
 
 # Register the primal implementation with JAX
@@ -161,8 +176,8 @@ tile_gather_prim_p.def_impl(tile_gather_prim_impl)
 tile_gather_prim_p.def_abstract_eval(tile_gather_prim_abstract_eval)
 # Register XLA translation, for different backends.
 xla.backend_specific_translations["ipu"][tile_gather_prim_p] = tile_gather_prim_xla_translation_ipu
-xla.backend_specific_translations["cpu"][tile_gather_prim_p] = tile_gather_prim_xla_translation_default
-xla.backend_specific_translations["gpu"][tile_gather_prim_p] = tile_gather_prim_xla_translation_default
+for b in default_backends:
+    xla.backend_specific_translations[b][tile_gather_prim_p] = tile_gather_prim_xla_translation_default
 
 
 def tile_data_barrier_prim(inputs, inputs_tiles):
@@ -179,8 +194,8 @@ def tile_data_barrier_prim_abstract_eval(*args: ShapedArray, **params) -> Tuple[
 
 def tile_data_barrier_prim_xla_translation_default(ctx, *args, **params):
     """`tile_data_barrier_prim` default XLA translation, for CPU/GPU backends."""
-    # TODO: implementation from JAX?
-    raise NotImplementedError()
+    # Translate into standard optimization barrier on CPU/GPU/TPU.
+    return xla_client.ops.OptimizationBarrier(xla_client.ops.Tuple(ctx, args))
 
 
 _tile_barrier_dtype_mapping: Dict[DType, DType] = {
@@ -240,5 +255,5 @@ tile_data_barrier_prim_p.def_impl(tile_data_barrier_prim_impl)
 tile_data_barrier_prim_p.def_abstract_eval(tile_data_barrier_prim_abstract_eval)
 # Register XLA translation, for different backends.
 xla.backend_specific_translations["ipu"][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_ipu
-xla.backend_specific_translations["cpu"][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_default
-xla.backend_specific_translations["gpu"][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_default
+for b in default_backends:
+    xla.backend_specific_translations[b][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_default

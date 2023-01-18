@@ -166,8 +166,8 @@ class TileShardedArrayTests(chex.TestCase, parameterized.TestCase):
         assert outdata.shape == exp_shape
 
 
-@pytest.mark.parametrize("backend", ["ipu"])
-def test__tile_put_sharded__ipu_jitting(backend):
+@pytest.mark.parametrize("backend", ["cpu", "ipu"])
+def test__tile_put_sharded__backend_jitting(backend):
     # TODO: more complex 3 x 64 x 64 array examples.
     input = np.asarray([1, 2, 3], np.float32)
     tiles = (3, 4, 5)
@@ -180,8 +180,8 @@ def test__tile_put_sharded__ipu_jitting(backend):
     npt.assert_array_equal(output.array, input)
 
 
-@pytest.mark.parametrize("backend", ["ipu"])
-def test__tile_put_replicated__ipu_jitting(backend):
+@pytest.mark.parametrize("backend", ["cpu", "ipu"])
+def test__tile_put_replicated__backend_jitting(backend):
     input = np.asarray([1, 2, 3], np.float32)
     tiles = (3, 4, 5)
     output = jax.jit(tile_put_replicated, static_argnums=1, backend=backend)(input, tiles)
@@ -264,6 +264,24 @@ class TileDataBarrierTests(chex.TestCase, parameterized.TestCase):
 
         data = np.asarray([1, 2, 5], np.float32)
         tile_data_barrier_fn(data)
+
+    @parameterized.parameters(["cpu"])
+    def test__tile_data_barrier__backend_jitting(self, backend):
+        # Set of random tiles mapping.
+        inputs_tiles = [[0, 1], [2, 3]]
+
+        @partial(jax.jit, backend=backend)
+        def tile_data_barrier_fn(data) -> Tuple[TileShardedArray, ...]:
+            inputs = [tile_put_replicated(data, tiles) for tiles in inputs_tiles]
+            outputs = tile_data_barrier(*inputs)
+            return outputs
+
+        data = np.asarray([1, 2, 5], np.float32)
+        out0, out1 = tile_data_barrier_fn(data)
+        assert out0.tiles == (0, 1)
+        assert out1.tiles == (2, 3)
+        assert out0.shape == (2, 3)
+        assert out1.shape == (2, 3)
 
     def test__tile_data_barrier__single_input__noop(self):
         tiles = [0, 1]
