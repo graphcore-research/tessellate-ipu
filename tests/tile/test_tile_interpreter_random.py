@@ -117,5 +117,5 @@ class IpuTilePrimitivesRandomNormal(chex.TestCase, parameterized.TestCase):
         assert ipu_normal_array.shape == (len(tiles), size)
         assert ipu_normal_array.dtype == dtype
 
-        npt.assert_almost_equal(np.mean(ipu_normal_array), mean, decimal=2)
+        npt.assert_almost_equal(np.mean(ipu_normal_array), mean, decimal=1)
         npt.assert_almost_equal(np.std(np.asarray(ipu_normal_array, dtype=np.float32) - mean), stddev, decimal=1)

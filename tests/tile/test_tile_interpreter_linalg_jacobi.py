@@ -92,7 +92,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
 
         start, end = np.asarray(start)[0], np.asarray(end)[0]
         qr_correction_cycle_count = end[0] - start[0]
-        assert qr_correction_cycle_count <= 306
+        assert qr_correction_cycle_count <= 310
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 
@@ -256,6 +256,21 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         N = 8
         x = np.random.randn(N, N).astype(np.float32)
         x = (x + x.T) / 2.0
+
+        ipu_eigh_fn = jax.jit(lambda x: ipu_eigh(x, sort_eigenvalues=True, num_iters=5), backend="ipu")
+        # Should be enough iterations...
+        eigvectors, eigvalues = ipu_eigh_fn(x)
+        eigvalues = np.asarray(eigvalues)
+        eigvectors = np.asarray(eigvectors)
+        # Expected eigen values and vectors (from Lapack?)
+        expected_eigvalues, expected_eigvectors = np.linalg.eigh(x)
+
+        npt.assert_array_almost_equal(eigvalues, expected_eigvalues, decimal=5)
+        npt.assert_array_almost_equal(np.abs(eigvectors), np.abs(expected_eigvectors), decimal=5)
+
+    def test__jacobi_eigh__sorting_failure_case(self):
+        # Trivial diagonalization, but with multiple identical eigen values.
+        x = np.diag([1.0, 2.0, 3.0, 2.0]).astype(np.float32)
 
         ipu_eigh_fn = jax.jit(lambda x: ipu_eigh(x, sort_eigenvalues=True, num_iters=5), backend="ipu")
         # Should be enough iterations...

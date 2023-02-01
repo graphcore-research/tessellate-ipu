@@ -11,7 +11,6 @@ from jax_ipu_research.utils import Array
 
 from .tile_array import TileShardedArray, tile_data_barrier, tile_gather, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive
-from .tile_interpreter_lax_sort import ipu_argsort_quadratic_unique
 from .tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
 
 
@@ -311,9 +310,9 @@ def ipu_eigh(
     A, VT = ipu_jacobi_eigh(x, num_iters=num_iters)
     eigvalues = jnp.diag(A)
     eigvectors_tr = VT
-    # Sorting eigen values, assuming uniqueness!
+    # Sorting eigen values.
     if sort_eigenvalues:
-        indices = ipu_argsort_quadratic_unique(eigvalues)
-        eigvalues = eigvalues[indices]
+        indices = jax.lax.iota(np.int32, len(eigvalues))
+        eigvalues, indices = jax.lax.sort_key_val(eigvalues, indices)
         eigvectors_tr = eigvectors_tr[indices]
     return eigvectors_tr.T, eigvalues
