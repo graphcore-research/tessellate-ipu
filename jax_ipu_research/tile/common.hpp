@@ -83,7 +83,7 @@ struct IpuTypeTraits {};
 
 IPU_TYPE_DECLARE_TRAITS(IpuType::BOOL, bool)
 IPU_TYPE_DECLARE_TRAITS(IpuType::UNSIGNED_CHAR, unsigned char)
-IPU_TYPE_DECLARE_TRAITS(IpuType::CHAR, char)
+IPU_TYPE_DECLARE_TRAITS(IpuType::CHAR, char) // char != signed char for Poplar
 IPU_TYPE_DECLARE_TRAITS(IpuType::UNSIGNED_SHORT, unsigned short)
 IPU_TYPE_DECLARE_TRAITS(IpuType::SHORT, short)
 IPU_TYPE_DECLARE_TRAITS(IpuType::UNSIGNED_INT, unsigned int)

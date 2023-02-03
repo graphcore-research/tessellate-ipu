@@ -9,11 +9,18 @@ from absl.testing import parameterized
 from jax import lax
 from jax.core import ShapedArray
 
-from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_replicated, tile_put_sharded
+from jax_ipu_research.tile import (
+    TileShardedArray,
+    ipu_hw_cycle_count,
+    tile_map_primitive,
+    tile_put_replicated,
+    tile_put_sharded,
+)
 from jax_ipu_research.tile.tile_interpreter_lax_binary import scaled_add_p, scaled_sub_p
 from jax_ipu_research.tile.tile_interpreter_lax_unary import (
     ipu_unary_primitive_translation,
     make_unary1d_vertex_fullname,
+    tile_copy,
 )
 from jax_ipu_research.tile.tile_interpreter_primitives_impl import IpuTileMapEquation, IpuType
 
@@ -250,3 +257,54 @@ class IpuTileBinaryPrimitiveTests(chex.TestCase, parameterized.TestCase):
         assert output.tiles == tiles
         assert output.dtype == A.dtype
         npt.assert_array_almost_equal(output.array, scale_op_p.impl(A, B, sB), decimal=2)
+
+
+class IpuTileMemcpyTests(chex.TestCase):
+    def setUp(self):
+        super().setUp()
+        np.random.seed(42)
+
+    # TODO: fix the case of `np.int8` output?
+    @parameterized.parameters([np.bool_, np.uint8, np.float16, np.float32])
+    def test__tile_copy__multi_size_copy__multi_dtypes(self, dtype):
+        tiles = (0,)
+        data = np.random.randn(6, 3).astype(dtype)
+
+        @partial(jax.jit, backend="ipu")
+        def copy_fn(indata):
+            indata = tile_put_replicated(indata, tiles)
+            # Check multiple sub-sizes.
+            out0 = tile_copy(indata)
+            out1 = tile_copy(indata[:, :6])
+            out2 = tile_copy(indata[:, :12])
+            return out0, out1, out2
+
+        out0, out1, out2 = copy_fn(data)
+        assert isinstance(out0, TileShardedArray)
+        assert out0.shape == (len(tiles), *data.shape)
+        assert out0.dtype == data.dtype
+        npt.assert_array_equal(np.asarray(out0)[0], data)
+        npt.assert_array_equal(np.asarray(out1)[0, :6], data)
+        npt.assert_array_equal(np.asarray(out2)[0, :12], data)
+
+    def test__tile_copy__benchmark_performance(self):
+        N = 512
+        tiles = (0,)
+        data = np.random.randn(N).astype(np.float32)
+
+        @partial(jax.jit, backend="ipu")
+        def copy_fn(indata):
+            indata = tile_put_replicated(indata, tiles)
+            indata, start = ipu_hw_cycle_count(indata)
+            outdata = tile_copy(indata)
+            outdata, end = ipu_hw_cycle_count(outdata)
+            return start, end
+
+        start, end = copy_fn(data)
+        # Cycle count. Reference for scale_add: 64(375), 128(467), 256(665), 512(1043)
+        start, end = np.asarray(start)[0], np.asarray(end)[0]
+        cycle_count = end[0] - start[0]
+        # Fairly poor performance at the moment!
+        assert cycle_count <= 5000
+        # print("CYCLE count:", cycle_count)
+        # assert False

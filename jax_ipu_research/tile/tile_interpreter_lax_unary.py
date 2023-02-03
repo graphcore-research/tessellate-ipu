@@ -1,18 +1,22 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+import os
 from typing import Any, Dict, List, Tuple
 
 from jax import lax
+from jax._src.lax.lax import copy_p
 from jax.core import Primitive, ShapedArray
 
 from jax_ipu_research.utils import DTypeLike
 
-from .tile_interpreter import register_ipu_tile_primitive
+from .tile_array import TileShardedArray
+from .tile_interpreter import register_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
     from_numpy_dtype_to_ipu_type,
     get_ipu_type_name,
     make_ipu_vertex_attributes,
     make_ipu_vertex_in_info,
+    make_ipu_vertex_name_templated,
     make_ipu_vertex_out_info,
 )
 
@@ -204,3 +208,60 @@ for p in _unary_primitive_to_vertex_basename.keys():
 
 register_ipu_tile_primitive(lax.convert_element_type_p, ipu_cast_primitive_translation)
 register_ipu_tile_primitive(lax.integer_pow_p, ipu_integer_pow_translation)
+
+
+# On tile (mem)copy primitive.
+def ipu_tile_memcpy(
+    p: Primitive,
+    tiles: Tuple[int, ...],
+    inavals: List[ShapedArray],
+    attributes: Dict[str, Any] = None,
+) -> IpuTileMapEquation:
+    """IPU `copy` primitive translation rule to IPU vertex.
+
+    TODO: not using Poplar optimized ASM vertex yet. How to do
+    reinterpret_cast to `char` in general case? Custom `TileMemcpy`
+    in the meantime.
+
+    Args:
+        p: JAX primitive.
+        tiles: Collection of tiles.
+        inavals: Input shaped arrays.
+        attributes: (unused) attributes.
+    Returns:
+        IPU tile map primitive structure.
+    """
+    assert len(inavals) == 1
+    inaval = inavals[0]
+
+    gp_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "vertex", "tile_prim_vertex.cpp"))
+    vname = make_ipu_vertex_name_templated("TileMemcpyVertex", inaval.dtype)
+    ipu_prim_info = IpuTileMapEquation(
+        vname=vname,
+        pname=p.name,
+        tiles=tiles,
+        inputs_info=[make_ipu_vertex_in_info("in", inaval)],
+        outputs_info=[make_ipu_vertex_out_info("out", inaval)],
+        attributes_i32=[],
+        attributes_f32=[],
+        gp_filename=gp_filename,
+    )
+    return ipu_prim_info
+
+
+register_ipu_tile_primitive(copy_p, ipu_tile_memcpy)
+
+
+def tile_copy(input: TileShardedArray) -> TileShardedArray:
+    """On tile-copy of sharded array (using custom vertex for now).
+
+    NOTE: `jnp.copy` calls can sometimes be optimized out by Poplar compiler,
+    whereas `tile_copy` will ALWAYS be performing a copy, even unnecessary ones.
+
+    Args:
+        input: Tile sharded array.
+    Returns:
+        Copied array, with same tile-mapping.
+    """
+    r: TileShardedArray = tile_map_primitive(copy_p, input)  # type:ignore
+    return r
