@@ -1,4 +1,6 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+from functools import partial
+
 import chex
 import jax
 import numpy as np
@@ -282,3 +284,24 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
 
         npt.assert_array_almost_equal(eigvalues, expected_eigvalues, decimal=5)
         npt.assert_array_almost_equal(np.abs(eigvectors), np.abs(expected_eigvectors), decimal=5)
+
+    def test__jacobi_eigh__jit_multi_calls__reused_buffer_bug(self):
+        N = 4
+        x = np.random.randn(N, N).astype(np.float32)
+        x0 = (x + x.T) / 2.0
+        x1 = x0 @ x0.T
+
+        @partial(jax.jit, backend="ipu")
+        def compute_fn(x0, x1):
+            # Two calls: make sure we don't reuse the same buffers.
+            eigvecs0, _ = ipu_eigh(x0, sort_eigenvalues=True, num_iters=4)
+            eigvecs1, _ = ipu_eigh(x1, sort_eigenvalues=True, num_iters=4)
+            return eigvecs0, eigvecs1
+
+        eigvecs0, eigvecs1 = compute_fn(x0, x1)
+        # Expected eigen values and vectors (from Lapack?)
+        _, expected_eigvectors0 = np.linalg.eigh(x0)
+        _, expected_eigvectors1 = np.linalg.eigh(x1)
+        # Both eigenvectors should be accurate.
+        npt.assert_array_almost_equal(np.abs(eigvecs0), np.abs(expected_eigvectors0), decimal=4)
+        npt.assert_array_almost_equal(np.abs(eigvecs1), np.abs(expected_eigvectors1), decimal=4)

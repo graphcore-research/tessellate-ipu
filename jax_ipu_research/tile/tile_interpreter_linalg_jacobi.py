@@ -61,7 +61,7 @@ jacobi_update_eigenvectors_p = create_ipu_tile_primitive(
     "jacobi_update_eigenvectors",
     "JacobiUpdateEigenvectors",
     inputs=["cs", "vpcol", "vqcol"],
-    outputs={"vpcol": 1, "vqcol": 2},
+    outputs={"vpcol_out": 1, "vqcol_out": 2},  # Bug when inplace update?
     constants={
         "worker_offsets": lambda inavals, *_: make_ipu_vector1d_worker_offsets(
             inavals[1].size, vector_size=2, wdtype=np.uint16

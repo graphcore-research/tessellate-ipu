@@ -23,7 +23,8 @@ __attribute__((always_inline)) float2 sym_schur2(const float App,
   const T sq_Dpq = Dpq * Dpq;
 
   // Avoids dividing by zero/eps!
-  constexpr T eps = 1e-10f;
+  // eps value fine-tuned on some DFT and random examples.
+  constexpr T eps = 1e-12f;
   T2 cs_vec{1, 0};
   if (sq_Cpq > sq_Dpq * eps) {
     const T norm_pq = sqrt(sq_Cpq + sq_Dpq);
@@ -253,11 +254,14 @@ class[[poplar::constraint(
 
   Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>>
       cs;  // (2,) (c, s) Schur decomposition values
-  InOut<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vpcol;  // (N,) p column
-  InOut<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vqcol;  // (N,) q column
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vpcol;  // (N,) p column
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vqcol;  // (N,) q column
 
   Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
       worker_offsets;  // (7,) threads work size + 1.
+
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vpcol_out;  // (N,) p column
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vqcol_out;  // (N,) q column
 
   JacobiUpdateEigenvectors();
 
@@ -276,8 +280,8 @@ class[[poplar::constraint(
     // pcol, qcol and results pointers.
     const T2* ptr_pcol = reinterpret_cast<const T2*>(vpcol.data()) + wstart;
     const T2* ptr_qcol = reinterpret_cast<const T2*>(vqcol.data()) + wstart;
-    T2* ptr_pcol_updated = reinterpret_cast<T2*>(vpcol.data()) + wstart;
-    T2* ptr_qcol_updated = reinterpret_cast<T2*>(vqcol.data()) + wstart;
+    T2* ptr_pcol_updated = reinterpret_cast<T2*>(vpcol_out.data()) + wstart;
+    T2* ptr_qcol_updated = reinterpret_cast<T2*>(vqcol_out.data()) + wstart;
 
     for (IndexType idx = 0; idx != wsize; ++idx) {
       const T2 vpvec = ipu::load_postinc(&ptr_pcol, 1);
