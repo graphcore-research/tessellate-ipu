@@ -65,6 +65,10 @@ _binary_primitive_to_vertex_basename: Dict[Primitive, Tuple[str, Any]] = {
     lax.pow_p: ("POWER", None),
     lax.rem_p: ("REMAINDER", None),
     lax.sub_p: ("SUBTRACT", None),
+    # NOTE: Poplar (SDK 3.1) having slightly different convention than XLA/JAX.
+    lax.shift_left_p: ("SHIFT_LEFT", None),
+    lax.shift_right_logical_p: ("SHIFT_RIGHT", None),
+    lax.shift_right_arithmetic_p: ("SHIFT_RIGHT_SIGN_EXTEND", None),
 }
 """Binary JAX primitive to to IPU vertex basename (and output optional dtype).
 """

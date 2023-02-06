@@ -259,6 +259,48 @@ class IpuTileBinaryPrimitiveTests(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(output.array, scale_op_p.impl(A, B, sB), decimal=2)
 
 
+class IpuTileShiftPrimitivesTests(chex.TestCase):
+    def setUp(self):
+        super().setUp()
+        np.random.seed(42)
+
+    @parameterized.parameters([0, 1, 16, 31])  # NOTE: 32 failing!
+    def test__tile_map_primitive__shift_left__ipu_jitting__proper_result(self, shift):
+        tiles = (0,)
+        dtype = np.int32
+        input0 = np.array([0, 1, 2, 4, 8], dtype=dtype)
+        input1 = np.array([shift] * len(input0), dtype=dtype)
+
+        def compute_fn(in0, shift):
+            input0 = tile_put_replicated(in0, tiles)
+            shift = tile_put_replicated(shift, tiles)
+            return tile_map_primitive(lax.shift_left_p, input0, shift)
+
+        compute_fn_cpu = partial(jax.jit, backend="cpu")(compute_fn)
+        compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)
+        output_cpu = compute_fn_cpu(input0, input1)
+        output_ipu = compute_fn_ipu(input0, input1)
+        npt.assert_array_equal(output_ipu, output_cpu)
+
+    @parameterized.parameters([0, 1, 16, 31])  # NOTE: 32 failing!
+    def test__tile_map_primitive__shift_right_logical__ipu_jitting__proper_result(self, shift):
+        tiles = (0,)
+        dtype = np.int32
+        input0 = np.array([0, 1, 2, 4, 8], dtype=dtype)
+        input1 = np.array([shift] * len(input0), dtype=dtype)
+
+        def compute_fn(in0, shift):
+            input0 = tile_put_replicated(in0, tiles)
+            shift = tile_put_replicated(shift, tiles)
+            return tile_map_primitive(lax.shift_right_logical_p, input0, shift)
+
+        compute_fn_cpu = partial(jax.jit, backend="cpu")(compute_fn)
+        compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)
+        output_cpu = compute_fn_cpu(input0, input1)
+        output_ipu = compute_fn_ipu(input0, input1)
+        npt.assert_array_equal(output_ipu, output_cpu)
+
+
 class IpuTileMemcpyTests(chex.TestCase):
     def setUp(self):
         super().setUp()

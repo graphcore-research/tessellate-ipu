@@ -1,5 +1,5 @@
-# JAX IPU currently built on top SDK 3.0
-FROM graphcore/tensorflow:2-amd-3.0.0-ubuntu-20.04
+# JAX IPU currently built on top SDK 3.1
+FROM graphcore/tensorflow:2-amd-3.1.0-ubuntu-20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
@@ -16,4 +16,9 @@ RUN apt-get update && apt-get install -y \
 RUN pip3 install --no-cache-dir -U pip wheel pip-tools
 RUN pip3 install --no-cache-dir \
     ipython \
-    numpy
+    jupyter \
+    numpy \
+    scipy \
+    pytest \
+    flake8 \
+    pre-commit
