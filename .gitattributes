@@ -1,6 +1,0 @@
-*.ipynb filter=lfs diff=lfs merge=lfs -text
-*.png filter=lfs diff=lfs merge=lfs -text
-# External libraries files.
-jax_ipu_research/external/**/*.h filter=lfs diff=lfs merge=lfs -text
-jax_ipu_research/external/**/*.hpp filter=lfs diff=lfs merge=lfs -text
-jax_ipu_research/external/**/*.cpp filter=lfs diff=lfs merge=lfs -text
