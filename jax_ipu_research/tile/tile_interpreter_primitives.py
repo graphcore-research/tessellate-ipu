@@ -4,7 +4,7 @@ import os
 from copy import copy
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
-import cppimport.import_hook  # noqa: F401
+import cppimport
 import numpy as np
 from jax import core, vmap
 from jax.interpreters import mlir, xla
@@ -15,7 +15,14 @@ from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_prim
 
 from jax_ipu_research.utils import Array, DTypeLike
 
-from .tile_interpreter_primitives_impl import (
+# Pybind11 extension import (and compilation if necessary).
+# Explicit path is more robust to different `pip install` usages.
+ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_interpreter_primitives_impl.cpp"))
+tile_interpreter_primitives_impl = cppimport.imp_from_filepath(
+    ext_filename, "jax_ipu_research.tile.tile_interpreter_primitives_impl"
+)
+
+from .tile_interpreter_primitives_impl import (  # noqa: E402
     Base64Data,
     IpuShapedArray,
     IpuTileMapEquation,

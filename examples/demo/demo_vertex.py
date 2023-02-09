@@ -31,7 +31,7 @@ def compute_fn(input):
     input, start = ipu_hw_cycle_count(input)
     out0, out1 = tile_map_primitive(ipu_custom_vertex_p, input, scale_value=1)  # type:ignore
     out0, end = ipu_hw_cycle_count(out0)
-    return start, end
+    return out0, out1
 
 
 out0, out1 = compute_fn(data0)

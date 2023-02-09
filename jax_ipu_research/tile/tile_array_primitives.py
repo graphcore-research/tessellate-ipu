@@ -3,7 +3,7 @@ import json
 import os
 from typing import Dict, Sequence, Tuple, Union
 
-import cppimport.import_hook  # noqa: F401
+import cppimport
 import jax.lax
 import numpy as np
 from jax import core
@@ -16,7 +16,13 @@ from jax_ipu_addons.utils import xla_shape_to_aval
 
 from jax_ipu_research.utils import DType
 
-from . import tile_array_primitives_impl  # type:ignore
+# Pybind11 extension import (and compilation if necessary).
+# Explicit path is more robust to different `pip install` usages.
+ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_array_primitives_impl.cpp"))
+tile_array_primitives_impl = cppimport.imp_from_filepath(
+    ext_filename, "jax_ipu_research.tile.tile_array_primitives_impl"
+)
+
 
 TilePutShardedPrimitive = tile_array_primitives_impl.TilePutShardedPrimitive
 TilePutReplicatedPrimitive = tile_array_primitives_impl.TilePutReplicatedPrimitive
