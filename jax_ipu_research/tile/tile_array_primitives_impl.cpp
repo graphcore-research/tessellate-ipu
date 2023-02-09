@@ -335,8 +335,8 @@ PYBIND11_MODULE(tile_array_primitives_impl, m) {
       .def(pybind11::init<>())
       .def(pybind11::init<
                const std::string&,
-               const std::vector<TileDataBarrierParams::TileArrayType>&,
-               TileDataBarrierParams::TileIndexType>(),
+               const std::vector<TileArrayType>&,
+               TileIndexType>(),
            pybind11::arg("vname"), pybind11::arg("inputs_tiles"),
            pybind11::arg("max_tile"))
       .def("to_json_str",
@@ -368,7 +368,7 @@ PYBIND11_MODULE(tile_array_primitives_impl, m) {
 /*
 <%
 cfg['extra_compile_args'] = ['-std=c++17', '-fPIC', '-O2', '-Wall']
-cfg['libraries'] = ['poplar', 'poputil', 'poprand', 'popops']
+cfg['libraries'] = ['poplar', 'poputil']
 cfg['include_dirs'] = []
 setup_pybind11(cfg)
 %>

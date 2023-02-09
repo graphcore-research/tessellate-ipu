@@ -151,8 +151,8 @@ decltype(auto) applyFnToArray(Fn&& fn, poplar::ArrayRef<char> raw_array,
 /**
  * @brief Make pybind11 bindings of IpuType enum.
  */
-inline decltype(auto) makeIpuTypeBindings(pybind11::module& m) {
-  return pybind11::enum_<IpuType>(m, "IpuType", pybind11::arithmetic())
+inline void makeIpuTypeBindings(pybind11::module& m) {
+  pybind11::enum_<IpuType>(m, "IpuType", pybind11::arithmetic())
       .value("BOOL", IpuType::BOOL)
       .value("CHAR", IpuType::CHAR)
       .value("UNSIGNED_CHAR", IpuType::UNSIGNED_CHAR)

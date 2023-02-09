@@ -537,14 +537,14 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
                           const Base64Data&, const std::vector<TensorSlice>&>(),
            pybind11::arg("name"), pybind11::arg("iotype"),
            pybind11::arg("aval"), pybind11::arg("constant_data") = Base64Data(),
-           pybind11::arg("slices2d") = {})
+           pybind11::arg("slices2d") = std::vector<TensorSlice>())
       .def(pybind11::init<const std::string&, VertexIOType, const ShapeType&,
                           IpuType, const Base64Data&,
                           const std::vector<TensorSlice>&>(),
            pybind11::arg("name"), pybind11::arg("iotype"),
            pybind11::arg("shape"), pybind11::arg("dtype"),
            pybind11::arg("constant_data") = Base64Data(),
-           pybind11::arg("slices2d") = {})
+           pybind11::arg("slices2d") = std::vector<TensorSlice>())
       .def(pybind11::init(&VertexIOInfo::makeVertexIOInfo),
            pybind11::arg("name"), pybind11::arg("iotype"),
            pybind11::arg("shape"), pybind11::arg("dtype"),
@@ -623,8 +623,8 @@ cfg['libraries'] = ['poplar', 'poputil', 'popops']
 cfg['include_dirs'] = []
 cfg['sources'] = [
   'poplin/ConvPartialsStridesPacking.cpp',
-  '../external/fastbase64/chromiumbase64.c',
-  '../external/fastbase64/fastavxbase64.c'
+  '../external/fastbase64/chromiumbase64.cpp',
+  '../external/fastbase64/fastavxbase64.cpp'
 ]
 setup_pybind11(cfg)
 %>
