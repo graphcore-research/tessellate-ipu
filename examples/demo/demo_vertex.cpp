@@ -5,8 +5,8 @@
 using namespace poplar;
 
 template<typename T>
-class CustomMultiOutVertex : public Vertex {
- public:
+class DemoVertex: public Vertex {
+public:
   Input<Vector<T, poplar::VectorLayout::SPAN>> in;     // (size, )
   Input<Vector<T, poplar::VectorLayout::ONE_PTR>> constant_scale; // (1, )
 
@@ -31,5 +31,5 @@ class CustomMultiOutVertex : public Vertex {
   }
 };
 
-template class CustomMultiOutVertex<int>;
-template class CustomMultiOutVertex<float>;
+template class DemoVertex<int>;
+template class DemoVertex<float>;
