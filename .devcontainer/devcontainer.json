@@ -16,6 +16,13 @@
         "--gpus",
         "all"
     ],
+    "mounts": [
+      {
+        "source": "${localEnv:HOME}",
+        "target": "/home/USER",
+        "type": "bind"
+      }
+    ],
     "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
