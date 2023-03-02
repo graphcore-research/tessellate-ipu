@@ -22,7 +22,7 @@ from jax_ipu_research.tile.tile_interpreter_lax_unary import (
     make_unary1d_vertex_fullname,
     tile_copy,
 )
-from jax_ipu_research.tile.tile_interpreter_primitives_impl import IpuTileMapEquation, IpuType
+from jax_ipu_research.tile.tile_interpreter_primitives import IpuTileMapEquation, IpuType
 
 
 class IpuTileUnaryPrimitiveTests(chex.TestCase):

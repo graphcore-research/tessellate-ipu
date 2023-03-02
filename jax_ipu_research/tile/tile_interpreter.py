@@ -10,11 +10,11 @@ from jax.core import Primitive
 from jax.interpreters.xla import ShapedArray
 
 from .tile_array import TileShardedArray
+from .tile_common_utils import make_ipu_shaped_array
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
     IpuVertexIOType,
     from_numpy_dtype_to_ipu_type,
-    make_ipu_shaped_array,
     make_ipu_vertex_attributes,
     make_ipu_vertex_constant_info,
     make_ipu_vertex_io_info,

@@ -7,9 +7,11 @@ import numpy as np
 from jax.interpreters.xla import DeviceArray, ShapedArray
 from jax.tree_util import register_pytree_node_class
 
-from jax_ipu_research.utils import DTypeLike, Shape
+from jax_ipu_research.utils import ArrayLike, DTypeLike, Shape
 
 from .tile_array_primitives import (
+    tile_constant_replicated_prim,
+    tile_constant_sharded_prim,
     tile_data_barrier_prim,
     tile_gather_prim,
     tile_put_replicated_prim,
@@ -226,6 +228,7 @@ def tile_data_barrier(*args: TileShardedArray) -> Tuple[TileShardedArray, ...]:
     return tuple([TileShardedArray(output, input.tiles) for output, input in zip(raw_outputs, args)])
 
 
+# Short alias!
 tile_barrier = tile_data_barrier
 
 
@@ -259,3 +262,32 @@ def tile_gather(
     data_arr = arr.array if isinstance(arr, TileShardedArray) else arr
     gather_arr = tile_gather_prim(data_arr, previous_tiles, indices, tiles)
     return TileShardedArray(array=gather_arr, tiles=tiles)  # type:ignore
+
+
+def tile_constant_replicated(data: ArrayLike, tiles: Sequence[int]) -> TileShardedArray:
+    """Replicate a (constant) Numpy array over tiles on the first axis.
+
+    Args:
+        data: Numpy array with data to replicate.
+        tiles: Tiles on which to replicate the data.
+    Returns:
+        TileShardedArray with constant data.
+    """
+    data = np.asarray(data)
+    arr = tile_constant_replicated_prim(data, tiles)
+    return TileShardedArray(array=arr, tiles=tiles)  # type:ignore
+
+
+def tile_constant_sharded(data: ArrayLike, tiles: Sequence[int]) -> TileShardedArray:
+    """Shard a (constant) Numpy array over tiles on the first axis.
+
+    Args:
+        data: Numpy array with data to replicate.
+        tiles: Tiles on which to replicate the data.
+    Returns:
+        TileShardedArray with constant data.
+    """
+    data = np.asarray(data)
+    assert data.shape[0] == len(tiles)
+    arr = tile_constant_sharded_prim(data, tiles)
+    return TileShardedArray(array=arr, tiles=tiles)  # type:ignore

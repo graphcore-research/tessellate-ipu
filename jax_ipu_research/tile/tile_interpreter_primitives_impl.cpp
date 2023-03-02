@@ -2,7 +2,6 @@
 // NOTE: comment necessary for automatic JIT compilation of the module!
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #define FMT_HEADER_ONLY
-#include <fastbase64/fastavxbase64.h>
 #include <fmt/format.h>
 
 #include <algorithm>
@@ -25,57 +24,6 @@ enum class VertexIOType : int {
   Out = 1,   // Output only tensor.
   InOut = 2  // Input/output tensor.
 };
-
-/**
- * @brief JAX-like shaped array data structure.
- */
-struct ShapedArray {
-  /** Shape of the array. */
-  ShapeType shape;
-  /** Dtype of the array. */
-  IpuType dtype = IpuType::UNSIGNED_CHAR;
-
-  /** @brief Size of the array (i.e. num elements). */
-  std::size_t size() const noexcept {
-    return std::accumulate(shape.begin(), shape.end(), 1,
-                           std::multiplies<std::size_t>());
-  }
-};
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ShapedArray, shape, dtype)
-
-/**
- * @brief Data encoded in base64.
- */
-struct Base64Data {
-  using byte = std::uint8_t;
-  /** Raw data as base64 encoded. */
-  std::string encoded_data;
-
-  /** Is the data empty? */
-  bool empty() const noexcept { return encoded_data.empty(); }
-  /**
-   * @brief Create base64 encoded data from raw data.
-   */
-  static Base64Data fromDecodedData(const std::string& data) {
-    return Base64Data{chromium_base64_encode(data)};
-  }
-  /**
-   * @brief Decode the data.
-   */
-  std::string decode() const { return chromium_base64_decode(encoded_data); }
-};
-// JSON encoding/decoding, supporting empty fields.
-void to_json(json& j, const Base64Data& v) {
-  if (!v.empty()) {
-    j = json{{"encoded_data", v.encoded_data}};
-  }
-}
-void from_json(const json& j, Base64Data& v) {
-  const auto it = j.find("encoded_data");
-  if (it != j.end()) {
-    it->get_to(v.encoded_data);
-  }
-}
 
 /**
  * @brief 1d tensor slice.
@@ -487,7 +435,6 @@ EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCall);
 // Declare a pybind11, to provide easy compilation & import from Python.
 PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
   using namespace ipu;
-  makeIpuTypeBindings(m);
 
   pybind11::enum_<VertexIOType>(m, "IpuVertexIOType", pybind11::arithmetic())
       .value("In", VertexIOType::In)
@@ -495,30 +442,6 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .value("InOut", VertexIOType::InOut);
   makeVertexAttributeBindings<int32_t>(m, "IpuVertexAttributeI32");
   makeVertexAttributeBindings<float>(m, "IpuVertexAttributeF32");
-
-  pybind11::class_<ShapedArray>(m, "IpuShapedArray")
-      .def(pybind11::init<>())
-      .def(pybind11::init<const ShapeType&, IpuType>(), pybind11::arg("shape"),
-           pybind11::arg("dtype"))
-      .def("to_json_str", [](const ShapedArray& v) { return to_json_str(v); })
-      .def_static(
-          "from_json_str",
-          [](const std::string& j) { return from_json_str<ShapedArray>(j); })
-      .def_readwrite("shape", &ShapedArray::shape)
-      .def_readwrite("dtype", &ShapedArray::dtype)
-      .def_property_readonly("size", &ShapedArray::size);
-
-  pybind11::class_<Base64Data>(m, "Base64Data")
-      .def(pybind11::init<>())
-      .def(pybind11::init<const std::string&>(), pybind11::arg("encoded_data"))
-      .def_readwrite("encoded_data", &Base64Data::encoded_data)
-      .def_static("from_decoded_data", &Base64Data::fromDecodedData)
-      .def_property_readonly("decoded_data", &Base64Data::decode)
-      .def_property_readonly("is_empty", &Base64Data::empty)
-      .def("to_json_str", [](const Base64Data& v) { return to_json_str(v); })
-      .def_static("from_json_str", [](const std::string& j) {
-        return from_json_str<Base64Data>(j);
-      });
 
   pybind11::class_<TensorSlice>(m, "IpuTensorSlice")
       .def(pybind11::init<std::size_t, std::size_t>(), pybind11::arg("begin"),

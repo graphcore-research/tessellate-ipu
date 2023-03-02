@@ -1,10 +1,12 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+import base64
 import json
 import os
 from typing import Dict, Sequence, Tuple, Union
 
 import cppimport
 import jax.lax
+import jax.numpy as jnp
 import numpy as np
 from jax import core
 from jax.interpreters import mlir, xla
@@ -16,6 +18,8 @@ from jax_ipu_addons.utils import xla_shape_to_aval
 
 from jax_ipu_research.utils import DType
 
+from .tile_common_utils import make_ipu_shaped_array
+
 # Pybind11 extension import (and compilation if necessary).
 # Explicit path is more robust to different `pip install` usages.
 ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_array_primitives_impl.cpp"))
@@ -23,18 +27,27 @@ tile_array_primitives_impl = cppimport.imp_from_filepath(
     ext_filename, "jax_ipu_research.tile.tile_array_primitives_impl"
 )
 
-
-TilePutShardedPrimitive = tile_array_primitives_impl.TilePutShardedPrimitive
-TilePutReplicatedPrimitive = tile_array_primitives_impl.TilePutReplicatedPrimitive
-TileGatherPrimitive = tile_array_primitives_impl.TileGatherPrimitive
-TileGatherParams = tile_array_primitives_impl.TileGatherParams
-TileDataBarrierPrimitive = tile_array_primitives_impl.TileDataBarrierPrimitive
-TileDataBarrierParams = tile_array_primitives_impl.TileDataBarrierParams
+from .tile_array_primitives_impl import (  # noqa: E402, F401
+    Base64Data,
+    IpuShapedArray,
+    IpuType,
+    TileConstantParams,
+    TileConstantReplicatedPrimitive,
+    TileConstantShardedPrimitive,
+    TileDataBarrierParams,
+    TileDataBarrierPrimitive,
+    TileGatherParams,
+    TileGatherPrimitive,
+    TilePutReplicatedPrimitive,
+    TilePutShardedPrimitive,
+)
 
 tile_put_sharded_prim_p = core.Primitive("tile_put_sharded")
 tile_put_replicated_prim_p = core.Primitive("tile_put_replicated")
 tile_gather_prim_p = core.Primitive("tile_gather")
 tile_data_barrier_prim_p = core.Primitive("tile_data_barrier")
+tile_constant_replicated_prim_p = core.Primitive("tile_constant_replicated")
+tile_constant_sharded_prim_p = core.Primitive("tile_constant_sharded")
 
 default_backends = ["cpu", "cuda", "tpu", "rocm"]
 
@@ -263,3 +276,107 @@ tile_data_barrier_prim_p.def_abstract_eval(tile_data_barrier_prim_abstract_eval)
 xla.backend_specific_translations["ipu"][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_ipu
 for b in default_backends:
     xla.backend_specific_translations[b][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_default
+
+
+def tile_constant_replicated_prim(data, tiles):
+    # Dummy empty variable to circumvent a bug in XLA custom op (when zero inputs).
+    dummy = jnp.empty((), np.float32)
+    assert isinstance(data, np.ndarray)
+    return tile_constant_replicated_prim_p.bind(dummy, data=data, tiles=tiles)
+
+
+def tile_constant_replicated_prim_impl(dummy, data, tiles) -> np.ndarray:
+    return np.stack([data for _ in range(len(tiles))], axis=0)
+
+
+def tile_constant_replicated_prim_abstract_eval(dummy, data, tiles) -> ShapedArray:
+    outshape = (len(tiles), *data.shape)
+    return ShapedArray(outshape, data.dtype)
+
+
+def tile_constant_replicated_prim_mlir_translation_default(
+    ctx: LoweringRuleContext, *args: Union[ir.Value, Sequence[ir.Value]], **params
+) -> Sequence[Union[ir.Value, Sequence[ir.Value]]]:
+    """`tile_constant_replicated_prim` default MLIR translation, for CPU/GPU backends: simple constant."""
+    # TODO: fix dummy input requirement.
+    assert len(args) == 1
+    data = params["data"]
+    tiles = params["tiles"]
+    replicated_data = tile_constant_replicated_prim_impl(args[0], data=data, tiles=tiles)
+    # MLIR constant from the replicated Numpy array.
+    return mlir._ndarray_constant_handler(replicated_data, canonicalize_types=False)
+
+
+def tile_constant_replicated_prim_xla_translation_ipu(ctx, dummy, data, tiles):
+    """`tile_constant_replicated_prim` IPU backend XLA translation, as a custom primitive."""
+    params = TileConstantParams(
+        aval=make_ipu_shaped_array(data.shape, data.dtype), tiles=tiles, data=Base64Data(base64.b64encode(data))
+    )
+    # IPU custom primtive XLA call.
+    outputs_aval = [tile_constant_replicated_prim_abstract_eval(dummy, ShapedArray(data.shape, data.dtype), tiles)]
+    # TODO: remove `dummy` when bug with zero inputs fixed.
+    outputs = ipu_xla_custom_primitive_call(
+        TileConstantReplicatedPrimitive, ctx, [dummy], outputs_aval, attributes=params.to_json_str()
+    )
+    return outputs[0]
+
+
+# Primal + abstract evaluation same as `tile_put_replicated_prim`
+tile_constant_replicated_prim_p.def_impl(tile_constant_replicated_prim_impl)
+tile_constant_replicated_prim_p.def_abstract_eval(tile_constant_replicated_prim_abstract_eval)
+# Register XLA translation on IPU.
+xla.backend_specific_translations["ipu"][
+    tile_constant_replicated_prim_p
+] = tile_constant_replicated_prim_xla_translation_ipu
+# Register MLIR translation for other backends.
+for b in default_backends:
+    mlir.register_lowering(tile_constant_replicated_prim_p, tile_constant_replicated_prim_mlir_translation_default, b)
+
+
+def tile_constant_sharded_prim(data, tiles):
+    # Dummy empty variable to circumvent a bug in XLA custom op (when zero inputs).
+    dummy = jnp.empty((), np.float32)
+    assert isinstance(data, np.ndarray)
+    return tile_constant_sharded_prim_p.bind(dummy, data=data, tiles=tiles)
+
+
+def tile_constant_sharded_prim_impl(dummy, data, tiles) -> np.ndarray:
+    return data
+
+
+def tile_constant_sharded_prim_abstract_eval(dummy, data, tiles) -> ShapedArray:
+    return ShapedArray(data.shape, data.dtype)
+
+
+def tile_constant_sharded_prim_mlir_translation_default(
+    ctx: LoweringRuleContext, *args: Union[ir.Value, Sequence[ir.Value]], **params
+) -> Sequence[Union[ir.Value, Sequence[ir.Value]]]:
+    """`tile_constant_sharded_prim` default MLIR translation, for CPU/GPU backends: simple constant."""
+    # TODO: fix dummy input requirement.
+    assert len(args) == 1
+    data = params["data"]
+    return mlir._ndarray_constant_handler(data, canonicalize_types=False)
+
+
+def tile_constant_sharded_prim_xla_translation_ipu(ctx, dummy, data, tiles):
+    """`tile_constant_sharded_prim` IPU backend XLA translation, as a custom primitive."""
+    params = TileConstantParams(
+        aval=make_ipu_shaped_array(data.shape, data.dtype), tiles=tiles, data=Base64Data(base64.b64encode(data))
+    )
+    # IPU custom primtive XLA call.
+    outputs_aval = [tile_constant_sharded_prim_abstract_eval(dummy, ShapedArray(data.shape, data.dtype), tiles)]
+    # TODO: remove `dummy` when bug with zero inputs fixed.
+    outputs = ipu_xla_custom_primitive_call(
+        TileConstantShardedPrimitive, ctx, [dummy], outputs_aval, attributes=params.to_json_str()
+    )
+    return outputs[0]
+
+
+# Primal + abstract evaluation same as `tile_put_replicated_prim`
+tile_constant_sharded_prim_p.def_impl(tile_constant_sharded_prim_impl)
+tile_constant_sharded_prim_p.def_abstract_eval(tile_constant_sharded_prim_abstract_eval)
+# Register XLA translation on IPU.
+xla.backend_specific_translations["ipu"][tile_constant_sharded_prim_p] = tile_constant_sharded_prim_xla_translation_ipu
+# Register MLIR translation for other backends.
+for b in default_backends:
+    mlir.register_lowering(tile_constant_sharded_prim_p, tile_constant_sharded_prim_mlir_translation_default, b)

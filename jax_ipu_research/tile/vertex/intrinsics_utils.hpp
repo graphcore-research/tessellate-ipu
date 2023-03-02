@@ -10,6 +10,8 @@
 #include "ipu_model_types.hpp"
 // Use the std functions
 #include <cmath>
+
+#include "ipu_model_types.hpp"
 #define NAMESPACE std
 #endif
 

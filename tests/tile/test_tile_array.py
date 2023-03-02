@@ -11,6 +11,8 @@ from jax.lax import add_p, sub_p
 
 from jax_ipu_research.tile import (
     TileShardedArray,
+    tile_constant_replicated,
+    tile_constant_sharded,
     tile_data_barrier,
     tile_gather,
     tile_map_primitive,
@@ -335,3 +337,97 @@ class TileDataBarrierTests(chex.TestCase, parameterized.TestCase):
         outputs = [np.asarray(v) for v in outputs]
         for idx in range(len(inputs_tiles)):
             npt.assert_array_equal(outputs[idx][0], data)
+
+
+class TileConstantTests(chex.TestCase, parameterized.TestCase):
+    def test__tile_constant_replicated__no_jitting__proper_tile_numpy_array(self):
+        data = np.asarray([[1, 2, 3], [4, 5, 6]], np.float32)
+        tiles = (3, 4, 5, 6)
+        output = tile_constant_replicated(data, tiles)
+
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        assert isinstance(output.array, np.ndarray)
+        assert output.shape == (len(tiles), *data.shape)
+        npt.assert_array_equal(output, np.stack([data] * len(tiles)))
+
+    @parameterized.parameters(["cpu", "ipu"])
+    def test__tile_constant_replicated__jitting__proper_tile_array(self, backend):
+        data = np.asarray([[1, 2, 3], [4, 5, 6]], np.float32)
+        tiles = (3, 4, 5, 6)
+
+        # Note: make sure it is not a constant function, so it does not get simplified away.
+        @partial(jax.jit, backend=backend)
+        def compute_fn(v):
+            return v, tile_constant_replicated(data, tiles)
+
+        _, output = compute_fn(data)
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        assert output.shape == (len(tiles), *data.shape)
+        npt.assert_array_equal(output, np.stack([data] * len(tiles)))
+
+    def test__tile_constant_replicated__jitting__multi_dtypes(self):
+        data = np.asarray([[0, 1, 2, 4]], np.float32)
+        # TODO: fix np.int8, np.uint16
+        dtypes = [np.float32, np.float16, np.int32, np.uint32, np.int16, np.uint8]
+        tiles = (3, 4, 5, 6)
+
+        # Note: make sure it is not a constant function, so it does not get simplified away.
+        @partial(jax.jit, backend="ipu")
+        def compute_fn(v):
+            outputs = [tile_constant_replicated(data.astype(d), tiles) for d in dtypes]
+            return v, *outputs
+
+        outputs = compute_fn(data)
+        for out in outputs[1:]:
+            assert isinstance(out, TileShardedArray)
+            assert out.tiles == tiles
+            assert out.shape == (len(tiles), *data.shape)
+            npt.assert_array_equal(out, np.stack([data] * len(tiles)))
+
+    def test__tile_constant_sharded__no_jitting__proper_tile_numpy_array(self):
+        data = np.asarray([[1, 2, 3], [4, 5, 6]], np.float32)
+        tiles = (3, 6)
+        output = tile_constant_sharded(data, tiles)
+
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        assert isinstance(output.array, np.ndarray)
+        assert output.shape == data.shape
+        npt.assert_array_equal(output, data)
+
+    @parameterized.parameters(["cpu", "ipu"])
+    def test__tile_constant_sharded__jitting__proper_tile_array(self, backend):
+        data = np.asarray([[1, 2, 3], [4, 5, 6]], np.float32)
+        tiles = (3, 6)
+
+        # Note: make sure it is not a constant function, so it does not get simplified away.
+        @partial(jax.jit, backend=backend)
+        def compute_fn(v):
+            return v, tile_constant_sharded(data, tiles)
+
+        _, output = compute_fn(data)
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        assert output.shape == data.shape
+        npt.assert_array_equal(output, data)
+
+    def test__tile_constant_sharded__jitting__multi_dtypes(self):
+        data = np.asarray([[0, 1, 2, 4], [0, 8, 16, 32]], np.float32)
+        # TODO: fix np.int8, np.uint16
+        dtypes = [np.float32, np.float16, np.int32, np.uint32, np.int16, np.uint8]
+        tiles = (3, 6)
+
+        # Note: make sure it is not a constant function, so it does not get simplified away.
+        @partial(jax.jit, backend="ipu")
+        def compute_fn(v):
+            outputs = [tile_constant_sharded(data.astype(d), tiles) for d in dtypes]
+            return v, *outputs
+
+        outputs = compute_fn(data)
+        for out in outputs[1:]:
+            assert isinstance(out, TileShardedArray)
+            assert out.tiles == tiles
+            assert out.shape == data.shape
+            npt.assert_array_equal(out, data)

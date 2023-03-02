@@ -7,6 +7,7 @@ import numpy.testing as npt
 from absl.testing import parameterized
 from jax.core import ShapedArray
 
+from jax_ipu_research.tile.tile_common_utils import Base64Data, IpuType
 from jax_ipu_research.tile.tile_interpreter_primitives import (
     from_ipu_type_to_numpy_dtype,
     from_numpy_dtype_to_ipu_type,
@@ -18,60 +19,13 @@ from jax_ipu_research.tile.tile_interpreter_primitives import (
     make_ipu_vertex_outputs,
 )
 from jax_ipu_research.tile.tile_interpreter_primitives_impl import (
-    Base64Data,
-    IpuShapedArray,
     IpuTensorSlice,
     IpuTileMapEquation,
-    IpuType,
     IpuVertexAttributeF32,
     IpuVertexAttributeI32,
     IpuVertexIOInfo,
     IpuVertexIOType,
 )
-
-
-class Base64DataTests(chex.TestCase, parameterized.TestCase):
-    def test__base64_data__empty_constructor(self):
-        data = Base64Data()
-        assert data.encoded_data == ""
-        assert data.is_empty
-
-    def test__base64_data__data_constructor(self):
-        data = Base64Data("123")
-        assert data.encoded_data == "123"
-        assert not data.is_empty
-
-    def test__base64_data__from_decoded_data__factory(self):
-        data = Base64Data.from_decoded_data("12345")
-        assert data.encoded_data == "MTIzNDU="
-        assert data.decoded_data == "12345"
-
-    def test__base64_data__python_base64_compatibility(self):
-        data = Base64Data(base64.b64encode(b"12345"))
-        assert data.encoded_data == "MTIzNDU="
-        assert data.decoded_data == "12345"
-
-    def test__base64_data__from_json_str(self):
-        data = Base64Data.from_json_str("{}")
-        assert data.is_empty
-        assert data.to_json_str() == "null"
-
-        data = Base64Data.from_json_str("null")
-        assert data.is_empty
-        assert data.to_json_str() == "null"
-
-        data = Base64Data.from_json_str('{"encoded_data":"12345"}')
-        assert not data.is_empty
-        assert data.encoded_data == "12345"
-        assert data.to_json_str() == '{"encoded_data":"12345"}'
-
-
-class IpuShapedArrayTests(chex.TestCase, parameterized.TestCase):
-    def test__shaped_array__init__default_values(self):
-        aval = IpuShapedArray()
-        assert aval.shape == []
-        assert aval.dtype == IpuType.UNSIGNED_CHAR
-        assert aval.size == 1
 
 
 class IpuTensorSliceTests(chex.TestCase, parameterized.TestCase):

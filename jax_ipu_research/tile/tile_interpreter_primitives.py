@@ -13,7 +13,10 @@ from jax.interpreters.xla import ShapedArray
 from jax.lib import xla_client
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
 
-from jax_ipu_research.utils import Array, DTypeLike
+from jax_ipu_research.utils import Array
+
+from .tile_array_primitives import Base64Data, IpuType
+from .tile_common_utils import from_ipu_type_to_numpy_dtype, from_numpy_dtype_to_ipu_type, get_ipu_type_name
 
 # Pybind11 extension import (and compilation if necessary).
 # Explicit path is more robust to different `pip install` usages.
@@ -23,77 +26,13 @@ tile_interpreter_primitives_impl = cppimport.imp_from_filepath(
 )
 
 from .tile_interpreter_primitives_impl import (  # noqa: E402
-    Base64Data,
-    IpuShapedArray,
     IpuTileMapEquation,
-    IpuType,
     IpuVertexAttributeF32,
     IpuVertexAttributeI32,
     IpuVertexIOInfo,
     IpuVertexIOType,
     TileMapEquationCall,
 )
-
-_numpy_dtype_to_ipu_type = {
-    np.dtype(np.bool_): IpuType.BOOL,
-    np.dtype(np.uint8): IpuType.UNSIGNED_CHAR,
-    np.dtype(np.uint16): IpuType.UNSIGNED_SHORT,
-    np.dtype(np.uint32): IpuType.UNSIGNED_INT,
-    np.dtype(np.int8): IpuType.CHAR,
-    np.dtype(np.int16): IpuType.SHORT,
-    np.dtype(np.int32): IpuType.INT,
-    np.dtype(np.float16): IpuType.HALF,
-    np.dtype(np.float32): IpuType.FLOAT,
-}
-"""Mapping from Numpy dtype to IPU datatype.
-"""
-
-_ipu_type_to_numpy_dtype = {
-    IpuType.BOOL: np.dtype(np.bool_),
-    IpuType.UNSIGNED_CHAR: np.dtype(np.uint8),
-    IpuType.UNSIGNED_SHORT: np.dtype(np.uint16),
-    IpuType.UNSIGNED_INT: np.dtype(np.uint32),
-    IpuType.CHAR: np.dtype(np.int8),
-    IpuType.SHORT: np.dtype(np.int16),
-    IpuType.INT: np.dtype(np.int32),
-    IpuType.HALF: np.dtype(np.float16),
-    IpuType.FLOAT: np.dtype(np.float32),
-}
-"""Mapping from IPU type to Numpy dtype.
-"""
-
-_ipu_type_to_name = {
-    IpuType.BOOL: "bool",
-    IpuType.UNSIGNED_CHAR: "unsigned char",
-    IpuType.UNSIGNED_SHORT: "unsigned short",
-    IpuType.UNSIGNED_INT: "unsigned int",
-    IpuType.CHAR: "signed char",
-    IpuType.SHORT: "short",
-    IpuType.INT: "int",
-    IpuType.HALF: "half",
-    IpuType.FLOAT: "float",
-}
-"""Mapping from IPU type to name (used in vertex naming convention).
-"""
-
-
-def from_numpy_dtype_to_ipu_type(v: Any) -> IpuType:
-    """Convert from Numpy dtype to IPU type."""
-    if isinstance(v, IpuType):
-        return v
-    return _numpy_dtype_to_ipu_type[np.dtype(v)]
-
-
-def from_ipu_type_to_numpy_dtype(v: IpuType) -> Any:
-    """Convert from IPU type to Numpy dtype."""
-    if isinstance(v, np.dtype) or (isinstance(v, type) and issubclass(v, np.number)):
-        return np.dtype(v)
-    return _ipu_type_to_numpy_dtype[v]
-
-
-def get_ipu_type_name(v: Any) -> str:
-    """Get the (vertex dtype) name of an IPU type."""
-    return _ipu_type_to_name[from_numpy_dtype_to_ipu_type(v)]
 
 
 def make_ipu_vertex_name_templated(basename: str, *args) -> str:
@@ -113,11 +52,6 @@ def make_ipu_vertex_name_templated(basename: str, *args) -> str:
 
     args_name = ",".join([get_arg_name(v) for v in args])
     return f"{basename}<{args_name}>"
-
-
-def make_ipu_shaped_array(shape: Sequence[int], dtype: DTypeLike) -> IpuShapedArray:
-    """Convert to IPU shaped array."""
-    return IpuShapedArray(shape, from_numpy_dtype_to_ipu_type(dtype))
 
 
 def make_ipu_vertex_io_info(

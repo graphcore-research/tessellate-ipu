@@ -12,6 +12,10 @@
 
 using namespace ipu;
 
+// Standard tile indexing.
+using TileIndexType = int32_t;
+using TileArrayType = std::vector<TileIndexType>;
+
 /**
  * @brief Base class for tile put primitives, with common features.
  */
@@ -79,8 +83,6 @@ class TilePutShardedPrimitive : public TilePutBase {
  */
 class TilePutReplicatedPrimitive : public TilePutBase {
  public:
-  using TileIndexType = int32_t;
-
   static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
     return jax::ipu::PrimitiveMetadata{
         .num_inputs = num_inputs,
@@ -119,9 +121,6 @@ class TilePutReplicatedPrimitive : public TilePutBase {
  * @brief IPU tile gather op parameters.
  */
 struct TileGatherParams {
-  using TileIndexType = int32_t;
-  using TileArrayType = std::vector<TileIndexType>;
-
   /** Previous input tile mapping (if existing). */
   TileArrayType previous_tiles;
   /** Gather indices. */
@@ -136,8 +135,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileGatherParams, previous_tiles, indices,
  */
 class TileGatherPrimitive : public jax::ipu::PrimitiveInterface {
  public:
-  using TileIndexType = TileGatherParams::TileIndexType;
-
   static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
     return jax::ipu::PrimitiveMetadata{
         .num_inputs = num_inputs,
@@ -194,9 +191,6 @@ class TileGatherPrimitive : public jax::ipu::PrimitiveInterface {
  * @brief Tile data Poplar barrier parameters.
  */
 struct TileDataBarrierParams {
-  using TileIndexType = int32_t;
-  using TileArrayType = std::vector<TileIndexType>;
-
   /** Vertex name to use. */
   std::string vname;
   /** Input tensors tiles. */
@@ -244,8 +238,6 @@ poplar::Tensor tileBarrierReinterpretTensor(const poplar::Tensor& t) {
  */
 class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
  public:
-  using TileIndexType = TileDataBarrierParams::TileIndexType;
-
   static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
     // TODO: input/output aliasing.
     return jax::ipu::PrimitiveMetadata{
@@ -303,16 +295,97 @@ class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
   }
 };
 
+/**
+ * @brief IPU tile constant (replicated or sharded) parameters.
+ */
+struct TileConstantParams {
+  /** Abstract shaped array (per tile). */
+  ShapedArray aval;
+  /** Tile mapping of the constant. */
+  TileArrayType tiles;
+  /** Raw data, encoded as base64. */
+  Base64Data data = Base64Data();
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileConstantParams, aval, tiles, data)
+
+/**
+ * @brief IPU tile constant replicated primitive: replicating a constant array
+ * over tiles (on the first axis).
+ */
+class TileConstantReplicatedPrimitive : public jax::ipu::PrimitiveInterface {
+ public:
+  static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
+    return jax::ipu::PrimitiveMetadata{.num_inputs = num_inputs,
+                                       .is_elementwise = false,
+                                       .is_stateless = true,
+                                       .is_hashable = true,
+                                       .input_to_output_tensor_aliasing = {{}},
+                                       .allocating_indices = {}};
+  }
+
+  static poplar::program::Program program(
+      poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+      std::vector<poplar::Tensor>& outputs, const std::string& attributes,
+      const std::string& debug_prefix) {
+    const auto debug_context = poplar::DebugContext(debug_prefix);
+    const auto params = ipu::from_json_str<TileConstantParams>(attributes);
+    const std::string raw_values = params.data.decode();
+    const auto raw_values_ref =
+        poplar::ArrayRef<char>(raw_values.data(), raw_values.size());
+    auto t = createReplicatedConstantTensor(graph, params.aval.dtype,
+                                            params.aval.shape, raw_values_ref,
+                                            params.tiles, debug_context);
+    outputs.push_back(t);
+    return poplar::program::Sequence();
+  }
+};
+
+/**
+ * @brief IPU tile constant sharded primitive: sharding a constant array
+ * over tiles (on the first axis).
+ */
+class TileConstantShardedPrimitive : public jax::ipu::PrimitiveInterface {
+ public:
+  static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
+    return jax::ipu::PrimitiveMetadata{.num_inputs = num_inputs,
+                                       .is_elementwise = false,
+                                       .is_stateless = true,
+                                       .is_hashable = true,
+                                       .input_to_output_tensor_aliasing = {{}},
+                                       .allocating_indices = {}};
+  }
+
+  static poplar::program::Program program(
+      poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+      std::vector<poplar::Tensor>& outputs, const std::string& attributes,
+      const std::string& debug_prefix) {
+    const auto debug_context = poplar::DebugContext(debug_prefix);
+    const auto params = ipu::from_json_str<TileConstantParams>(attributes);
+    const std::string raw_values = params.data.decode();
+    const auto raw_values_ref =
+        poplar::ArrayRef<char>(raw_values.data(), raw_values.size());
+    auto t = createShardedConstantTensor(graph, params.aval.dtype,
+                                         params.aval.shape, raw_values_ref,
+                                         params.tiles, debug_context);
+    outputs.push_back(t);
+    return poplar::program::Sequence();
+  }
+};
+
 // Export the IPU JAX primitives in the shared library.
 EXPORT_IPU_JAX_PRIMITIVE(TilePutShardedPrimitive);
 EXPORT_IPU_JAX_PRIMITIVE(TilePutReplicatedPrimitive);
 EXPORT_IPU_JAX_PRIMITIVE(TileGatherPrimitive);
 EXPORT_IPU_JAX_PRIMITIVE(TileDataBarrierPrimitive);
+EXPORT_IPU_JAX_PRIMITIVE(TileConstantReplicatedPrimitive);
+EXPORT_IPU_JAX_PRIMITIVE(TileConstantShardedPrimitive);
 
 // Declare a pybind11, to provide easy compilation & import from Python.
 PYBIND11_MODULE(tile_array_primitives_impl, m) {
-  using TileIndexType = TileGatherParams::TileIndexType;
-  using TileArrayType = TileGatherParams::TileArrayType;
+  // Common classes bindings.
+  makeIpuTypeBindings(m);
+  makeShapeArrayBindings(m);
+  makeBase64DataBindings(m);
 
   pybind11::class_<TileGatherParams>(m, "TileGatherParams")
       .def(pybind11::init<>())
@@ -346,6 +419,21 @@ PYBIND11_MODULE(tile_array_primitives_impl, m) {
       .def_readwrite("inputs_tiles", &TileDataBarrierParams::inputs_tiles)
       .def_readwrite("max_tile", &TileDataBarrierParams::max_tile);
 
+  pybind11::class_<TileConstantParams>(m, "TileConstantParams")
+      .def(pybind11::init<>())
+      .def(pybind11::init<const ShapedArray&, const TileArrayType&,
+                          const Base64Data&>(),
+           pybind11::arg("aval"), pybind11::arg("tiles"), pybind11::arg("data"))
+      .def("to_json_str",
+           [](const TileConstantParams& v) { return to_json_str(v); })
+      .def_static("from_json_str",
+                  [](const std::string& j) {
+                    return from_json_str<TileConstantParams>(j);
+                  })
+      .def_readwrite("aval", &TileConstantParams::aval)
+      .def_readwrite("tiles", &TileConstantParams::tiles)
+      .def_readwrite("data", &TileConstantParams::data);
+
   pybind11::class_<TilePutShardedPrimitive>(m, "TilePutShardedPrimitive")
       .def_static("metadata", &TilePutShardedPrimitive::metadata,
                   pybind11::arg("num_inputs"));
@@ -358,15 +446,27 @@ PYBIND11_MODULE(tile_array_primitives_impl, m) {
   pybind11::class_<TileDataBarrierPrimitive>(m, "TileDataBarrierPrimitive")
       .def_static("metadata", &TileDataBarrierPrimitive::metadata,
                   pybind11::arg("num_inputs"));
+  pybind11::class_<TileConstantReplicatedPrimitive>(
+      m, "TileConstantReplicatedPrimitive")
+      .def_static("metadata", &TileConstantReplicatedPrimitive::metadata,
+                  pybind11::arg("num_inputs"));
+  pybind11::class_<TileConstantShardedPrimitive>(m,
+                                                 "TileConstantShardedPrimitive")
+      .def_static("metadata", &TileConstantShardedPrimitive::metadata,
+                  pybind11::arg("num_inputs"));
 }
 
 // cppimport configuration for compiling the pybind11 module.
 // clang-format off
 /*
 <%
-cfg['extra_compile_args'] = ['-std=c++17', '-fPIC', '-O2', '-Wall']
+cfg['extra_compile_args'] = ['-std=c++17', '-fPIC', '-O2', '-Wall', '-mavx2']
 cfg['libraries'] = ['poplar', 'poputil']
 cfg['include_dirs'] = []
+cfg['sources'] = [
+  '../external/fastbase64/chromiumbase64.cpp',
+  '../external/fastbase64/fastavxbase64.cpp'
+]
 setup_pybind11(cfg)
 %>
 */
