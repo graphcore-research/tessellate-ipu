@@ -4,9 +4,10 @@
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 #include <fmt/ranges.h>
-#include <json/json.hpp>
 
 #include <ipu_custom_primitive.hpp>
+#include <json/json.hpp>
+
 #include "tile_array_utils.hpp"
 
 using namespace ipu;
@@ -171,15 +172,13 @@ class TileGatherPrimitive : public jax::ipu::PrimitiveInterface {
       const auto input_item = input[gather_idx];
       const auto input_tile = params.previous_tiles[gather_idx];
       const auto output_tile = params.tiles[idx];
-      if (input_tile == output_tile)
-      {
+      if (input_tile == output_tile) {
         // No copy => using directly the existing data on the tile.
         output_slices.push_back(input_item.expand({0}));
-      }
-      else
-      {
+      } else {
         // New Poplar tensor + copy to the proper tile.
-        auto output_item = graph.addVariable(item_type, item_shape, debug_context);
+        auto output_item =
+            graph.addVariable(item_type, item_shape, debug_context);
         graph.setTileMapping(output_item, output_tile);
         seq.add(poplar::program::Copy(input_item, output_item));
         output_slices.push_back(output_item.expand({0}));
@@ -333,10 +332,8 @@ PYBIND11_MODULE(tile_array_primitives_impl, m) {
 
   pybind11::class_<TileDataBarrierParams>(m, "TileDataBarrierParams")
       .def(pybind11::init<>())
-      .def(pybind11::init<
-               const std::string&,
-               const std::vector<TileArrayType>&,
-               TileIndexType>(),
+      .def(pybind11::init<const std::string&, const std::vector<TileArrayType>&,
+                          TileIndexType>(),
            pybind11::arg("vname"), pybind11::arg("inputs_tiles"),
            pybind11::arg("max_tile"))
       .def("to_json_str",

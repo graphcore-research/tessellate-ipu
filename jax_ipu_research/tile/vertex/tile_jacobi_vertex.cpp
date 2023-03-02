@@ -84,7 +84,7 @@ class JacobiSymSchur2 : public Vertex {
  * See:  Gene H. Golub, Charles F. Van Loan, MATRIX COMPUTATIONS, 3rd edition,
  * Johns Hopkins Chapter 8.
  */
-class[[poplar::constraint("elem(*pcol) != elem(*qcol)")]] JacobiUpdateFirstStep
+class [[poplar::constraint("elem(*pcol) != elem(*qcol)")]] JacobiUpdateFirstStep
     : public MultiVertex {
  public:
   using T = float;
@@ -243,7 +243,7 @@ class JacobiUpdateSecondStep : public MultiVertex {
  * See:  Gene H. Golub, Charles F. Van Loan, MATRIX COMPUTATIONS, 3rd edition,
  * Johns Hopkins Chapter 8.
  */
-class[[poplar::constraint(
+class [[poplar::constraint(
     "elem(*vpcol) != elem(*vqcol)")]] JacobiUpdateEigenvectors
     : public MultiVertex {
  public:
@@ -260,8 +260,10 @@ class[[poplar::constraint(
   Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
       worker_offsets;  // (7,) threads work size + 1.
 
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vpcol_out;  // (N,) p column
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> vqcol_out;  // (N,) q column
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR, 8>>
+      vpcol_out;  // (N,) p column
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR, 8>>
+      vqcol_out;  // (N,) q column
 
   JacobiUpdateEigenvectors();
 

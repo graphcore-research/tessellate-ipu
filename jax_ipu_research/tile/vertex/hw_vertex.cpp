@@ -24,10 +24,11 @@ using namespace poplar;
 /**
  * @brief Cycle count vertex, with a data barrier.
  *
- * NOTE: the data barrier mechanism is an attempt to avoid XLA and Poplar to re-organize
- * too much the program and as a consequence get inacurrate cycle count measurements. It is
- * by far not perfect and 100% reliable (e.g. comms can still be inserted in the middle),
- * but probably good enough for most cases.
+ * NOTE: the data barrier mechanism is an attempt to avoid XLA and Poplar to
+ * re-organize too much the program and as a consequence get inacurrate cycle
+ * count measurements. It is by far not perfect and 100% reliable (e.g. comms
+ * can still be inserted in the middle), but probably good enough for most
+ * cases.
  *
  * TODO: support multiple data barrier in/out vectors.
  *
@@ -42,13 +43,13 @@ class CycleCountBarrier : public SupervisorVertex {
   Output<Vector<unsigned, VectorLayout::ONE_PTR>> out;
 
   SUPERVISOR_TARGET bool compute() {
-    #ifdef __IPU__
+#ifdef __IPU__
     out[0] = __builtin_ipu_get_scount_l();
     out[1] = __builtin_ipu_get_scount_u();
-    #else
+#else
     out[0] = 0;
     out[1] = 0;
-    #endif
+#endif
     return true;
   }
 };

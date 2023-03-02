@@ -13,7 +13,9 @@ using namespace poplar;
  * TODO: support multiple tensor datatypes. Issue: Poplar general reinterpret
  * cast.
  * Compilation for all supported targets:
- *      popc -O2 jax_ipu_research/tile/vertex/tile_prim_vertex.cpp -I./jax_ipu_research/tile/vertex -o jax_ipu_research/tile/vertex/tile_prim_vertex.gp
+ *      popc -O2 jax_ipu_research/tile/vertex/tile_prim_vertex.cpp
+ * -I./jax_ipu_research/tile/vertex -o
+ * jax_ipu_research/tile/vertex/tile_prim_vertex.gp
  */
 template <typename T>
 class TileDataBarrierVertex : public SupervisorVertex {
@@ -42,7 +44,6 @@ template class TileDataBarrierVertex<int>;
 template class TileDataBarrierVertex<float>;
 template class TileDataBarrierVertex<half>;
 
-
 /**
  * @brief On-tile memcpy vertex. Useful for explicit copies
  * on tile (but not as performant as Poplar optimized ones).
@@ -55,15 +56,16 @@ class TileMemcpyVertex : public MultiVertex {
   static constexpr int AlignSize = 8;
   static constexpr int NumWorkers = 6;
 
-  Input<Vector<T, poplar::VectorLayout::SPAN, AlignSize>> in;     // (N,) in vector
-  Output<Vector<T, poplar::VectorLayout::SPAN, AlignSize>> out;   // (N,) out vector
+  Input<Vector<T, poplar::VectorLayout::SPAN, AlignSize>> in;  // (N,) in vector
+  Output<Vector<T, poplar::VectorLayout::SPAN, AlignSize>>
+      out;  // (N,) out vector
 
   bool compute(unsigned wid) {
     if (wid != 0) {
       return true;
     }
     // Start with the most basic loop!
-    for (int i = 0 ; i< in.size() ; ++i) {
+    for (int i = 0; i < in.size(); ++i) {
       out[i] = in[i];
     }
     return true;

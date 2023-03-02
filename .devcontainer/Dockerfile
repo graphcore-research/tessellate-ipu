@@ -1,5 +1,5 @@
-# JAX IPU currently built on top of SDK 3.1.  
-# PyTorch rather than TF to avoid numpy version issues  
+# JAX IPU currently built on top of SDK 3.1.
+# PyTorch rather than TF to avoid numpy version issues
 FROM graphcore/pytorch:3.1.0-ubuntu-20.04
 
 ENV DEBIAN_FRONTEND=noninteractive

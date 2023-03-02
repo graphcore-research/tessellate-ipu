@@ -9,7 +9,7 @@ using namespace poplar;
 // popc -O2 jax_ipu_research/tile/vertex/tile_qr_vertex.cpp -o
 // jax_ipu_research/tile/vertex/tile_qr_vertex.gp
 
-class[[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex
+class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex
     : public MultiVertex {
  public:
   using T = float;
@@ -17,7 +17,7 @@ class[[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex
   // Using `uint16` seems to be generating more efficient loops?
   using IndexType = unsigned short;
 
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> x;     // (N,) x vector
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> x;  // (N,) x vector
   Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> y;  // (N,) y vector
 
   Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
@@ -158,7 +158,8 @@ float QRCorrectionVectorVertex::shared_partial_sqnorms[6] = {-1};
  * NOTE: poplar::constraint here to make sure x and v are not part of the same
  * memory bank, allowing simultaneous loads (see `ld2x64pace` instruction).
  */
-class[[poplar::constraint("elem(*x) != elem(*v)")]] QRHouseholderRowUpdateVertex
+class [[poplar::constraint(
+    "elem(*x) != elem(*v)")]] QRHouseholderRowUpdateVertex
     : public MultiVertex {
  public:
   using T = float;
