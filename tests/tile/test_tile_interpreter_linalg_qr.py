@@ -1,4 +1,6 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+import unittest
+
 import chex
 import jax
 import numpy as np
@@ -21,8 +23,10 @@ from jax_ipu_research.tile.tile_interpreter_linalg_qr import (
     qr_correction_vector_p,
     qr_householder_row_update_p,
 )
+from jax_ipu_research.utils import IpuTargetType
 
-# from jax.lax.linalg import qr_p
+# Skipping some tests if no local IPU hardware.
+ipu_hw_available = len(jax.devices("ipu")) > 0 and jax.devices("ipu")[0].target_type == IpuTargetType.IPU
 
 
 def qr_correction_vector_impl(rcol, sdiag, rcol_idx):
@@ -82,6 +86,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
     #     npt.assert_array_almost_equal(np.abs(Q_ipu), np.abs(Q_cpu))
     #     npt.assert_array_almost_equal(np.abs(R_ipu), np.abs(R_cpu))
 
+    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     @parameterized.parameters(
         {"N": 16, "M": 16},
         {"N": 16, "M": 12},
@@ -108,6 +113,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(x_ipu.array[0, : N - M], x[: N - M])
         npt.assert_array_almost_equal(x_ipu.array[0, N - M :], x[N - M :] - w[0] * w[0] * v)
 
+    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__qr_householder_row_update_p__benchmark_performance(self):
         N = 32 * 8
         M = N
@@ -138,6 +144,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         # print("SIZE / CYCLE COUNT: ", N, qr_correction_cycle_count)
         # assert False
 
+    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     @parameterized.parameters(
         {"N": 16, "col_idx": 0},
         {"N": 16, "col_idx": 13},
@@ -163,6 +170,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         npt.assert_array_equal(v_ipu.array[0][:col_idx], 0)
         npt.assert_array_almost_equal(v_ipu.array[0], v_exp)
 
+    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__qr_correction_vector_vertex__benchmark_performance(self):
         N = 128
         tiles = (0,)
@@ -186,6 +194,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         # print(qr_correction_cycle_count)
         # assert False
 
+    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     @parameterized.parameters(
         {"N": 16},
         {"N": 64},
@@ -207,6 +216,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(np.abs(Q.array), np.abs(Qexp), decimal=5)
         npt.assert_array_almost_equal(np.abs(RT.array), np.abs(Rexp.T), decimal=5)
 
+    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__linalg_qr_ipu__benchmark(self):
         N = 32
         # Random symmetric matrix...
@@ -236,6 +246,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         # print("CYCLE COUNT, TIMING:", qr_cycle_count, timing * 1000)
         # assert False
 
+    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__dot_product1d__benchmark(self):
         N = 512
         # N = 128 * 6

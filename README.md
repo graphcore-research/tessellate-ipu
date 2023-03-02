@@ -40,7 +40,7 @@ Additionally, unit tests can be run using `pytest`:
 ```bash
 pip install -r test-requirements.txt
 export PYTHONPATH=$(pwd):$PYTHONPATH
-TF_POPLAR_FLAGS='--use_ipu_model --ipu_model_tiles=8' pytest -vv ./tests/
+JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=8 pytest -v --tb=short ./tests/
 ```
 
 How to create the wheel package:
@@ -51,8 +51,8 @@ python setup.py bdist_wheel --universal
 
 How to run a terminal with IPU model (useful for local debugging):
 ```bash
-TF_POPLAR_FLAGS='--use_ipu_model --ipu_model_tiles=8' ipython
-TF_CPP_MIN_LOG_LEVEL=0 TF_CPP_VMODULE='poplar_compiler=1,poplar_executor=1' TF_POPLAR_FLAGS='--use_ipu_model' ipython
+JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=8 ipython
+TF_CPP_MIN_LOG_LEVEL=0 TF_CPP_VMODULE='poplar_compiler=1,poplar_executor=1' JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=8 ipython
 ```
 
 How to benchmark a test / piece of code:

@@ -190,7 +190,7 @@ def make_conv_partial1x1_worklist_entry(
     # `num_field_elems` bias?
     assert num_field_elems >= -2
     assert in_offset >= 0
-    return np.array([out_offset, num_field_elems, in_offset], dtype=np.uint32).astype(worklist_dtype)
+    return np.array([out_offset, num_field_elems, in_offset], dtype=np.int32).astype(worklist_dtype)
 
 
 @dataclass

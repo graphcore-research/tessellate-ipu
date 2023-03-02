@@ -245,6 +245,8 @@ def ipu_tile_memcpy(
         attributes_i32=[],
         attributes_f32=[],
         gp_filename=gp_filename,
+        # Very approximate perf. estimate. TODO: refine, once optimized!
+        perf_estimate=inaval.size * inaval.dtype.itemsize,
     )
     return ipu_prim_info
 
