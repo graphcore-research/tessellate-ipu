@@ -30,7 +30,7 @@ class CustomArangeVertex : public Vertex {
 template<typename T>
 class CustomMultiOutVertex : public Vertex {
  public:
-  Input<Vector<T, poplar::VectorLayout::SPAN>> in;     // (size, )
+  Input<Vector<T, poplar::VectorLayout::SPAN>> input;     // (size, )
   Input<Vector<T, poplar::VectorLayout::ONE_PTR>> constant_scale; // (1, )
 
   Output<Vector<T, poplar::VectorLayout::ONE_PTR>> out0;  // (size, )
@@ -43,10 +43,10 @@ class CustomMultiOutVertex : public Vertex {
   T scale_value;
 
   bool compute() {
-    const auto outsize = in.size();
-    for (std::size_t idx = 0; idx < in.size(); ++idx) {
+    const auto outsize = input.size();
+    for (std::size_t idx = 0; idx < input.size(); ++idx) {
       // Most basic compute!
-      tmp[idx] = constant_scale[0] * scale_value * in[idx];
+      tmp[idx] = constant_scale[0] * scale_value * input[idx];
       out0[idx] = tmp[idx];
       out1[idx] = -tmp[idx];
     }

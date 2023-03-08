@@ -19,7 +19,13 @@ from .tile_array import (
     tile_put_sharded,
 )
 from .tile_common_utils import make_ipu_shaped_array
-from .tile_interpreter import create_ipu_tile_primitive, register_ipu_tile_primitive, tile_map_primitive
+from .tile_interpreter import (
+    create_ipu_tile_primitive,
+    create_ipu_tile_primitive_v2,
+    declare_ipu_tile_primitive,
+    register_ipu_tile_primitive,
+    tile_map_primitive,
+)
 from .tile_interpreter_hw_primitives import hw_cycle_count_p, ipu_hw_cycle_count
 from .tile_interpreter_lax_binary import scaled_add_p, scaled_sub_p
 from .tile_interpreter_lax_dot import IpuConvVertexType

@@ -4,28 +4,29 @@
 
 using namespace poplar;
 
+
 template<typename T>
 class DemoVertex: public Vertex {
 public:
-  Input<Vector<T, poplar::VectorLayout::SPAN>> in;     // (size, )
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR>> constant_scale; // (1, )
+  Input<Vector<T>> x;               // (r,c)
+  Input<Vector<T>> constant_scale;  // (r,c)
 
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> out0;  // (size, )
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> out1;  // (size, )
+  Output<Vector<T>> out0;           // (r,c/2)
+  Output<Vector<T>> out1;           // (r,c/2)
 
   // Temporary cache entry (automatically allocated by JAX-tile equation)
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> tmp;  // (size, )
+  Output<Vector<T>> tmp;            // (r,c)
 
   // Attribute to pass directly to the vertex.
   T scale_value;
 
   bool compute() {
-    const auto outsize = in.size();
-    for (std::size_t idx = 0; idx < in.size(); ++idx) {
+    const auto outsize = x.size();
+    for (std::size_t idx = 0; idx < x.size(); ++idx) {
       // Most basic compute!
-      tmp[idx] = constant_scale[0] * scale_value * in[idx];
-      out0[idx] = tmp[idx];
-      out1[idx] = -tmp[idx];
+      tmp[idx] = constant_scale[0] * scale_value * x[idx];
+      out0[idx / 2] = tmp[idx];
+      out1[idx / 2] = -tmp[idx];
     }
     return true;
   }
