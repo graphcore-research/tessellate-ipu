@@ -96,6 +96,6 @@ register_ipu_tile_primitive(custom_arange_p, custom_arange_tile_translation_ipu)
 def custom_multi_out_p(input):
     outputs = {"out0": input, "out1": input}
     constants = {"constant_scale": np.array([input.size], input.dtype)}
-    tmp_space = {"tmp": input}
+    tmp_space = {"mytmp": input}
     perf_estimate = 100
     return outputs, constants, tmp_space, perf_estimate

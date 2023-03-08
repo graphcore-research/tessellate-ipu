@@ -205,6 +205,9 @@ struct TileMapEquation {
   std::vector<VertexAttributeI32> attributes_i32;
   std::vector<VertexAttributeF32> attributes_f32;
 
+  /** Temporary vertex scratch space name. */
+  std::string tmp_space_name = "";
+
   /** Temporary vertex scratch space (empty by default). */
   ShapedArray tmp_space_aval =
       ipu::ShapedArray{ipu::ShapeType{0}, IpuType::UNSIGNED_CHAR};
@@ -320,7 +323,6 @@ struct TileMapEquation {
     poplar::DebugContext debug_context(debug_prefix, this->pname);
 
     // Tensor used for vertex temp. scratch space.
-    const std::string tmp_space_name = "tmp";
     auto tmp_space_tensor_opt = allocateTmpSpaceTensor(graph);
 
     poplar::ComputeSet cs = graph.addComputeSet(debug_context);
@@ -389,8 +391,9 @@ struct TileMapEquation {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
                                    inputs_info, outputs_info, attributes_i32,
-                                   attributes_f32, tmp_space_aval, gp_filename,
-                                   perf_estimate, sync)
+                                   attributes_f32, tmp_space_name,
+                                   tmp_space_aval, gp_filename, perf_estimate,
+                                   sync)
 
 }  // namespace ipu
 
@@ -492,20 +495,24 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
 
   pybind11::class_<TileMapEquation>(m, "IpuTileMapEquation")
       .def(pybind11::init<>())
-      .def(pybind11::init<const std::string&, const std::string&,
-                          const std::vector<TileIndexType>&,
-                          const std::vector<VertexIOInfo>&,
-                          const std::vector<VertexIOInfo>&,
-                          const std::vector<VertexAttributeI32>&,
-                          const std::vector<VertexAttributeF32>&,
-                          const ShapedArray&, const std::string&, uint64_t,
-                          bool>(),
+      .def(pybind11::init<
+               const std::string& /* pname */, const std::string& /* vname */,
+               const std::vector<TileIndexType>& /* tiles */,
+               const std::vector<VertexIOInfo>& /* inputs_info */,
+               const std::vector<VertexIOInfo>& /* outputs_info */,
+               const std::vector<VertexAttributeI32>& /* attributes_i32 */,
+               const std::vector<VertexAttributeF32>& /* attributes_f32 */,
+               const std::string& /* tmp_space_name */,
+               const ShapedArray& /* tmp_space_aval */,
+               const std::string& /* gp_filename */,
+               uint64_t /* perf_estimate */, bool /* sync */>(),
            pybind11::arg("pname"), pybind11::arg("vname"),
            pybind11::arg("tiles"),
            pybind11::arg("inputs_info") = std::vector<VertexIOInfo>(),
            pybind11::arg("outputs_info") = std::vector<VertexIOInfo>(),
            pybind11::arg("attributes_i32") = std::vector<VertexAttributeI32>(),
            pybind11::arg("attributes_f32") = std::vector<VertexAttributeF32>(),
+           pybind11::arg("tmp_space_name") = "",
            pybind11::arg("tmp_space_aval") =
                ShapedArray{{0}, IpuType::UNSIGNED_CHAR},
            pybind11::arg("gp_filename") = "",
@@ -523,6 +530,7 @@ PYBIND11_MODULE(tile_interpreter_primitives_impl, m) {
       .def_readwrite("outputs_info", &TileMapEquation::outputs_info)
       .def_readwrite("attributes_i32", &TileMapEquation::attributes_i32)
       .def_readwrite("attributes_f32", &TileMapEquation::attributes_f32)
+      .def_readwrite("tmp_space_name", &TileMapEquation::tmp_space_name)
       .def_readwrite("tmp_space_aval", &TileMapEquation::tmp_space_aval)
       .def_readwrite("gp_filename", &TileMapEquation::gp_filename)
       .def_readwrite("perf_estimate", &TileMapEquation::perf_estimate)

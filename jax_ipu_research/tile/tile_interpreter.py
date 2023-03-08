@@ -172,6 +172,7 @@ def create_ipu_tile_primitive(
                 tmp_inaval = tmp_space
             else:
                 raise ValueError(f"Unknown IPU vertex primitive tmp space: '{tmp_space}'.")
+            ipu_prim_info.tmp_space_name = "tmp"
             ipu_prim_info.tmp_space_aval = make_ipu_shaped_array(tmp_inaval.shape, tmp_inaval.dtype)
         return ipu_prim_info
 
@@ -364,7 +365,7 @@ def create_ipu_tile_primitive_v2(
             assert len(temps) == 1  # TODO: Decide whether or not to handle multiple tmps
             for name, aval in temps.items():
                 # Temporary scratch space to use by the vertex (zero=unused).
-                # ipu_prim_info.tmp_space_name = name
+                ipu_prim_info.tmp_space_name = name
                 ipu_prim_info.tmp_space_aval = make_ipu_shaped_array(aval.shape, aval.dtype)
 
         return ipu_prim_info

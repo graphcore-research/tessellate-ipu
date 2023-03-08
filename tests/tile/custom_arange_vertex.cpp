@@ -37,7 +37,7 @@ class CustomMultiOutVertex : public Vertex {
   Output<Vector<T, poplar::VectorLayout::ONE_PTR>> out1;  // (size, )
 
   // Temporary cache entry (automatically allocated by JAX-tile equation)
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> tmp;  // (size, )
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> mytmp;  // (size, )
 
   // Attribute to pass directly to the vertex.
   T scale_value;
@@ -46,9 +46,9 @@ class CustomMultiOutVertex : public Vertex {
     const auto outsize = input.size();
     for (std::size_t idx = 0; idx < input.size(); ++idx) {
       // Most basic compute!
-      tmp[idx] = constant_scale[0] * scale_value * input[idx];
-      out0[idx] = tmp[idx];
-      out1[idx] = -tmp[idx];
+      mytmp[idx] = constant_scale[0] * scale_value * input[idx];
+      out0[idx] = mytmp[idx];
+      out1[idx] = -mytmp[idx];
     }
     return true;
   }
