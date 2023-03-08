@@ -22,4 +22,6 @@ RUN pip3 install --no-cache-dir \
     scipy \
     pytest \
     flake8 \
+    black \
+    mypy \
     pre-commit
