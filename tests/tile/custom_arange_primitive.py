@@ -99,3 +99,13 @@ def custom_multi_out_p(input):
     tmp_space = {"mytmp": input}
     perf_estimate = 100
     return outputs, constants, tmp_space, perf_estimate
+
+
+# Provide a JAX Numpy implementation for other backends (CPU/GPU/TPU)
+def custom_multi_out_impl(x, scale_value):
+    constant_scale = np.array([x.size], x.dtype)
+    mytmp = constant_scale[0] * scale_value * x
+    return (mytmp, -mytmp)
+
+
+custom_multi_out_p.def_impl(custom_multi_out_impl)

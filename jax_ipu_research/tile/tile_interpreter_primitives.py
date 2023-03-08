@@ -1,5 +1,6 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import base64
+import inspect
 import os
 from copy import copy
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
@@ -8,6 +9,7 @@ import cppimport
 import numpy as np
 from jax import core, vmap
 from jax.interpreters import mlir, xla
+from jax.interpreters.batching import primitive_batchers
 from jax.interpreters.mlir import LoweringRuleContext, ir
 from jax.interpreters.xla import ShapedArray
 from jax.lib import xla_client
@@ -33,6 +35,17 @@ from .tile_interpreter_primitives_impl import (  # noqa: E402
     IpuVertexIOType,
     TileMapEquationCall,
 )
+
+
+def primitive_has_impl(p: core.Primitive) -> bool:
+    """Check if a JAX primitive has a default Numpy-like implementation."""
+    # Is it the default empty `impl` function?
+    return not (inspect.ismethod(p.impl) and p.impl.__func__ == core.Primitive.impl)
+
+
+def primitive_has_batching(p: core.Primitive) -> bool:
+    """Check if a primitive has a batching rule (i.e. supports `vmap`)."""
+    return p in primitive_batchers
 
 
 def make_ipu_vertex_name_templated(basename: str, *args) -> str:
@@ -266,16 +279,30 @@ def tile_map_equation_call_mlir_translation_default(
     pname, _, _ = get_tile_map_ipu_arguments(**params)
     primitive, _ = get_ipu_tile_primitive_translation(pname)
 
-    # Not sure using a local function is a good idea?
-    def primitive_fn(*inputs):
-        return primitive.bind(*inputs, **get_primitive_arguments(params))
+    if primitive_has_batching(primitive):
+        # Not sure using a local function is a good idea?
+        def primitive_fn(*inputs):
+            return primitive.bind(*inputs, **get_primitive_arguments(params))
 
-    # Use `vmap` to run the equivalent computation on any device.
-    vmap_primitive_fn = vmap(primitive_fn, in_axes=0, out_axes=0)
-    # Lower to MLIR using JAX tooling.
-    # TODO: cache lowering?
-    vmap_primitive_lower_fn = mlir.lower_fun(vmap_primitive_fn, multiple_results=primitive.multiple_results)
-    return vmap_primitive_lower_fn(ctx, *args)
+        # Primitive has batching rule (e.g. standard JAX primitives) => directly use `vmap`
+        vmap_primitive_fn = vmap(primitive_fn, in_axes=0, out_axes=0)
+        # Lower to MLIR using JAX tooling. TODO: cache lowering?
+        vmap_primitive_lower_fn = mlir.lower_fun(vmap_primitive_fn, multiple_results=primitive.multiple_results)
+        return vmap_primitive_lower_fn(ctx, *args)
+
+    elif primitive_has_impl(primitive):
+        # No batching rule => let's try to `vmap` the default primitive implementation.
+        def primitive_impl_fn(*inputs):
+            return primitive.impl(*inputs, **get_primitive_arguments(params))
+
+        # Use `vmap` on the primitive implementation => does not required batching rule of the primitive itself.
+        vmap_primitive_impl_fn = vmap(primitive_impl_fn, in_axes=0, out_axes=0)
+        # Lower to MLIR using JAX tooling. TODO: cache lowering?
+        vmap_primitive_lower_fn = mlir.lower_fun(vmap_primitive_impl_fn, multiple_results=primitive.multiple_results)
+        return vmap_primitive_lower_fn(ctx, *args)
+
+    # Not much we can do without implementation or batching rule!
+    raise NotImplementedError(f"No implementation or batching provided for JAX primitive '{primitive}'.")
 
 
 def tile_map_equation_call_xla_translation_ipu(ctx, *xla_args, **params):

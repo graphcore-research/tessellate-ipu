@@ -65,7 +65,7 @@ assert len(tiles) == M
 assert len(tiles_t) == N
 
 
-def compute_fn_cpu(input):
+def compute_fn(input):
     M, N, N1 = input.shape
     assert N == N1
     assert M == len(tiles)
@@ -73,7 +73,7 @@ def compute_fn_cpu(input):
 
     out0, out1 = tile_map_primitive(demo_vertex_p, input_sharded, scale_value=1.23)  # type:ignore
     print("First out0 shape", out0.shape)
-    assert out0.shape == (M, N, N // 2)
+    assert out0.shape == (M, N, N1 // 2)
 
     # Reshuffle data and call demo_vertex_p again
     transpose = jnp.reshape(out0.array, (N, N // 2, M))
@@ -86,17 +86,37 @@ def compute_fn_cpu(input):
     return out0, out1
 
 
-compute_fn = jax.jit(compute_fn_cpu, backend="ipu")
+def demo_vertex_impl(x, scale_value=None):
+    r, c = x.shape
+    outshape = (r, c // 2)
+    outsize = np.prod(outshape)
+    # Pre-computed constant as Numpy array.
+    constant_scale = 0.5 * np.ones((x.size,), dtype=x.dtype)
+    # JAX Numpy implementation, equivalent to C++ IPU vertex.
+    tmp = constant_scale * scale_value * jnp.ravel(x)
+    # A bit of complex slicing on the flatten array!
+    out0 = jnp.reshape(tmp[1 : 2 * outsize : 2], outshape)
+    out1 = -out0
+    return out0, out1
+
+
+# Primitive default implementation, in JAX Numpy.
+demo_vertex_p.def_impl(demo_vertex_impl)
+
+compute_fn_on_ipu = jax.jit(compute_fn, backend="ipu")
+compute_fn_on_cpu = jax.jit(compute_fn, backend="cpu")
 
 np.set_printoptions(formatter={"float": "{: 0.3f}".format})
 
 
 data0 = np.arange(M * N * N, dtype=np.float32).reshape(M, N, N)
-print(data0)
-
-# out0, out1 = compute_fn_cpu(data0)
+# print(data0)
 
 print("Input shape:", data0.shape)
-out0, out1 = compute_fn(data0)
-print("Output shape:", out0.shape, out1.shape)
-print("RESULT:", out0.array, out1.array, sep="\n")
+
+out0_ipu, out1_ipu = compute_fn_on_ipu(data0)
+out0_cpu, out1_cpu = compute_fn_on_cpu(data0)
+
+print("Output shape:", out0_ipu.shape, out1_ipu.shape)
+print("IPU RESULT:", np.ravel(out0_ipu.array))
+print("CPU RESULT:", np.ravel(out0_cpu.array))

@@ -5,7 +5,9 @@ import chex
 import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
-from jax.core import ShapedArray
+from custom_arange_primitive import custom_multi_out_p
+from jax import lax
+from jax.core import Primitive, ShapedArray
 
 from jax_ipu_research.tile.tile_common_utils import Base64Data, IpuType
 from jax_ipu_research.tile.tile_interpreter_primitives import (
@@ -17,6 +19,8 @@ from jax_ipu_research.tile.tile_interpreter_primitives import (
     make_ipu_vertex_io_info,
     make_ipu_vertex_name_templated,
     make_ipu_vertex_outputs,
+    primitive_has_batching,
+    primitive_has_impl,
 )
 from jax_ipu_research.tile.tile_interpreter_primitives_impl import (
     IpuTensorSlice,
@@ -167,3 +171,14 @@ class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
         attrs_i32, attrs_f32 = make_ipu_vertex_attributes(k1=2, k2=3.0)
         assert attrs_i32[0] == IpuVertexAttributeI32("k1", 2)
         assert attrs_f32[0] == IpuVertexAttributeF32("k2", 3.0)
+
+
+class IpuPrimitiveUtilsTests(chex.TestCase):
+    def test__primitive_has_impl(self):
+        assert primitive_has_impl(lax.add_p)
+        assert primitive_has_impl(custom_multi_out_p)
+        assert not primitive_has_impl(Primitive("test"))
+
+    def test__primitive_has_batching(self):
+        assert primitive_has_batching(lax.add_p)
+        assert not primitive_has_batching(custom_multi_out_p)

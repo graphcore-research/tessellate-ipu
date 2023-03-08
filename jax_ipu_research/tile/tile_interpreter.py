@@ -110,10 +110,6 @@ def create_ipu_tile_primitive(
         out_avals = [_get_output_aval(idx) for idx in outputs.values()]
         return tuple(out_avals) if p.multiple_results else out_avals[0]
 
-    def p_impl(*args, **kwargs):
-        # TODO: call `tile_map_primitive` on single tile.
-        raise NotImplementedError(f"IPU tile primitive '{pname}' not implemented.")
-
     def p_tile_translation_ipu(
         p: Primitive,
         tiles: Tuple[int, ...],
@@ -176,8 +172,6 @@ def create_ipu_tile_primitive(
             ipu_prim_info.tmp_space_aval = make_ipu_shaped_array(tmp_inaval.shape, tmp_inaval.dtype)
         return ipu_prim_info
 
-    # Register the primal implementation with JAX
-    p.def_impl(p_impl)
     # Register the abstract evaluation with JAX
     p.def_abstract_eval(p_abstract_aval)
     # Register tile IPU translation.
@@ -299,10 +293,6 @@ def create_ipu_tile_primitive_v2(
         outputs, _, _, _ = initializer_fn(*args)
         return outputs.values()
 
-    def p_impl(*args, **kwargs):
-        # TODO: call `tile_map_primitive` on single tile.
-        raise NotImplementedError(f"IPU tile primitive '{pname}' not implemented.")
-
     def p_tile_translation_ipu(
         p: Primitive,
         tiles: Tuple[int, ...],
@@ -370,8 +360,6 @@ def create_ipu_tile_primitive_v2(
 
         return ipu_prim_info
 
-    # Register the primal implementation with JAX
-    p.def_impl(p_impl)
     # Register the abstract evaluation with JAX
     p.def_abstract_eval(p_abstract_aval)
     # Register tile IPU translation.

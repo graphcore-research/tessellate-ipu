@@ -110,14 +110,14 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
                 decimal=0,
             )
 
-    @parameterized.parameters([np.float32, np.int32])
-    def test__tile_map_primitive__custom_vertex__multi_outputs__ipu_jitting(self, dtype):
+    @parameterized.parameters([(np.float32, "ipu"), (np.int32, "ipu"), (np.float32, "cpu")])
+    def test__tile_map_primitive__custom_vertex__multi_outputs__ipu_jitting(self, dtype, backend):
         size = 128
         tiles = (3, 4, 5)
         input = np.random.rand(len(tiles), size).astype(dtype) + 1
         scale_value = 3
 
-        @partial(jax.jit, backend="ipu")
+        @partial(jax.jit, backend=backend)
         def compute_fn(input):
             input = tile_put_sharded(input, tiles)
             out0, out1 = tile_map_primitive(custom_multi_out_p, input, scale_value=scale_value)  # type:ignore
