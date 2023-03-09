@@ -1,6 +1,6 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import os
-from typing import Tuple
+from typing import Any, Tuple
 
 import jax.lax
 import jax.numpy as jnp
@@ -9,7 +9,15 @@ from jax.core import ShapedArray
 
 from jax_ipu_research.utils import Array
 
-from .tile_array import TileShardedArray, tile_data_barrier, tile_gather, tile_put_replicated, tile_put_sharded
+from .tile_array import (
+    TileShardedArray,
+    tile_constant_replicated,
+    tile_constant_sharded,
+    tile_data_barrier,
+    tile_gather,
+    tile_put_replicated,
+    tile_put_sharded,
+)
 from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
 
@@ -74,12 +82,16 @@ jacobi_update_eigenvectors_p = create_ipu_tile_primitive(
 
 def jacobi_initial_rotation_set(N: int) -> np.ndarray:
     """Jacobi initial rotation array/set (N/2, 2)."""
-    rot = np.arange(0, N).astype(np.int32).reshape((-1, 2))
+    rot = np.arange(0, N).astype(np.uint32).reshape((-1, 2))
     return rot
 
 
 def jacobi_next_rotation_set(rot: np.ndarray) -> np.ndarray:
-    """Jacobi next rotation set (N/2, 2)."""
+    """Jacobi next rotation set (N/2, 2).
+
+    In short: moving p columns to the right, q columns to the left, with
+        p[0] not moving.
+    """
     next_rot = np.copy(rot)
     # Translate columns.
     next_rot[2:, 0] = rot[1:-1, 0]
@@ -91,89 +103,84 @@ def jacobi_next_rotation_set(rot: np.ndarray) -> np.ndarray:
     return next_rot
 
 
-def jacobi_rotate_columns(pcols: Array, qcols: Array) -> Tuple[Array, Array]:
-    """Jacobi rotation matrix columns between processors (tiles).
-
-    This op is a pure view operation (slicing + concat), to comms between IPU tiles.
-
-    NOTE: we use two arrays for storage of P and Q columns, instead of a single
-    (N//2, 2, N) array, in order to have more flexible memory mapping on every tile
-    (no requirement on contiguity between p and q. Potentially on different memory bank).
-
-    See for the rotation description:
-        Gene H. Golub, Charles F. Van Loan, MATRIX COMPUTATIONS, 3rd edition, Johns Hopkins Chapter 8.
-
-    Args:
-        pcols: P-index columns (N//2, N).
-        qcols: Q-index columns (N//2, N).
-    """
-    assert pcols.shape == qcols.shape
-    halfN = len(pcols)
-    pcols_rotated = jax.lax.concatenate(
-        [
-            jax.lax.slice_in_dim(pcols, start_index=0, limit_index=1),
-            jax.lax.slice_in_dim(qcols, start_index=0, limit_index=1),
-            jax.lax.slice_in_dim(pcols, start_index=1, limit_index=halfN - 1),
-        ],
-        dimension=0,
-    )
-    qcols_rotated = jax.lax.concatenate(
-        [
-            jax.lax.slice_in_dim(qcols, start_index=1, limit_index=halfN),
-            jax.lax.slice_in_dim(pcols, start_index=halfN - 1, limit_index=halfN),
-        ],
-        dimension=0,
-    )
-    return pcols_rotated, qcols_rotated
+def jacobi_sort_rotation_set(rotset: np.ndarray) -> np.ndarray:
+    """Sort the p, q indices in the Jacobi rotation set, such p < q."""
+    pindices, qindices = rotset[:, 0], rotset[:, 1]
+    pindices, qindices = np.minimum(pindices, qindices), np.maximum(pindices, qindices)
+    return np.stack([pindices, qindices], axis=-1)
 
 
-def jacobi_sort_columns(
-    rot: np.ndarray, pcols: TileShardedArray, qcols: TileShardedArray
-) -> Tuple[np.ndarray, TileShardedArray, TileShardedArray]:
-    """Jacobi sorting of columns on every processor, ensuring that we always have p < q.
+def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtiles: Any) -> Tuple[Array, ...]:
+    """IPU Eigen decomposition: single iteration of the Jacobi algorithm.
 
-    This op is a pure view operation (slicing + concat). Just re-assigning columns within tiles.
+    NOTE: the goal is to have a function which can be easily combined with `fori_loop`.
 
     Args:
-        rot: Rotation set, assigning columns to processors (static argnum).
-        pcols: P-columns.
-        qcols: Q-columns.
+        all_AV_cols: A and V matrices p/q columns.
+        Atiles: A matrix tiles.
+        Vtiles: V matrix tiles.
     Returns:
-        Equivalent (rot, pcols, qcols) such that p < q on every processor/tile.
+        Tuple of updated A and V matrices p/q columns.
     """
-    halfN = len(rot)
-    assert len(pcols.array) == halfN
-    assert len(qcols.array) == halfN
-    assert pcols.tiles == qcols.tiles
+    Apcols, Aqcols, Vpcols, Vqcols = all_AV_cols
+    N = Apcols.shape[-1]
+    halfN = N // 2
+    # TODO: check compatibility of TileShardedArray with fori_loop
+    # Shard arrays across tiles.
+    Apcols = tile_put_sharded(Apcols, tiles=Atiles)
+    Aqcols = tile_put_sharded(Aqcols, tiles=Atiles)
+    # Initial eigenvectors (identity matrix).
+    Vpcols = tile_put_sharded(Vpcols, tiles=Vtiles)
+    Vqcols = tile_put_sharded(Vqcols, tiles=Vtiles)
+    # Constant tensor of index to ignored at every iteration.
+    rotset_index_ignored = tile_constant_sharded(np.arange(0, halfN, dtype=np.uint32), tiles=Atiles)
+    rotset = jacobi_initial_rotation_set(N)
 
-    rot_sorted = []
-    pcols_sorted = []
-    qcols_sorted = []
-    for idx in range(halfN):
-        p, q = rot[idx]
-        assert p != q
-        if p < q:
-            # Keep same ordering.
-            rot_sorted.append((p, q))
-            # pcols_sorted.append(jax.lax.slice_in_dim(pcols.array, idx, idx + 1))
-            # qcols_sorted.append(jax.lax.slice_in_dim(qcols.array, idx, idx + 1))
-            pcols_sorted.append(pcols.array[idx])
-            qcols_sorted.append(qcols.array[idx])
-        else:
-            # Swap p and q (on the same tile).
-            rot_sorted.append((q, p))
-            # pcols_sorted.append(jax.lax.slice_in_dim(qcols.array, idx, idx + 1))
-            # qcols_sorted.append(jax.lax.slice_in_dim(pcols.array, idx, idx + 1))
-            pcols_sorted.append(qcols.array[idx])
-            qcols_sorted.append(pcols.array[idx])
+    # All different size 2 partitions on columns.
+    for _ in range(1, N):
+        # Sorted rotation set: p < q indices.
+        rotset_sorted = jacobi_sort_rotation_set(rotset)
+        # On tile constant rotation set tensor building.
+        rotset_replicated = tile_constant_replicated(rotset_sorted, tiles=Atiles)
+        rotset_sharded = tile_constant_sharded(rotset_sorted, tiles=Atiles)
 
-    pcols_sorted = [jax.lax.expand_dims(t, (0,)) for t in pcols_sorted]
-    qcols_sorted = [jax.lax.expand_dims(t, (0,)) for t in qcols_sorted]
+        # Compute Schur decomposition + on-tile update of columns.
+        cs_per_tile, Apcols, Aqcols = tile_map_primitive(  # type:ignore
+            jacobi_update_first_step_p, rotset_sharded, Apcols, Aqcols, N=N
+        )
+        # Replicate Schur decomposition across all A tiles: (2*N//2) comms.
+        cs_replicated = tile_put_replicated(cs_per_tile.array, tiles=Atiles)
+        # Just copy Schur decomposition to associated V tiles.
+        cs_Vtiles = tile_put_sharded(cs_per_tile.array, tiles=Vtiles)
 
-    rot_sorted_arr = np.array(rot_sorted, np.uint32)
-    pcols_sorted_arr = TileShardedArray(jax.lax.concatenate(pcols_sorted, dimension=0), pcols.tiles)
-    qcols_sorted_arr = TileShardedArray(jax.lax.concatenate(qcols_sorted, dimension=0), qcols.tiles)
-    return (rot_sorted_arr, pcols_sorted_arr, qcols_sorted_arr)
+        # Second Jacobi update step.
+        cs_replicated, Apcols, Aqcols = tile_map_primitive(  # type:ignore
+            jacobi_update_second_step_p,
+            cs_replicated,
+            rotset_replicated,
+            rotset_index_ignored,
+            Apcols,
+            Aqcols,
+            halfN=halfN,
+        )
+        # Jacobi eigenvectors update step.
+        Vpcols, Vqcols = tile_map_primitive(  # type:ignore
+            jacobi_update_eigenvectors_p,
+            cs_Vtiles,
+            Vpcols,
+            Vqcols,
+        )
+
+        # Barrier, to make we sync. both set of tiles A and V
+        Apcols, Aqcols, Vpcols, Vqcols = tile_data_barrier(Apcols, Aqcols, Vpcols, Vqcols)
+        # Move columns between tiles. 2*N commns per tile.
+        # NOTE: this inter-tile comm is keeping the p < q property on A and V columns.
+        Apcols, Aqcols = tile_rotate_columns(Apcols, Aqcols, rotset)
+        Vpcols, Vqcols = tile_rotate_columns(Vpcols, Vqcols, rotset)
+        # Next rotation set.
+        rotset = jacobi_next_rotation_set(rotset)
+
+    return (Apcols.array, Aqcols.array, Vpcols.array, Vqcols.array)
 
 
 def ipu_jacobi_eigh(x: Array, num_iters: int = 1) -> Tuple[Array, Array]:
@@ -193,97 +200,88 @@ def ipu_jacobi_eigh(x: Array, num_iters: int = 1) -> Tuple[Array, Array]:
 
     Atiles = tuple(range(0, halfN))
     Vtiles = tuple(range(halfN, 2 * halfN))
-    # Initial rotation (i.e. allocation of columns per tiles).
-    rotset = jacobi_initial_rotation_set(N)
-    Apcols = tile_put_sharded(jax.lax.slice_in_dim(x, 0, N, stride=2), tiles=Atiles)
-    Aqcols = tile_put_sharded(jax.lax.slice_in_dim(x, 1, N, stride=2), tiles=Atiles)
+    # Initial "eigenvalues" matrix.
+    Apcols = jax.lax.slice_in_dim(x, 0, N, stride=2)
+    Aqcols = jax.lax.slice_in_dim(x, 1, N, stride=2)
     # Initial eigenvectors (identity matrix).
-    Vpcols = tile_put_sharded(np.identity(N)[0::2], tiles=Vtiles)
-    Vqcols = tile_put_sharded(np.identity(N)[1::2], tiles=Vtiles)
+    Vpcols = np.identity(N)[0::2]
+    Vqcols = np.identity(N)[1::2]
 
-    # Constant tensor of index to ignored at every iteration.
-    rotset_index_ignored = tile_put_sharded(np.arange(0, halfN, dtype=np.uint32), tiles=Atiles)
+    # Set A and V tiling static.
+    eigh_iteration_fn = lambda _, x: ipu_jacobi_eigh_iteration(x, Atiles, Vtiles)
+    # JAX fori_loop => no Python unrolling and code bloating!
+    Apcols, Aqcols, Vpcols, Vqcols = jax.lax.fori_loop(
+        0, num_iters, eigh_iteration_fn, (Apcols, Aqcols, Vpcols, Vqcols)
+    )
 
-    for _ in range(num_iters):
-        # All different size 2 partitions on columns.
-        for _ in range(1, N):
-            # Sorted rotation + columns. No copy, just on tile slicing + concat.
-            rotset_sorted, Apcols_sorted, Aqcols_sorted = jacobi_sort_columns(rotset, Apcols, Aqcols)
-            _, Vpcols_sorted, Vqcols_sorted = jacobi_sort_columns(rotset, Vpcols, Vqcols)
-
-            # TODO: on device create? or constant replicated?
-            rotset_replicated = tile_put_replicated(rotset_sorted, tiles=Atiles)
-            rotset_sharded = tile_put_sharded(rotset_sorted, tiles=Atiles)
-
-            # Compute Schur decomposition + on-tile update of columns.
-            cs_per_tile, Apcols_sorted, Aqcols_sorted = tile_map_primitive(  # type:ignore
-                jacobi_update_first_step_p, rotset_sharded, Apcols_sorted, Aqcols_sorted, N=N
-            )
-            # Replicate Schur decomposition across all A tiles: (2*N//2) comms.
-            cs_replicated = tile_put_replicated(cs_per_tile.array, tiles=Atiles)
-            # Just copy Schur decomposition to associated V tiles.
-            cs_Vtiles = tile_put_sharded(cs_per_tile.array, tiles=Vtiles)
-
-            # Second Jacobi update step.
-            cs_replicated, Apcols_sorted, Aqcols_sorted = tile_map_primitive(  # type:ignore
-                jacobi_update_second_step_p,
-                cs_replicated,
-                rotset_replicated,
-                rotset_index_ignored,
-                Apcols_sorted,
-                Aqcols_sorted,
-                halfN=halfN,
-            )
-            # Jacobi eigenvectors update step.
-            Vpcols_sorted, Vqcols_sorted = tile_map_primitive(  # type:ignore
-                jacobi_update_eigenvectors_p,
-                cs_Vtiles,
-                Vpcols_sorted,
-                Vqcols_sorted,
-            )
-
-            # Unsort to keep the pure functional flow. No copy.
-            _, Apcols, Aqcols = jacobi_sort_columns(rotset, Apcols_sorted, Aqcols_sorted)
-            _, Vpcols, Vqcols = jacobi_sort_columns(rotset, Vpcols_sorted, Vqcols_sorted)
-            # Barrier, to make we sync. both set of tiles A and V
-            Apcols, Aqcols, Vpcols, Vqcols = tile_data_barrier(Apcols, Aqcols, Vpcols, Vqcols)
-
-            # Update rotation and columns.
-            rotset = jacobi_next_rotation_set(rotset)
-            # Move columns between tiles. 2*N commns per tile.
-            Apcols, Aqcols = tile_rotate_columns(Apcols, Aqcols)
-            Vpcols, Vqcols = tile_rotate_columns(Vpcols, Vqcols)
-
+    # Expect the output to follow the initial rotation set columns split.
+    rotset = jacobi_initial_rotation_set(N)
     # Re-organize pcols and qcols into the result matrix.
     Aresult_rows = [None] * N
     Vresult_cols = [None] * N
     for idx, (p, q) in enumerate(rotset):
-        Aresult_rows[p] = jax.lax.slice_in_dim(Apcols.array, start_index=idx, limit_index=idx + 1)
-        Aresult_rows[q] = jax.lax.slice_in_dim(Aqcols.array, start_index=idx, limit_index=idx + 1)
+        Aresult_rows[p] = jax.lax.slice_in_dim(Apcols, start_index=idx, limit_index=idx + 1)
+        Aresult_rows[q] = jax.lax.slice_in_dim(Aqcols, start_index=idx, limit_index=idx + 1)
 
-        Vresult_cols[p] = jax.lax.slice_in_dim(Vpcols.array, start_index=idx, limit_index=idx + 1)
-        Vresult_cols[q] = jax.lax.slice_in_dim(Vqcols.array, start_index=idx, limit_index=idx + 1)
+        Vresult_cols[p] = jax.lax.slice_in_dim(Vpcols, start_index=idx, limit_index=idx + 1)
+        Vresult_cols[q] = jax.lax.slice_in_dim(Vqcols, start_index=idx, limit_index=idx + 1)
 
     A = jax.lax.concatenate(Aresult_rows, dimension=0)
     VT = jax.lax.concatenate(Vresult_cols, dimension=0)
     return A, VT
 
 
-def tile_rotate_columns(pcols: TileShardedArray, qcols: TileShardedArray) -> Tuple[TileShardedArray, TileShardedArray]:
-    """Rotate columns between tiles using a static `tile_gather`."""
+def permute_pq_indices(
+    pindices: np.ndarray, qindices: np.ndarray, rotset_permute_mask: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Permute p,q indices based on a mask.
+
+    Args, Returns: (N//2,) shaped arrays.
+    """
+    return (np.where(rotset_permute_mask, pindices, qindices), np.where(rotset_permute_mask, qindices, pindices))
+
+
+def tile_rotate_columns(
+    pcols: TileShardedArray, qcols: TileShardedArray, rotset: np.ndarray
+) -> Tuple[TileShardedArray, TileShardedArray]:
+    """Rotate columns between tiles using a static `tile_gather`.
+
+    The tricky part of this function is to rotate the columns between tiles, but
+    keep the property p < q, which means taking care of the present sorting permutation applied
+    as well the next sorting permutation.
+    """
     assert pcols.shape == qcols.shape
     assert pcols.tiles == qcols.tiles
     halfN = pcols.shape[0]
+    N = halfN * 2
     # Concat all columns, in order to perform a single gather.
     all_cols = TileShardedArray(
         jax.lax.concatenate([pcols.array, qcols.array], dimension=0), (*pcols.tiles, *qcols.tiles)
     )
-    # Express rotation as indices for a gather op.
-    pcols_indices = (0, halfN, *range(1, halfN - 1))
-    qcols_indices = (*range(halfN + 1, 2 * halfN), halfN - 1)
-    all_indices = (*pcols_indices, *qcols_indices)
+
+    # Start with current indices, in the concat representation of columns
+    pcols_indices = np.arange(0, halfN, dtype=np.int32)
+    qcols_indices = np.arange(halfN, N, dtype=np.int32)
+    # First sorting permutation correction.
+    rotset_permute_mask = rotset[:, 0] < rotset[:, 1]
+    pcols_indices, qcols_indices = permute_pq_indices(pcols_indices, qcols_indices, rotset_permute_mask)
+
+    # Rotation of columns between tiles (see Jacobi alg.)
+    # Roughtly: pcols move to the right, qcols to the left.
+    pcols_indices_new = np.concatenate([pcols_indices[0:1], qcols_indices[0:1], pcols_indices[1:-1]])
+    qcols_indices_new = np.concatenate([qcols_indices[1:], pcols_indices[-1:]])
+    pcols_indices, qcols_indices = pcols_indices_new, qcols_indices_new
+    assert len(pcols_indices_new) == halfN
+    assert len(qcols_indices_new) == halfN
+
+    # Second sorting permutation correction, using the next rotation set.
+    rotset = jacobi_next_rotation_set(rotset)
+    rotset_permute_mask = rotset[:, 0] < rotset[:, 1]
+    pcols_indices, qcols_indices = permute_pq_indices(pcols_indices, qcols_indices, rotset_permute_mask)
+
     # Move columns around + re-split between pcols and qcols.
-    all_cols_updated = tile_gather(all_cols, all_indices, all_cols.tiles)
+    all_indices = np.concatenate([pcols_indices, qcols_indices])
+    all_cols_updated = tile_gather(all_cols, all_indices.tolist(), all_cols.tiles)
     return all_cols_updated[:halfN], all_cols_updated[halfN:]
 
 

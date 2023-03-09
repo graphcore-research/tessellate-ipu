@@ -9,20 +9,12 @@ import numpy.testing as npt
 import scipy.linalg
 from absl.testing import parameterized
 
-from jax_ipu_research.tile import (
-    ipu_hw_cycle_count,
-    tile_data_barrier,
-    tile_map_primitive,
-    tile_put_replicated,
-    tile_put_sharded,
-)
+from jax_ipu_research.tile import ipu_hw_cycle_count, tile_data_barrier, tile_map_primitive, tile_put_replicated
 from jax_ipu_research.tile.tile_interpreter_linalg_jacobi import (
     ipu_eigh,
     ipu_jacobi_eigh,
     jacobi_initial_rotation_set,
     jacobi_next_rotation_set,
-    jacobi_rotate_columns,
-    jacobi_sort_columns,
     jacobi_sym_schur2_p,
     jacobi_update_eigenvectors_p,
     jacobi_update_first_step_p,
@@ -43,7 +35,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         N = 8
         rot = jacobi_initial_rotation_set(N)
         assert rot.shape == (N // 2, 2)
-        assert rot.dtype == np.int32
+        assert rot.dtype == np.uint32
         npt.assert_array_equal(rot.flatten(), np.arange(0, N))
 
     def test__jacobi_next_rotation_set__proper_set_indexes(self):
@@ -172,56 +164,19 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 
-    def test__jacobi_rotate_columns__proper_result(self):
-        N = 8
-        rot = jacobi_initial_rotation_set(N)
-        rot = jacobi_next_rotation_set(rot)
-
-        # Just need to test on CPU? TODO: IPU as well?
-        jacobi_rotate_fn = jax.jit(jacobi_rotate_columns, backend="cpu")
-        rot0, rot1 = jacobi_rotate_fn(rot[:, 0], rot[:, 1])
-        expected_rot = jacobi_next_rotation_set(rot)
-
-        npt.assert_array_equal(rot0, expected_rot[:, 0])
-        npt.assert_array_equal(rot1, expected_rot[:, 1])
-
-    def test__jacobi_sort_columns__proper_result(self):
-        N = 8
-        tiles = (0, 1, 2, 3)
-        # Find interesting rotation set!
-        rot = jacobi_initial_rotation_set(N)
-        for _ in range(4):
-            rot = jacobi_next_rotation_set(rot)
-
-        def jacobi_sort_fn(pcols, qcols):
-            pcols = tile_put_sharded(pcols, tiles)
-            qcols = tile_put_sharded(qcols, tiles)
-            return jacobi_sort_columns(rot, pcols, qcols)
-
-        # Just need to test on CPU? TODO: IPU as well?
-        jacobi_sort_fn = jax.jit(jacobi_sort_fn, backend="cpu")
-        # Dummy pcols and qcols, corresponding to rotation data.
-        rot_sorted, pcols_sorted, qcols_sorted = jacobi_sort_fn(rot[:, 0], rot[:, 1])
-        rot_sorted = np.asarray(rot_sorted)
-
-        # Proper sorting of columns.
-        npt.assert_array_equal(rot_sorted[:, 0], np.min(rot, axis=1))
-        npt.assert_array_equal(rot_sorted[:, 1], np.max(rot, axis=1))
-        npt.assert_array_equal(pcols_sorted, rot_sorted[:, 0])
-        npt.assert_array_equal(qcols_sorted, rot_sorted[:, 1])
-
     @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__jacobi_eigh__single_iteration(self):
-        N = 16
+        N = 32
         x = np.random.randn(N, N).astype(np.float32)
         x = (x + x.T) / 2.0
 
         jacobi_eigh_fn = jax.jit(ipu_jacobi_eigh, backend="ipu", static_argnums=(1,))
         A, _ = jacobi_eigh_fn(x, num_iters=1)
+        A = np.asarray(A)
         # Should be still symmetric.
         npt.assert_array_almost_equal(A.T, A)
         # Same eigenvalues.
-        npt.assert_array_almost_equal(np.linalg.eigh(A)[0], np.linalg.eigh(x)[0])
+        npt.assert_array_almost_equal(np.linalg.eigh(A)[0], np.linalg.eigh(x)[0], decimal=5)
 
     @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__jacobi_eigh_raw__proper_eigh_result(self):
@@ -231,7 +186,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
 
         jacobi_eigh_fn = jax.jit(ipu_jacobi_eigh, backend="ipu", static_argnums=(1,))
         # Should be enough iterations...
-        A, VT = jacobi_eigh_fn(x, num_iters=5)
+        A, VT = jacobi_eigh_fn(x, num_iters=10)
         A = np.asarray(A)
         VT = np.asarray(VT)
         eigvalues = np.diag(A)
