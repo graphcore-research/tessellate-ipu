@@ -1,4 +1,4 @@
-chex
+chex == 0.1.6
 cppimport
 jax >= 0.3.16
 jax_ipu_addons
