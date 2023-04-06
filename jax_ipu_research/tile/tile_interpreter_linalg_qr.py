@@ -24,7 +24,7 @@ dot_product1d_p = create_ipu_tile_primitive(
     outputs={"partials": ShapedArray((12,), dtype=np.float32)},
     constants={
         "worker_offsets": lambda inavals, *_: make_ipu_vector1d_worker_offsets(
-            inavals[0].size, vector_size=2, wdtype=np.uint16
+            inavals[0].size, vector_size=2, num_workers=6, wdtype=np.uint16
         )
     },
     # tmp_space=ShapedArray((12,), dtype=np.float32),
@@ -43,7 +43,7 @@ qr_correction_vector_p = create_ipu_tile_primitive(
     perf_estimate=1000,
 )
 
-"""Vertex QR HouseHolder performing row inplace update: x -= scale[0] @ v
+"""Vertex QR HouseHolder performing row inplace update: x -= scale1[0] * scale2[0] * v
 """
 qr_householder_row_update_p = create_ipu_tile_primitive(
     "qr_householder_row_update",

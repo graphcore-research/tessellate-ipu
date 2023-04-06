@@ -24,6 +24,8 @@
 // #define ALWAYS_INLINE __attribute__((always_inline))
 #define ALWAYS_INLINE inline
 
+#ifdef __IPU__
+
 /**
  * @brief Efficient division by 6, on IPU hardware. Up to 98,304.
  */
@@ -69,3 +71,100 @@ ALWAYS_INLINE float ld32(const T* address, unsigned offset) {
       :);
   return result;
 }
+
+struct __ipu_and_ipumodel_tas {
+  void put(float v) { __builtin_ipu_put_tas(v); }
+  float2 f32v2axpy(float2 const& x, float2 const& y) {
+    return __builtin_ipu_f32v2axpy(x, y);
+  }
+};
+
+#else
+
+#include <limits>
+
+namespace ipu {
+// Implementations of IPU intrinsics for IPUModel
+
+// https://docs.graphcore.ai/projects/poplar-api/en/latest/doxygen/namespaceipu.html#aa1a33d2be82a6b73549badf896cfd88e
+template <class T>
+void store_postinc(T** a, T const& v, int i) {
+  **a = v;
+  (*a) += i;
+}
+
+// https://docs.graphcore.ai/projects/poplar-api/en/latest/doxygen/namespaceipu.html#acb144a365e4027998954ee1e9d98e0d3
+template <class T>
+T load_postinc(T const** a, int i) {
+  T const* p = *a;
+  (*a) += i;
+  return *p;
+}
+
+// https://docs.graphcore.ai/projects/poplar-api/en/latest/doxygen/namespaceipu.html#a2a81ec4b6956ea14fe230a137178ff48
+template <class T, size_t N>
+std::array<T, N> fma(std::array<T, N> const& x, std::array<T, N> const& y,
+                     std::array<T, N> const& z) {
+  std::array<T, N> ret = z;
+  for (size_t i = 0; i < N; ++i) ret[i] += x[i] * y[i];
+  return ret;
+}
+
+}  // namespace ipu
+
+// Reflect IPU's AXPY semantics in a way that is IPUModel compatible
+// IPU-only usage:
+//   __builtin_ipu_put_tas(v);
+//   z_prev = __builtin_ipu_f32v2axpy(x, y)
+//
+// IPUModel-compatible usage:
+//   __ipu_and_ipumodel_tas tas;
+//   tas.put(v);
+//   z_prev = tas.f32v2axpy(x, y)
+//
+// https://docs.graphcore.ai/projects/poplar-api/en/latest/ipu_intrinsics/ipu_builtins.html#_CPPv423__builtin_ipu_f32v2axpy6float26float2
+struct __ipu_and_ipumodel_tas {
+  float tas;
+  float2 prev;
+
+  __ipu_and_ipumodel_tas() : tas{0}, prev{0, 0} {}
+
+  void put(float v) { tas = v; }
+
+  float2 f32v2axpy(float2 const& x, float2 const& y) {
+    const auto res = prev;
+    prev = float2{
+        tas * x[0] + y[0],
+        tas * x[1] + y[1],
+    };
+    return res;
+  }
+};
+
+// And give useful error messages when people port from IPU to IPUModel, e.g.
+/* clang-format off */ // need these error messages on one line
+/*
+/workspaces/jax-ipu-research/jax_ipu_research/tile/vertex/intrinsics_utils.hpp:166:3: error: static_assert failed due to requirement '__ipu_false<std::array<float, 2>>()': *** Replace __builtin_ipu_f32v2axpy with __ipu_and_ipumodel_tas for TAS handling on IPUModel.
+  static_assert(__ipu_false<T>(), "*** Replace __builtin_ipu_f32v2axpy with __ipu_and_ipumodel_tas for TAS handling on IPUModel.");
+  ^             ~~~~~~~~~~~~~~~~
+/workspaces/jax-ipu-research/jax_ipu_research/tile/vertex/tile_qr_vertex.cpp:231:12: note: in instantiation of function template specialization '__builtin_ipu_f32v2axpy<std::array<float, 2>>' requested here
+    rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
+*/
+template <typename T>
+constexpr bool __ipu_false() {
+  return !std::is_same<T, T>::value;
+}
+
+template <typename T>
+void __builtin_ipu_put_tas(T v) {
+  static_assert(__ipu_false<T>(), "*** Replace __builtin_ipu_put_tas with __ipu_and_ipumodel_tas for TAS handling on IPUModel.");
+}
+
+template <typename T>
+T __builtin_ipu_f32v2axpy(T const& x, T const& y) {
+  static_assert(__ipu_false<T>(), "*** Replace __builtin_ipu_f32v2axpy with __ipu_and_ipumodel_tas for TAS handling on IPUModel.");
+  return T{};
+}
+// clang-format on
+
+#endif

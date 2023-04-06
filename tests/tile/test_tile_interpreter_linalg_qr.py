@@ -7,12 +7,13 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from jax_ipu_research.tile import (  # tile_put_sharded,
+from jax_ipu_research.tile import (
     TileShardedArray,
     ipu_hw_cycle_count,
     tile_data_barrier,
     tile_map_primitive,
     tile_put_replicated,
+    tile_put_sharded,
 )
 from jax_ipu_research.tile.tile_interpreter_linalg_qr import (
     dot_product1d_p,
@@ -86,7 +87,6 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
     #     npt.assert_array_almost_equal(np.abs(Q_ipu), np.abs(Q_cpu))
     #     npt.assert_array_almost_equal(np.abs(R_ipu), np.abs(R_cpu))
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     @parameterized.parameters(
         {"N": 16, "M": 16},
         {"N": 16, "M": 12},
@@ -96,22 +96,27 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         tiles = (0,)
         x = np.random.randn(N).astype(np.float32)
         v = np.random.randn(M).astype(np.float32)
-        w = np.random.randn(1).astype(np.float32)
+        w = 0.5 + np.random.rand(1).astype(np.float32)
+
+        start_idx = N - M
 
         def qr_householder_update_fn(x, v, w):
             x = tile_put_replicated(x, tiles)
             v = tile_put_replicated(v, tiles)
             w = tile_put_replicated(w, tiles)
             # Two scaling factors passed.
-            return tile_map_primitive(qr_householder_row_update_p, x, v, w, w, start_idx=N - M)
+            return tile_map_primitive(qr_householder_row_update_p, x, v, w, w, start_idx=start_idx)
 
         qr_householder_update_fn_ipu = jax.jit(qr_householder_update_fn, backend="ipu")
-        x_ipu = qr_householder_update_fn_ipu(x, v, w)
+        ret_ipu = qr_householder_update_fn_ipu(x, v, w)
 
-        assert isinstance(x_ipu, TileShardedArray)
-        assert x_ipu.tile_shape == x.shape
-        npt.assert_array_almost_equal(x_ipu.array[0, : N - M], x[: N - M])
-        npt.assert_array_almost_equal(x_ipu.array[0, N - M :], x[N - M :] - w[0] * w[0] * v)
+        ret_cpu = x.copy()
+        ret_cpu[start_idx:] = x[start_idx:] - w[0] * w[0] * v
+
+        assert isinstance(ret_ipu, TileShardedArray)
+        assert ret_ipu.tile_shape == ret_cpu.shape
+        npt.assert_array_almost_equal(ret_ipu.array[0, :start_idx], ret_cpu[:start_idx])
+        npt.assert_array_almost_equal(ret_ipu.array[0, start_idx:], ret_cpu[start_idx:])
 
     @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__qr_householder_row_update_p__benchmark_performance(self):
@@ -245,6 +250,37 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         # timing = qr_cycle_count / ipu_frequency
         # print("CYCLE COUNT, TIMING:", qr_cycle_count, timing * 1000)
         # assert False
+
+    @parameterized.parameters({"dtype": np.float32})
+    def test__dot_product1d__proper_result(self, dtype):
+        IPU_NUM_THREADS = 6
+        IPU_SIMD_WIDTH = 8 // dtype(0).nbytes
+        WORKER_SIZE = IPU_NUM_THREADS * IPU_SIMD_WIDTH
+        # Array size doesn't need to be an exact multiple of WORKER_SIZE
+        # but making it so to simplify numpy comparison
+        N = 16 * WORKER_SIZE
+        # N = 128 * 6
+        tiles = (0, 1, 2)
+        T = len(tiles)
+        x = np.random.randn(T, N).astype(dtype)
+        y = np.random.randn(T, N).astype(dtype)
+
+        def dot_product1d_fn(x, y):
+            # Shard inputs, and wait!
+            x = tile_put_sharded(x, tiles)
+            y = tile_put_sharded(y, tiles)
+            x, y = tile_data_barrier(x, y)
+            r = tile_map_primitive(dot_product1d_p, x, y)
+            return r
+
+        dot_product1d_fn = jax.jit(dot_product1d_fn, backend="ipu")
+        res = dot_product1d_fn(x, y)
+        res = np.asarray(res)
+        assert res.shape == (T, WORKER_SIZE)
+        np_res = [np.dot(x[i], y[i]) for i in range(T)]
+        ipu_res = np.sum(res, 1)
+        # NOTE: accumulation accuracy changing a bit depending on the strategy.
+        npt.assert_array_almost_equal(ipu_res, np_res, decimal=5)
 
     @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__dot_product1d__benchmark(self):

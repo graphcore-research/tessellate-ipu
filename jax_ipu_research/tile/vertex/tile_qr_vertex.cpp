@@ -6,8 +6,10 @@
 
 using namespace poplar;
 
-// popc -O2 jax_ipu_research/tile/vertex/tile_qr_vertex.cpp -o
-// jax_ipu_research/tile/vertex/tile_qr_vertex.gp
+/* popc -O2 -I jax_ipu_research/tile/vertex\
+     jax_ipu_research/tile/vertex/tile_qr_vertex.cpp \
+     -o jax_ipu_research/tile/vertex/tile_qr_vertex.gp
+*/
 
 class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex
     : public MultiVertex {
@@ -17,8 +19,12 @@ class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex
   // Using `uint16` seems to be generating more efficient loops?
   using IndexType = unsigned short;
 
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> x;  // (N,) x vector
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> y;  // (N,) y vector
+  static constexpr size_t MIN_ALIGN = 8;
+
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
+      x;  // (N,) x vector
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
+      y;  // (N,) y vector
 
   Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
       worker_offsets;  // (7,) number threads + 1.
@@ -45,8 +51,9 @@ class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex
       // TODO: use ld2x64pace + tapack instructions?
       const T2 xin = ipu::load_postinc(&ptr_inxdata_f2, 1);
       const T2 yin = ipu::load_postinc(&ptr_inydata_f2, 1);
-      // popc seems to recognize this pattern and optimize it.
-      partial += xin * yin;
+      // popc would recognize "partial += xin * yin" and optimize,
+      // but not on IPUModel
+      partial = ipu::fma(xin, yin, partial);
     }
     ipu::store_postinc(&ptr_tmp_partials_f2, partial, 1);
     return true;
@@ -107,7 +114,7 @@ class QRCorrectionVectorVertex : public MultiVertex {
     // Copy Rcol data and accumulate squared norm.
     while (ptr_outdata_f2 < ptr_outdata_end_f2) {
       const float2 v = ipu::load_postinc(&ptr_indata_f2, num_workers);
-      partials_f2 += v * v;
+      partials_f2 = ipu::fma(v, v, partials_f2);
       ipu::store_postinc(&ptr_outdata_f2, v, num_workers);
     }
     T partial = partials_f2[0] + partials_f2[1];
@@ -146,6 +153,8 @@ class QRCorrectionVectorVertex : public MultiVertex {
   }
 };
 
+#include <print.h>
+
 float QRCorrectionVectorVertex::shared_partial_sqnorms[6] = {-1};
 
 /**
@@ -153,7 +162,7 @@ float QRCorrectionVectorVertex::shared_partial_sqnorms[6] = {-1};
  * algorithm. NOTE: the vertex is only updating the sub-slice of x corresponding
  * to v.
  *
- * More specifically: x[-M:] -= w[0] * v
+ * More specifically: x[end-len(v)+i] -= scale1[0] * scale2[0] * v[i]
  *
  * NOTE: poplar::constraint here to make sure x and v are not part of the same
  * memory bank, allowing simultaneous loads (see `ld2x64pace` instruction).
@@ -192,7 +201,8 @@ class [[poplar::constraint(
 
     // Set the $TAS register with the proper scale.
     const T s = -scale1[0] * scale2[0];
-    __builtin_ipu_put_tas(s);
+    __ipu_and_ipumodel_tas tas;
+    tas.put(s);
 
     // Nothing to do in this worker thread.
     if (wstart == wend) {
@@ -211,16 +221,17 @@ class [[poplar::constraint(
     vin = ipu::load_postinc(&ptr_vdata_f2, ptr_step);
     // TODO: use ld2x64pace + tapack instructions.
     for (IndexType idx = 1; idx != wsize; ++idx) {
-      rtmp = __builtin_ipu_f32v2axpy(xin, vin);
+      rtmp = tas.f32v2axpy(vin, xin);
       // Grouping here seems to help the compiler optimising loads?
       xin = ipu::load_postinc(&ptr_inxdata_f2, ptr_step);
       vin = ipu::load_postinc(&ptr_vdata_f2, ptr_step);
-      rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
+      rout = tas.f32v2axpy(rtmp, rtmp);
       ipu::store_postinc(&ptr_outxdata_f2, rout, ptr_step);
     }
     // Finish the loop, getting the last computation.
-    rtmp = __builtin_ipu_f32v2axpy(xin, vin);
-    rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
+    rtmp = tas.f32v2axpy(vin, xin);
+    rout = tas.f32v2axpy(rtmp, rtmp);
+    printf("                         -> %g %g\n", rout[0], rout[1]);
     ipu::store_postinc(&ptr_outxdata_f2, rout, ptr_step);
 
     return true;
