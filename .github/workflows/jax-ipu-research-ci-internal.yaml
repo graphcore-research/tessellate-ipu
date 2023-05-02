@@ -15,7 +15,7 @@ on:
 
 jobs:
   lint_and_typecheck:
-    runs-on: [self-hosted, Linux, X64, 20.04, Ubuntu]
+    runs-on: [self-hosted, Linux, X64, 20.04, Ubuntu, intel]
     timeout-minutes: 10
     steps:
       - name: Cancel previous
@@ -32,7 +32,7 @@ jobs:
 
   # JAX unit tests using IPU model
   jax_unit_tests_ipu_model:
-    runs-on: [self-hosted, Linux, X64, 20.04, Ubuntu]
+    runs-on: [self-hosted, Linux, X64, 20.04, Ubuntu, amd]
     container: graphcore/pytorch:3.1.0-ubuntu-20.04
     timeout-minutes: 10
     steps:
@@ -50,8 +50,7 @@ jobs:
       - name: Install JAX for IPU
         run: |
           pip3 install --default-timeout=100 -U numpy==1.23.5 scipy etils pytest
-          pip3 install https://github.com/graphcore-research/jax-experimental/releases/latest/download/jaxlib-0.3.15-cp38-none-manylinux2014_x86_64.whl
-          pip3 install https://github.com/graphcore-research/jax-experimental/releases/latest/download/jax-0.3.16-py3-none-any.whl
+          pip3 install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk310 -f https://graphcore-research.github.io/jax-experimental/wheels.html
           pip3 install .github/dependencies/jax_ipu_addons-0.0.1-py2.py3-none-any.whl
       # Install other dependencies.
       - name: Install dependencies

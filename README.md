@@ -4,7 +4,12 @@ JAX IPU **research** addons: JAX custom primitives and methods maintained by Gra
 
 ## Installation
 
-As a pure Python repo, JAX IPU research can be directly installed using `pip`:
+This package requires JAX IPU experimental to be installed:
+```bash
+pip install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk310 -f https://graphcore-research.github.io/jax-experimental/wheels.html
+```
+
+As a pure Python repo, JAX IPU research can then be directly installed using `pip`:
 ```bash
 pip install git+ssh://git@github.com/graphcore/jax-ipu-research.git@main
 ```
