@@ -85,7 +85,7 @@ register_ipu_tile_primitive(hw_cycle_count_p, hw_cycle_count_tile_translation_ip
 def ipu_hw_cycle_count(arg: TileShardedArray, sync: bool = False) -> Tuple[TileShardedArray, TileShardedArray]:
     """Get IPU hardware cycle count, with a given argument acting as barrier.
 
-    See XLA optimization barrier for more information on the expected behaviour of a barrier.
+    See XLA/MLIR optimization barrier for more information on the expected behaviour of a barrier.
     """
     assert isinstance(arg, TileShardedArray)
     return tile_map_primitive(hw_cycle_count_p, arg, sync=sync)  # type:ignore

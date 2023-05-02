@@ -7,8 +7,7 @@ import re
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
-from jax.core import Primitive
-from jax.interpreters.xla import ShapedArray
+from jax.core import Primitive, ShapedArray
 
 from .tile_array import TileShardedArray
 from .tile_common_utils import make_ipu_shaped_array

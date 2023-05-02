@@ -4,7 +4,8 @@ from typing import Any, Sequence, Tuple, Union
 
 import chex
 import numpy as np
-from jax.interpreters.xla import DeviceArray, ShapedArray
+from jax.core import ShapedArray
+from jax.interpreters.xla import DeviceArray
 from jax.tree_util import register_pytree_node_class
 
 from jax_ipu_experimental_addons.utils import ArrayLike, DTypeLike, Shape

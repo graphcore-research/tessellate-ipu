@@ -1,7 +1,7 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import os.path
 
-from jax_ipu_addons.utils import cppimport_append_include_dirs
+from jax.ipu.primitive import cppimport_append_include_dirs
 
 from jax_ipu_experimental_addons.utils import env_cpath_append
 

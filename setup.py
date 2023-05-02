@@ -38,7 +38,7 @@ setuptools.setup(
     name=PACKAGE_NAME,
     author="Graphcore",
     version=__version__,
-    description="JAX IPU research addons.",
+    description="JAX IPU experimetal addons.",
     long_description=long_description,
     packages=setuptools.find_packages(),
     long_description_content_type="text/markdown",

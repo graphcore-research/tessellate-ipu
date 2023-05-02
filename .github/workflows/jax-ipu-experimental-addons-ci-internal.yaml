@@ -51,7 +51,6 @@ jobs:
         run: |
           pip3 install --default-timeout=100 -U numpy==1.23.5 scipy etils pytest
           pip3 install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk310 -f https://graphcore-research.github.io/jax-experimental/wheels.html
-          pip3 install .github/dependencies/jax_ipu_addons-0.0.1-py2.py3-none-any.whl
       # Install other dependencies.
       - name: Install dependencies
         run: |
@@ -63,7 +62,7 @@ jobs:
           python3 setup.py bdist_wheel --universal
           pip3 install dist/*.whl
       # Run repository unit tests.
-      - name: Run JAX IPU research unit tests
+      - name: Run JAX IPU experimental addons unit tests
         run: |
           JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=8 pytest --tb=short -v --log-cli-level=INFO ./tests/
       # Dockerized workflow known to create issues with self-hosted servers.

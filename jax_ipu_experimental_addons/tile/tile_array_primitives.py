@@ -2,19 +2,17 @@
 import base64
 import json
 import os
-from typing import Dict, Sequence, Tuple, Union
+from typing import Any, Dict, Sequence, Tuple, Union
 
 import cppimport
 import jax.lax
 import jax.numpy as jnp
 import numpy as np
 from jax import core
-from jax.interpreters import mlir, xla
-from jax.interpreters.mlir import LoweringRuleContext, ir
-from jax.interpreters.xla import ShapedArray
-from jax.lib import xla_client
-from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
-from jax_ipu_addons.utils import xla_shape_to_aval
+from jax.core import ShapedArray
+from jax.interpreters import mlir
+from jax.interpreters.mlir import LoweringRuleContext, ir, mhlo
+from jax.ipu.primitive import ipu_mlir_lowering_custom_primitive
 
 from jax_ipu_experimental_addons.utils import DType
 
@@ -73,33 +71,29 @@ def tile_put_sharded_prim_abstract_eval(xs, tiles) -> ShapedArray:
     return xs
 
 
-def tile_put_sharded_prim_xla_translation_default(ctx, xc, tiles):
-    """`tile_put_sharded_prim` default XLA translation, for CPU/GPU backends: no-op"""
-    return xc
+def tile_put_sharded_prim_mlir_lowering_default(ctx, xc, tiles):
+    """`tile_put_sharded_prim` default MLIR lowering, for CPU/GPU backends: no-op"""
+    return (xc,)
 
 
-def tile_put_sharded_prim_xla_translation_ipu(ctx, xc, tiles):
-    """`tile_put_sharded_prim` IPU backend XLA translation, as a custom primitive."""
-    # TODO: Check the IPU tile out of the memory (roughly)
+def tile_put_sharded_prim_mlir_lowering_ipu(ctx: LoweringRuleContext, xc: ir.Value, tiles: Any) -> Sequence[ir.Value]:
+    """`tile_put_sharded_prim` IPU backend MLIR lowering, as a custom primitive."""
     inputs = [xc]
     # Passing the tiles collections as a raw attributes to the C++ implementation.
     raw_attributes = make_tiles_raw_attributes(tiles)
-    outputs_aval = [xla_shape_to_aval(ctx.get_shape(xc))]
     # TODO: Add Github permanent link to C++.
-    outputs = ipu_xla_custom_primitive_call(
-        TilePutShardedPrimitive, ctx, inputs, outputs_aval, attributes=raw_attributes
-    )
-    return outputs[0]
+    outputs = ipu_mlir_lowering_custom_primitive(TilePutShardedPrimitive, ctx, inputs, opaque_attributes=raw_attributes)
+    return outputs
 
 
 # Register the primal implementation with JAX
 tile_put_sharded_prim_p.def_impl(tile_put_sharded_prim_impl)
 # Register the abstract evaluation with JAX
 tile_put_sharded_prim_p.def_abstract_eval(tile_put_sharded_prim_abstract_eval)
-# Register XLA translation, for different backends.
-xla.backend_specific_translations["ipu"][tile_put_sharded_prim_p] = tile_put_sharded_prim_xla_translation_ipu
-for b in default_backends:
-    xla.backend_specific_translations[b][tile_put_sharded_prim_p] = tile_put_sharded_prim_xla_translation_default
+# Register specific MLIR lowering for IPU.
+mlir.register_lowering(tile_put_sharded_prim_p, tile_put_sharded_prim_mlir_lowering_ipu, platform="ipu")
+# Register MLIR lowering, for other backends.
+mlir.register_lowering(tile_put_sharded_prim_p, tile_put_sharded_prim_mlir_lowering_default)
 
 
 def tile_put_replicated_prim(x, tiles):
@@ -132,27 +126,28 @@ def tile_put_replicated_prim_mlir_translation_default(
     return tile_replicated_lower_fn(ctx, *args)
 
 
-def tile_put_replicated_prim_xla_translation_ipu(ctx, xc, tiles):
-    """`tile_put_replicated_prim` IPU backend XLA translation, as a custom primitive."""
+def tile_put_replicated_prim_mlir_lowering_ipu(
+    ctx: LoweringRuleContext, xc: ir.Value, tiles: Any
+) -> Sequence[ir.Value]:
+    """`tile_put_replicated_prim` IPU backend MLIR lowering, as a custom primitive."""
     inputs = [xc]
     # Passing the tiles collections as a raw attributes to the C++ implementation.
     raw_attributes = make_tiles_raw_attributes(tiles)
-    outputs_aval = [tile_put_replicated_prim_abstract_eval(xla_shape_to_aval(ctx.get_shape(xc)), tiles)]
-    outputs = ipu_xla_custom_primitive_call(
-        TilePutReplicatedPrimitive, ctx, inputs, outputs_aval, attributes=raw_attributes
+    # outputs_aval = [tile_put_replicated_prim_abstract_eval(xla_shape_to_aval(ctx.get_shape(xc)), tiles)]
+    outputs = ipu_mlir_lowering_custom_primitive(
+        TilePutReplicatedPrimitive, ctx, inputs, opaque_attributes=raw_attributes
     )
-    return outputs[0]
+    return outputs
 
 
 # Register the primal implementation with JAX
 tile_put_replicated_prim_p.def_impl(tile_put_replicated_prim_impl)
 # Register the abstract evaluation with JAX
 tile_put_replicated_prim_p.def_abstract_eval(tile_put_replicated_prim_abstract_eval)
-# Register XLA translation, for different backends.
-xla.backend_specific_translations["ipu"][tile_put_replicated_prim_p] = tile_put_replicated_prim_xla_translation_ipu
+# Register specific MLIR lowering for IPU.
+mlir.register_lowering(tile_put_replicated_prim_p, tile_put_replicated_prim_mlir_lowering_ipu, platform="ipu")
 # Register MLIR translation for other backends.
-for b in default_backends:
-    mlir.register_lowering(tile_put_replicated_prim_p, tile_put_replicated_prim_mlir_translation_default, b)
+mlir.register_lowering(tile_put_replicated_prim_p, tile_put_replicated_prim_mlir_translation_default)
 
 
 def tile_gather_prim(x, previous_tiles, indices, tiles):
@@ -170,33 +165,32 @@ def tile_gather_prim_abstract_eval(xs, previous_tiles, indices, tiles) -> Shaped
     return ShapedArray(outshape, xs.dtype, xs.weak_type)
 
 
-def tile_gather_prim_xla_translation_default(ctx, xc, previous_tiles, indices, tiles):
-    """`tile_gather_prim` default XLA translation, for CPU/GPU backends: simple JAX static gather"""
+def tile_gather_prim_mlir_lowering_default(ctx, xc, previous_tiles, indices, tiles):
+    """`tile_gather_prim` default MLIR lowering, for CPU/GPU backends: simple JAX static gather"""
     # TODO: implementation from JAX?
     raise NotImplementedError()
 
 
-def tile_gather_prim_xla_translation_ipu(ctx, xc, previous_tiles, indices, tiles):
-    """`tile_gather_prim` IPU backend XLA translation, as a custom primitive."""
+def tile_gather_prim_mlir_lowering_ipu(
+    ctx: LoweringRuleContext, xc: ir.Value, previous_tiles: Any, indices: Any, tiles: Any
+) -> Sequence[ir.Value]:
+    """`tile_gather_prim` IPU backend MLIR lowering, as a custom primitive."""
     inputs = [xc]
-    # Til gather parameters, to pass to the XLA op.
+    # Til gather parameters, to pass to the XLA/HLO op.
     gather_params = TileGatherParams(previous_tiles, indices, tiles)
     raw_attributes = gather_params.to_json_str()
-    outputs_aval = [
-        tile_gather_prim_abstract_eval(xla_shape_to_aval(ctx.get_shape(xc)), previous_tiles, indices, tiles)
-    ]
-    outputs = ipu_xla_custom_primitive_call(TileGatherPrimitive, ctx, inputs, outputs_aval, attributes=raw_attributes)
-    return outputs[0]
+    outputs = ipu_mlir_lowering_custom_primitive(TileGatherPrimitive, ctx, inputs, opaque_attributes=raw_attributes)
+    return outputs
 
 
 # Register the primal implementation with JAX
 tile_gather_prim_p.def_impl(tile_gather_prim_impl)
 # Register the abstract evaluation with JAX
 tile_gather_prim_p.def_abstract_eval(tile_gather_prim_abstract_eval)
-# Register XLA translation, for different backends.
-xla.backend_specific_translations["ipu"][tile_gather_prim_p] = tile_gather_prim_xla_translation_ipu
-for b in default_backends:
-    xla.backend_specific_translations[b][tile_gather_prim_p] = tile_gather_prim_xla_translation_default
+# Register specific MLIR lowering for IPU.
+mlir.register_lowering(tile_gather_prim_p, tile_gather_prim_mlir_lowering_ipu, platform="ipu")
+# Register MLIR lowering, for other backends.
+mlir.register_lowering(tile_gather_prim_p, tile_gather_prim_mlir_lowering_default)
 
 
 def tile_data_barrier_prim(inputs, inputs_tiles):
@@ -211,10 +205,10 @@ def tile_data_barrier_prim_abstract_eval(*args: ShapedArray, **params) -> Tuple[
     return args
 
 
-def tile_data_barrier_prim_xla_translation_default(ctx, *args, **params):
-    """`tile_data_barrier_prim` default XLA translation, for CPU/GPU backends."""
+def tile_data_barrier_prim_mlir_lowering_default(ctx, *args, **params):
+    """`tile_data_barrier_prim` default MLIR lowering, for CPU/GPU backends."""
     # Translate into standard optimization barrier on CPU/GPU/TPU.
-    return xla_client.ops.OptimizationBarrier(xla_client.ops.Tuple(ctx, args))
+    return mhlo.OptimizationBarrierOp([v.type for v in args], args).results
 
 
 _tile_barrier_dtype_mapping: Dict[DType, DType] = {
@@ -234,12 +228,14 @@ def tile_data_barrier_refdtype(dtype: DType) -> DType:
     return _tile_barrier_dtype_mapping[dtype]
 
 
-def tile_data_barrier_prim_xla_translation_ipu(ctx, *args, **params):
-    """`tile_data_barrier_prim` IPU backend XLA translation, as a custom primitive."""
+def tile_data_barrier_prim_mlir_lowering_ipu(
+    ctx: LoweringRuleContext, *args: ir.Value, **params: Any
+) -> Sequence[ir.Value]:
+    """`tile_data_barrier_prim` IPU backend MLIR lowering, as a custom primitive."""
     from .tile_interpreter_primitives import make_ipu_vertex_name_templated
 
     inputs = list(args)
-    inputs_aval = [xla_shape_to_aval(ctx.get_shape(xc)) for xc in inputs]
+    inputs_aval = ctx.avals_in
     dtypes = list({aval.dtype for aval in inputs_aval})
     dtypes_size = {dt.itemsize for dt in dtypes}
     if len(dtypes_size) > 1:
@@ -254,17 +250,14 @@ def tile_data_barrier_prim_xla_translation_ipu(ctx, *args, **params):
     raw_attributes = barrier_params.to_json_str()
 
     gp_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "vertex", "tile_prim_vertex.cpp"))
-    outputs_aval = inputs_aval
-    outputs = ipu_xla_custom_primitive_call(
+    outputs = ipu_mlir_lowering_custom_primitive(
         TileDataBarrierPrimitive,
         ctx,
         inputs,
-        outputs_aval,
-        attributes=raw_attributes,
+        opaque_attributes=raw_attributes,
         ipu_gp_filename=gp_filename,
     )
-    # Re-construct the XLA tuple (TODO: clean this back & forth mess!)
-    return xla_client.ops.Tuple(ctx, outputs)
+    return outputs
 
 
 tile_data_barrier_prim_p.multiple_results = True
@@ -272,10 +265,10 @@ tile_data_barrier_prim_p.multiple_results = True
 tile_data_barrier_prim_p.def_impl(tile_data_barrier_prim_impl)
 # Register the abstract evaluation with JAX
 tile_data_barrier_prim_p.def_abstract_eval(tile_data_barrier_prim_abstract_eval)
-# Register XLA translation, for different backends.
-xla.backend_specific_translations["ipu"][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_ipu
-for b in default_backends:
-    xla.backend_specific_translations[b][tile_data_barrier_prim_p] = tile_data_barrier_prim_xla_translation_default
+# Register specific MLIR lowering for IPU.
+mlir.register_lowering(tile_data_barrier_prim_p, tile_data_barrier_prim_mlir_lowering_ipu, platform="ipu")
+# Register MLIR lowering, for other backends.
+mlir.register_lowering(tile_data_barrier_prim_p, tile_data_barrier_prim_mlir_lowering_default)
 
 
 def tile_constant_replicated_prim(data, tiles):
@@ -307,30 +300,27 @@ def tile_constant_replicated_prim_mlir_translation_default(
     return mlir._ndarray_constant_handler(replicated_data, canonicalize_types=False)
 
 
-def tile_constant_replicated_prim_xla_translation_ipu(ctx, dummy, data, tiles):
-    """`tile_constant_replicated_prim` IPU backend XLA translation, as a custom primitive."""
+def tile_constant_replicated_prim_mlir_lowering_ipu(
+    ctx: LoweringRuleContext, dummy: ir.Value, data: np.ndarray, tiles: Any
+) -> Sequence[ir.Value]:
+    """`tile_constant_replicated_prim` IPU backend MLIR lowering, as a custom primitive."""
     params = TileConstantParams(
         aval=make_ipu_shaped_array(data.shape, data.dtype), tiles=tiles, data=Base64Data(base64.b64encode(data))
     )
-    # IPU custom primtive XLA call.
-    outputs_aval = [tile_constant_replicated_prim_abstract_eval(dummy, ShapedArray(data.shape, data.dtype), tiles)]
     # TODO: remove `dummy` when bug with zero inputs fixed.
-    outputs = ipu_xla_custom_primitive_call(
-        TileConstantReplicatedPrimitive, ctx, [dummy], outputs_aval, attributes=params.to_json_str()
+    outputs = ipu_mlir_lowering_custom_primitive(
+        TileConstantReplicatedPrimitive, ctx, [dummy], opaque_attributes=params.to_json_str()
     )
-    return outputs[0]
+    return outputs
 
 
 # Primal + abstract evaluation same as `tile_put_replicated_prim`
 tile_constant_replicated_prim_p.def_impl(tile_constant_replicated_prim_impl)
 tile_constant_replicated_prim_p.def_abstract_eval(tile_constant_replicated_prim_abstract_eval)
-# Register XLA translation on IPU.
-xla.backend_specific_translations["ipu"][
-    tile_constant_replicated_prim_p
-] = tile_constant_replicated_prim_xla_translation_ipu
+# Register specific MLIR lowering for IPU.
+mlir.register_lowering(tile_constant_replicated_prim_p, tile_constant_replicated_prim_mlir_lowering_ipu, platform="ipu")
 # Register MLIR translation for other backends.
-for b in default_backends:
-    mlir.register_lowering(tile_constant_replicated_prim_p, tile_constant_replicated_prim_mlir_translation_default, b)
+mlir.register_lowering(tile_constant_replicated_prim_p, tile_constant_replicated_prim_mlir_translation_default)
 
 
 def tile_constant_sharded_prim(data, tiles):
@@ -358,25 +348,24 @@ def tile_constant_sharded_prim_mlir_translation_default(
     return mlir._ndarray_constant_handler(data, canonicalize_types=False)
 
 
-def tile_constant_sharded_prim_xla_translation_ipu(ctx, dummy, data, tiles):
-    """`tile_constant_sharded_prim` IPU backend XLA translation, as a custom primitive."""
+def tile_constant_sharded_prim_mlir_lowering_ipu(
+    ctx: LoweringRuleContext, dummy: ir.Value, data: np.ndarray, tiles: Any
+) -> Sequence[ir.Value]:
+    """`tile_constant_sharded_prim` IPU backend MLIR lowering, as a custom primitive."""
     params = TileConstantParams(
         aval=make_ipu_shaped_array(data.shape, data.dtype), tiles=tiles, data=Base64Data(base64.b64encode(data))
     )
-    # IPU custom primtive XLA call.
-    outputs_aval = [tile_constant_sharded_prim_abstract_eval(dummy, ShapedArray(data.shape, data.dtype), tiles)]
     # TODO: remove `dummy` when bug with zero inputs fixed.
-    outputs = ipu_xla_custom_primitive_call(
-        TileConstantShardedPrimitive, ctx, [dummy], outputs_aval, attributes=params.to_json_str()
+    outputs = ipu_mlir_lowering_custom_primitive(
+        TileConstantShardedPrimitive, ctx, [dummy], opaque_attributes=params.to_json_str()
     )
-    return outputs[0]
+    return outputs
 
 
 # Primal + abstract evaluation same as `tile_put_replicated_prim`
 tile_constant_sharded_prim_p.def_impl(tile_constant_sharded_prim_impl)
 tile_constant_sharded_prim_p.def_abstract_eval(tile_constant_sharded_prim_abstract_eval)
-# Register XLA translation on IPU.
-xla.backend_specific_translations["ipu"][tile_constant_sharded_prim_p] = tile_constant_sharded_prim_xla_translation_ipu
+# Register specific MLIR lowering for IPU.
+mlir.register_lowering(tile_constant_sharded_prim_p, tile_constant_sharded_prim_mlir_lowering_ipu, platform="ipu")
 # Register MLIR translation for other backends.
-for b in default_backends:
-    mlir.register_lowering(tile_constant_sharded_prim_p, tile_constant_sharded_prim_mlir_translation_default, b)
+mlir.register_lowering(tile_constant_sharded_prim_p, tile_constant_sharded_prim_mlir_translation_default)

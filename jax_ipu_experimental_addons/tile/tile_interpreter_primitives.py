@@ -8,17 +8,16 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 import cppimport
 import numpy as np
 from jax import core, vmap
-from jax.interpreters import mlir, xla
+from jax.core import ShapedArray
+from jax.interpreters import mlir
 from jax.interpreters.batching import primitive_batchers
 from jax.interpreters.mlir import LoweringRuleContext, ir
-from jax.interpreters.xla import ShapedArray
-from jax.lib import xla_client
-from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
+from jax.ipu.primitive import ipu_mlir_lowering_custom_primitive
 
 from jax_ipu_experimental_addons.utils import Array
 
 from .tile_array_primitives import Base64Data, IpuType
-from .tile_common_utils import from_ipu_type_to_numpy_dtype, from_numpy_dtype_to_ipu_type, get_ipu_type_name
+from .tile_common_utils import from_numpy_dtype_to_ipu_type, get_ipu_type_name
 
 # Pybind11 extension import (and compilation if necessary).
 # Explicit path is more robust to different `pip install` usages.
@@ -305,64 +304,46 @@ def tile_map_equation_call_mlir_translation_default(
     raise NotImplementedError(f"No implementation or batching provided for JAX primitive '{primitive}'.")
 
 
-def tile_map_equation_call_xla_translation_ipu(ctx, *xla_args, **params):
-    """`tile_map_equation_call` IPU backend XLA translation, as a custom primitive.
-
-    TODO: Move to MLIR translation.
+def tile_map_equation_call_mlir_lowering_ipu(
+    ctx: LoweringRuleContext, *args: ir.Value, **params: Any
+) -> Sequence[ir.Value]:
+    """`tile_map_equation_call` IPU backend MLIR lowering, as a custom primitive.
 
     Args:
-        ctx: XLA context
-        args: XLA operands
-        params: Additiona parameters/attributes to pass.
+        ctx: MLIR context
+        args: IR operands
+        params: Additional parameters/attributes to pass.
     """
-    from .tile_interpreter import get_ipu_tile_primitive_translation
-
-    pname, tiles, tile_map_eqn_json = get_tile_map_ipu_arguments(**params)
-    primitive, _ = get_ipu_tile_primitive_translation(pname)
-    num_tiles = len(tiles)
+    _, _, tile_map_eqn_json = get_tile_map_ipu_arguments(**params)
     # Tile map equation (serialized as json).
     tile_map_eqn = IpuTileMapEquation.from_json_str(tile_map_eqn_json)
-    # Outputs (sharded) abstract values.
-    outputs_aval = [
-        ShapedArray((num_tiles, *v.shape), from_ipu_type_to_numpy_dtype(v.dtype)) for v in tile_map_eqn.outputs_info
-    ]
     # Load optional vertex compiled file (or cpp)
     ipu_gp_filename: Optional[str] = None
     if len(tile_map_eqn.gp_filename) > 0:
         ipu_gp_filename = os.path.abspath(tile_map_eqn.gp_filename)
-    outputs = ipu_xla_custom_primitive_call(
+    outputs = ipu_mlir_lowering_custom_primitive(
         TileMapEquationCall,
         ctx,
-        xla_args,
-        outputs_aval,
-        attributes=tile_map_eqn_json,
+        args,
+        opaque_attributes=tile_map_eqn_json,
         ipu_gp_filename=ipu_gp_filename,
     )
-    if not primitive.multiple_results:
-        return outputs[0]
-    # Re-construct the XLA tuple (TODO: clean this back & forth mess!)
-    return xla_client.ops.Tuple(ctx, outputs)
+    # With MLIR lowering, always returns a tuple of results.
+    return outputs
 
 
 tile_map_equation_call_single_out_p.multiple_results = False
 tile_map_equation_call_multi_out_p.multiple_results = True
-# Register the primal implementation with JAX
-tile_map_equation_call_single_out_p.def_impl(tile_map_equation_call_impl)
-tile_map_equation_call_multi_out_p.def_impl(tile_map_equation_call_impl)
 # Register the abstract evaluation with JAX
 tile_map_equation_call_single_out_p.def_abstract_eval(tile_map_equation_call_abstract_eval)
 tile_map_equation_call_multi_out_p.def_abstract_eval(tile_map_equation_call_abstract_eval)
+# Register the primal implementation with JAX
+tile_map_equation_call_single_out_p.def_impl(tile_map_equation_call_impl)
+tile_map_equation_call_multi_out_p.def_impl(tile_map_equation_call_impl)
 
-# Register IPU XLA translation. TODO: move to MLIR.
-xla.backend_specific_translations["ipu"][
-    tile_map_equation_call_single_out_p
-] = tile_map_equation_call_xla_translation_ipu
-xla.backend_specific_translations["ipu"][
-    tile_map_equation_call_multi_out_p
-] = tile_map_equation_call_xla_translation_ipu
-
+# Register IPU MLIR lowering.
+mlir.register_lowering(tile_map_equation_call_single_out_p, tile_map_equation_call_mlir_lowering_ipu, platform="ipu")
+mlir.register_lowering(tile_map_equation_call_multi_out_p, tile_map_equation_call_mlir_lowering_ipu, platform="ipu")
 # Register MLIR translation for other backends.
-other_backends = ["cpu", "cuda", "tpu", "rocm"]
-for b in other_backends:
-    mlir.register_lowering(tile_map_equation_call_single_out_p, tile_map_equation_call_mlir_translation_default, b)
-    mlir.register_lowering(tile_map_equation_call_multi_out_p, tile_map_equation_call_mlir_translation_default, b)
+mlir.register_lowering(tile_map_equation_call_single_out_p, tile_map_equation_call_mlir_translation_default)
+mlir.register_lowering(tile_map_equation_call_multi_out_p, tile_map_equation_call_mlir_translation_default)

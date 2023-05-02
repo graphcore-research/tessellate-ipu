@@ -9,9 +9,9 @@ This package requires JAX IPU experimental to be installed:
 pip install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk310 -f https://graphcore-research.github.io/jax-experimental/wheels.html
 ```
 
-As a pure Python repo, JAX IPU research can then be directly installed using `pip`:
+As a pure Python repo, JAX IPU experimental addons can then be directly installed using `pip`:
 ```bash
-pip install git+ssh://git@github.com/graphcore/jax-ipu-research.git@main
+pip install git+ssh://git@github.com/graphcore/jax-ipu-experimental-addons.git@main
 ```
 NOTE: `main` can be replaced by any tag (`v0.1`, ...) or commit hash in order to install a specific version.
 

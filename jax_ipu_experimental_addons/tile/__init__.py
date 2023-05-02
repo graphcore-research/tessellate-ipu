@@ -18,7 +18,7 @@ from .tile_array import (
     tile_put_replicated,
     tile_put_sharded,
 )
-from .tile_common_utils import make_ipu_shaped_array
+from .tile_common_utils import from_ipu_type_to_numpy_dtype, make_ipu_shaped_array
 from .tile_interpreter import (
     create_ipu_tile_primitive,
     create_ipu_tile_primitive_v2,
@@ -35,7 +35,6 @@ from .tile_interpreter_linalg_qr import ipu_qr
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
     IpuVertexIOType,
-    from_ipu_type_to_numpy_dtype,
     from_numpy_dtype_to_ipu_type,
     get_ipu_type_name,
     make_ipu_vertex_constant_info,

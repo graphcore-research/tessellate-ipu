@@ -34,7 +34,7 @@ def compute_unsync_fn(data):
         # sync + comms in GP1.
         gp1_data = tile_put_replicated(gp1_data.array[idx], gp1_tiles)
 
-        # Tile barrier: to avoid Poplar or XLA re-org.
+        # Tile barrier: to avoid Poplar or XLA/HLO re-org.
         gp0_data, gp1_data = tile_data_barrier(gp0_data, gp1_data)
 
     # Mixup between GP0 and GP1
