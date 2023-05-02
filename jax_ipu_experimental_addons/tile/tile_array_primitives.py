@@ -16,7 +16,7 @@ from jax.lib import xla_client
 from jax_ipu_addons.primitives.custom_primitive_utils import ipu_xla_custom_primitive_call
 from jax_ipu_addons.utils import xla_shape_to_aval
 
-from jax_ipu_research.utils import DType
+from jax_ipu_experimental_addons.utils import DType
 
 from .tile_common_utils import make_ipu_shaped_array
 
@@ -24,7 +24,7 @@ from .tile_common_utils import make_ipu_shaped_array
 # Explicit path is more robust to different `pip install` usages.
 ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_array_primitives_impl.cpp"))
 tile_array_primitives_impl = cppimport.imp_from_filepath(
-    ext_filename, "jax_ipu_research.tile.tile_array_primitives_impl"
+    ext_filename, "jax_ipu_experimental_addons.tile.tile_array_primitives_impl"
 )
 
 from .tile_array_primitives_impl import (  # noqa: E402, F401

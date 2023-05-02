@@ -7,8 +7,8 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
-from jax_ipu_research.tile.tile_interpreter_lax_reduce import make_continuous_reduce_vertex_fullname
+from jax_ipu_experimental_addons.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
+from jax_ipu_experimental_addons.tile.tile_interpreter_lax_reduce import make_continuous_reduce_vertex_fullname
 
 
 def test__make_continuous_reduce_vertex_fullname__proper_name():

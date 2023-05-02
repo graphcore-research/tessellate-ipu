@@ -9,7 +9,7 @@ import pytest
 from absl.testing import parameterized
 from jax.lax import add_p, sub_p
 
-from jax_ipu_research.tile import (
+from jax_ipu_experimental_addons.tile import (
     TileShardedArray,
     tile_constant_replicated,
     tile_constant_sharded,
@@ -19,7 +19,7 @@ from jax_ipu_research.tile import (
     tile_put_replicated,
     tile_put_sharded,
 )
-from jax_ipu_research.tile.tile_array import check_tile_array_multi_slice
+from jax_ipu_experimental_addons.tile.tile_array import check_tile_array_multi_slice
 
 
 class TileShardedArrayTests(chex.TestCase, parameterized.TestCase):

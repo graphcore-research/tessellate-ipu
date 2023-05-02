@@ -5,7 +5,7 @@ import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
 
-from jax_ipu_research.tile.tile_array_primitives import (
+from jax_ipu_experimental_addons.tile.tile_array_primitives import (
     TileDataBarrierParams,
     tile_put_replicated_prim,
     tile_put_sharded_prim,

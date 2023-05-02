@@ -3,7 +3,7 @@ from functools import partial
 import jax
 import numpy as np
 
-from jax_ipu_research.tile import tile_map_primitive, tile_put_replicated, tile_put_sharded
+from jax_ipu_experimental_addons.tile import tile_map_primitive, tile_put_replicated, tile_put_sharded
 
 N = 5
 tiles0 = (0, 2, 5)

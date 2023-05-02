@@ -8,7 +8,7 @@ from absl.testing import parameterized
 from custom_arange_primitive import custom_arange_p, custom_multi_out_p
 from jax import lax
 
-from jax_ipu_research.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
+from jax_ipu_experimental_addons.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
 
 
 class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):

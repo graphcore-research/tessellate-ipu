@@ -1,4 +1,6 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+#include <print.h>
+
 #include <poplar/HalfFloat.hpp>
 #include <poplar/Vertex.hpp>
 
@@ -6,9 +8,9 @@
 
 using namespace poplar;
 
-/* popc -O2 -I jax_ipu_research/tile/vertex\
-     jax_ipu_research/tile/vertex/tile_qr_vertex.cpp \
-     -o jax_ipu_research/tile/vertex/tile_qr_vertex.gp
+/* popc -O2 -I jax_ipu_experimental_addons/tile/vertex\
+     jax_ipu_experimental_addons/tile/vertex/tile_qr_vertex.cpp \
+     -o jax_ipu_experimental_addons/tile/vertex/tile_qr_vertex.gp
 */
 
 class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex
@@ -153,8 +155,6 @@ class QRCorrectionVectorVertex : public MultiVertex {
   }
 };
 
-#include <print.h>
-
 float QRCorrectionVectorVertex::shared_partial_sqnorms[6] = {-1};
 
 /**
@@ -231,7 +231,6 @@ class [[poplar::constraint(
     // Finish the loop, getting the last computation.
     rtmp = tas.f32v2axpy(vin, xin);
     rout = tas.f32v2axpy(rtmp, rtmp);
-    printf("                         -> %g %g\n", rout[0], rout[1]);
     ipu::store_postinc(&ptr_outxdata_f2, rout, ptr_step);
 
     return true;

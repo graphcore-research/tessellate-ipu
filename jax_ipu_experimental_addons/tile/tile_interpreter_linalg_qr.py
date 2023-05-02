@@ -6,7 +6,7 @@ import jax.lax
 import numpy as np
 from jax.core import ShapedArray
 
-from jax_ipu_research.utils import Array
+from jax_ipu_experimental_addons.utils import Array
 
 from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive

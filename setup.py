@@ -6,7 +6,7 @@ from typing import List
 
 import setuptools
 
-PACKAGE_NAME = "jax_ipu_research"
+PACKAGE_NAME = "jax_ipu_experimental_addons"
 repository_dir = os.path.dirname(__file__)
 
 try:
@@ -28,7 +28,7 @@ with open(os.path.join(repository_dir, "test-requirements.txt")) as f:
     test_requirements = f.readlines()
 
 # C++ source to include in the package.
-# Enable users to build their own custom primitives just using `pip install jax_ipu_research`
+# Enable users to build their own custom primitives just using `pip install jax_ipu_experimental_addons`
 cpp_extensions = [".h", ".hpp", ".c", ".cpp"]
 package_data_cpp_list = [glob.glob(f"{PACKAGE_NAME}/**/*{ext}", recursive=True) for ext in cpp_extensions]
 package_data_cpp: List[str] = list(itertools.chain(*package_data_cpp_list))

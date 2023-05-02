@@ -5,7 +5,7 @@ import numpy as np
 from jax import lax
 from jax.core import Primitive, ShapedArray
 
-from jax_ipu_research.utils import DTypeLike
+from jax_ipu_experimental_addons.utils import DTypeLike
 
 from .tile_interpreter import register_ipu_tile_primitive
 from .tile_interpreter_primitives import (

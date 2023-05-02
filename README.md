@@ -19,7 +19,7 @@ NOTE: `main` can be replaced by any tag (`v0.1`, ...) or commit hash in order to
 
 The repository contains various pieces of IPU JAX research code, some specific to projects, some more generic:
 
-* [Tile API](jax_ipu_research/tile/README.md): basic API on how to directly call IPU vertex in JAX;
+* [Tile API](jax_ipu_experimental_addons/tile/README.md): basic API on how to directly call IPU vertex in JAX;
 * [Popops](...): how to build `popops` expression directly from JAX;
 * [DFT](...): code specific to DFT project;
 
@@ -29,7 +29,7 @@ Despite being research code, we still aim at having decent unit test coverage to
 
 To complete!
 ```python
-import jax_ipu_research
+import jax_ipu_experimental_addons
 ```
 
 ## Development

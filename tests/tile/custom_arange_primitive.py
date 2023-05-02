@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 from jax import core
 
-from jax_ipu_research.tile import (
+from jax_ipu_experimental_addons.tile import (
     IpuTileMapEquation,
     declare_ipu_tile_primitive,
     from_numpy_dtype_to_ipu_type,
@@ -14,7 +14,7 @@ from jax_ipu_research.tile import (
     make_ipu_vertex_out_info,
     register_ipu_tile_primitive,
 )
-from jax_ipu_research.utils import DTypeLike
+from jax_ipu_experimental_addons.utils import DTypeLike
 
 custom_arange_p = core.Primitive("custom_arange")
 

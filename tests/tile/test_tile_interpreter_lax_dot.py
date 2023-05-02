@@ -7,8 +7,8 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from jax_ipu_research.tile import IpuConvVertexType, TileShardedArray, tile_map_primitive, tile_put_sharded
-from jax_ipu_research.tile.tile_interpreter_lax_dot import (
+from jax_ipu_experimental_addons.tile import IpuConvVertexType, TileShardedArray, tile_map_primitive, tile_put_sharded
+from jax_ipu_experimental_addons.tile.tile_interpreter_lax_dot import (
     IpuConvPartial1x1Args,
     IpuConvPartial1x1StaticArgs,
     ipuGetTransformedOutStride,

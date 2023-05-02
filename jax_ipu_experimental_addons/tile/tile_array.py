@@ -7,7 +7,7 @@ import numpy as np
 from jax.interpreters.xla import DeviceArray, ShapedArray
 from jax.tree_util import register_pytree_node_class
 
-from jax_ipu_research.utils import ArrayLike, DTypeLike, Shape
+from jax_ipu_experimental_addons.utils import ArrayLike, DTypeLike, Shape
 
 from .tile_array_primitives import (
     tile_constant_replicated_prim,

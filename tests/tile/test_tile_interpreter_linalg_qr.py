@@ -7,7 +7,7 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from jax_ipu_research.tile import (
+from jax_ipu_experimental_addons.tile import (
     TileShardedArray,
     ipu_hw_cycle_count,
     tile_data_barrier,
@@ -15,7 +15,7 @@ from jax_ipu_research.tile import (
     tile_put_replicated,
     tile_put_sharded,
 )
-from jax_ipu_research.tile.tile_interpreter_linalg_qr import (
+from jax_ipu_experimental_addons.tile.tile_interpreter_linalg_qr import (
     dot_product1d_p,
     ipu_qr,
     ipu_qr_iterations,
@@ -24,7 +24,7 @@ from jax_ipu_research.tile.tile_interpreter_linalg_qr import (
     qr_correction_vector_p,
     qr_householder_row_update_p,
 )
-from jax_ipu_research.utils import IpuTargetType
+from jax_ipu_experimental_addons.utils import IpuTargetType
 
 # Skipping some tests if no local IPU hardware.
 ipu_hw_available = len(jax.devices("ipu")) > 0 and jax.devices("ipu")[0].target_type == IpuTargetType.IPU

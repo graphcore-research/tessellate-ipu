@@ -6,8 +6,8 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from jax_ipu_research import is_ipu_model
-from jax_ipu_research.tile import (
+from jax_ipu_experimental_addons import is_ipu_model
+from jax_ipu_experimental_addons.tile import (
     TileShardedArray,
     ipu_get_hw_seeds_tmap,
     ipu_random_normal_tmap,

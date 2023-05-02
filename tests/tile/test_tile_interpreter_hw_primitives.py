@@ -7,8 +7,8 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from jax_ipu_research import is_ipu_model
-from jax_ipu_research.tile import TileShardedArray, ipu_hw_cycle_count, tile_put_replicated
+from jax_ipu_experimental_addons import is_ipu_model
+from jax_ipu_experimental_addons.tile import TileShardedArray, ipu_hw_cycle_count, tile_put_replicated
 
 
 class IpuTileHardwarePrimitives(chex.TestCase, parameterized.TestCase):

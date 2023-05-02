@@ -1,6 +1,6 @@
 # IPU basic tile API
 
-The sub-module `jax_ipu_research.tile` provides basic tooling for programming the IPU at the low level directly in JAX (i.e. exposing some of the Poplar vertex API at the higher level).
+The sub-module `jax_ipu_experimental_addons.tile` provides basic tooling for programming the IPU at the low level directly in JAX (i.e. exposing some of the Poplar vertex API at the higher level).
 
 ## Tile mapping of an array
 

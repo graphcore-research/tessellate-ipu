@@ -1,4 +1,4 @@
-name: CI_jax_ipu_research_internal
+name: CI_jax_ipu_experimental_addons_internal
 
 env:
   GIT_MAIN_BRANCH: "main"

@@ -9,8 +9,13 @@ import numpy.testing as npt
 import scipy.linalg
 from absl.testing import parameterized
 
-from jax_ipu_research.tile import ipu_hw_cycle_count, tile_data_barrier, tile_map_primitive, tile_put_replicated
-from jax_ipu_research.tile.tile_interpreter_linalg_jacobi import (
+from jax_ipu_experimental_addons.tile import (
+    ipu_hw_cycle_count,
+    tile_data_barrier,
+    tile_map_primitive,
+    tile_put_replicated,
+)
+from jax_ipu_experimental_addons.tile.tile_interpreter_linalg_jacobi import (
     ipu_eigh,
     ipu_jacobi_eigh,
     jacobi_initial_rotation_set,
@@ -19,7 +24,7 @@ from jax_ipu_research.tile.tile_interpreter_linalg_jacobi import (
     jacobi_update_eigenvectors_p,
     jacobi_update_first_step_p,
 )
-from jax_ipu_research.utils import IpuTargetType
+from jax_ipu_experimental_addons.utils import IpuTargetType
 
 # Skipping some tests if no local IPU hardware.
 ipu_hw_available = len(jax.devices("ipu")) > 0 and jax.devices("ipu")[0].target_type == IpuTargetType.IPU

@@ -3,7 +3,7 @@ import os.path
 
 from jax_ipu_addons.utils import cppimport_append_include_dirs
 
-from jax_ipu_research.utils import env_cpath_append
+from jax_ipu_experimental_addons.utils import env_cpath_append
 
 # Update default `cppimport` external libraries directory.
 cppimport_append_include_dirs([os.path.join(os.path.dirname(__file__), "../external")])
