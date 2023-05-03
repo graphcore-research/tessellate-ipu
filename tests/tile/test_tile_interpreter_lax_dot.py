@@ -5,6 +5,7 @@ import chex
 import jax.lax
 import numpy as np
 import numpy.testing as npt
+import pytest
 from absl.testing import parameterized
 
 from jax_ipu_experimental_addons.tile import IpuConvVertexType, TileShardedArray, tile_map_primitive, tile_put_sharded
@@ -58,6 +59,7 @@ class IpuConvPartial1x1Utils(chex.TestCase, parameterized.TestCase):
         assert attrs_dict["inChansPerGroup"] == 8
 
 
+@pytest.mark.ipu_hardware
 class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()

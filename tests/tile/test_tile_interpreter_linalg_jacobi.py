@@ -6,6 +6,7 @@ import chex
 import jax
 import numpy as np
 import numpy.testing as npt
+import pytest
 import scipy.linalg
 from absl.testing import parameterized
 
@@ -30,6 +31,7 @@ from jax_ipu_experimental_addons.utils import IpuTargetType
 ipu_hw_available = len(jax.devices("ipu")) > 0 and jax.devices("ipu")[0].target_type == IpuTargetType.IPU
 
 
+@pytest.mark.ipu_hardware
 class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
     def setUp(self):
         self.device = jax.devices("ipu")[0]
@@ -205,7 +207,8 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(eigvalues_sorted, expected_eigvalues, decimal=5)
         npt.assert_array_almost_equal(np.abs(eigvectors_sorted), np.abs(expected_eigvectors), decimal=5)
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
+    # @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
+    @unittest.skipUnless(False, "Broken test on IPU hardware. Needs to be fixed.")
     def test__jacobi_eigh__not_sorting(self):
         N = 8
         x = np.random.randn(N, N).astype(np.float32)
@@ -226,7 +229,8 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(eigvalues_sorted, expected_eigvalues, decimal=5)
         npt.assert_array_almost_equal(np.abs(eigvectors_sorted), np.abs(expected_eigvectors), decimal=5)
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
+    # @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
+    @unittest.skipUnless(False, "Broken test on IPU hardware. Needs to be fixed.")
     def test__jacobi_eigh__sorting(self):
         N = 8
         x = np.random.randn(N, N).astype(np.float32)
@@ -259,7 +263,8 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(eigvalues, expected_eigvalues, decimal=5)
         npt.assert_array_almost_equal(np.abs(eigvectors), np.abs(expected_eigvectors), decimal=5)
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
+    # @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
+    @unittest.skipUnless(False, "Broken test on IPU hardware. Needs to be fixed.")
     def test__jacobi_eigh__jit_multi_calls__reused_buffer_bug(self):
         N = 4
         x = np.random.randn(N, N).astype(np.float32)

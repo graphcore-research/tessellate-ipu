@@ -4,6 +4,7 @@ import chex
 import jax
 import numpy as np
 import numpy.testing as npt
+import pytest
 from absl.testing import parameterized
 
 from jax_ipu_experimental_addons import is_ipu_model
@@ -17,6 +18,7 @@ from jax_ipu_experimental_addons.tile import (
 )
 
 
+@pytest.mark.ipu_hardware
 class IpuTilePrimitivesRandomSeeds(chex.TestCase):
     def setUp(self):
         self.device = jax.devices("ipu")[0]
