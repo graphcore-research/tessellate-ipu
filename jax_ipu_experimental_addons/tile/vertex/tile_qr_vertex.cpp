@@ -1,6 +1,4 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-#include <print.h>
-
 #include <poplar/HalfFloat.hpp>
 #include <poplar/Vertex.hpp>
 
@@ -53,9 +51,9 @@ class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex
       // TODO: use ld2x64pace + tapack instructions?
       const T2 xin = ipu::load_postinc(&ptr_inxdata_f2, 1);
       const T2 yin = ipu::load_postinc(&ptr_inydata_f2, 1);
-      // popc would recognize "partial += xin * yin" and optimize,
-      // but not on IPUModel
-      partial = ipu::fma(xin, yin, partial);
+      // popc seems to recognize this pattern and optimize it.
+      // Using directly ipu::fma intrinsics leads to poor performance!?
+      partial += xin * yin;
     }
     ipu::store_postinc(&ptr_tmp_partials_f2, partial, 1);
     return true;
@@ -116,7 +114,7 @@ class QRCorrectionVectorVertex : public MultiVertex {
     // Copy Rcol data and accumulate squared norm.
     while (ptr_outdata_f2 < ptr_outdata_end_f2) {
       const float2 v = ipu::load_postinc(&ptr_indata_f2, num_workers);
-      partials_f2 = ipu::fma(v, v, partials_f2);
+      partials_f2 += v * v;
       ipu::store_postinc(&ptr_outdata_f2, v, num_workers);
     }
     T partial = partials_f2[0] + partials_f2[1];
@@ -201,6 +199,7 @@ class [[poplar::constraint(
 
     // Set the $TAS register with the proper scale.
     const T s = -scale1[0] * scale2[0];
+    // __builtin_ipu_put_tas(s);
     __ipu_and_ipumodel_tas tas;
     tas.put(s);
 
@@ -221,15 +220,19 @@ class [[poplar::constraint(
     vin = ipu::load_postinc(&ptr_vdata_f2, ptr_step);
     // TODO: use ld2x64pace + tapack instructions.
     for (IndexType idx = 1; idx != wsize; ++idx) {
-      rtmp = tas.f32v2axpy(vin, xin);
+      rtmp = tas.f32v2axpy(xin, vin);
+      // rtmp = __builtin_ipu_f32v2axpy(xin, vin);
       // Grouping here seems to help the compiler optimising loads?
       xin = ipu::load_postinc(&ptr_inxdata_f2, ptr_step);
       vin = ipu::load_postinc(&ptr_vdata_f2, ptr_step);
       rout = tas.f32v2axpy(rtmp, rtmp);
+      // rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
       ipu::store_postinc(&ptr_outxdata_f2, rout, ptr_step);
     }
     // Finish the loop, getting the last computation.
-    rtmp = tas.f32v2axpy(vin, xin);
+    // rtmp = __builtin_ipu_f32v2axpy(xin, vin);
+    // rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
+    rtmp = tas.f32v2axpy(xin, vin);
     rout = tas.f32v2axpy(rtmp, rtmp);
     ipu::store_postinc(&ptr_outxdata_f2, rout, ptr_step);
 

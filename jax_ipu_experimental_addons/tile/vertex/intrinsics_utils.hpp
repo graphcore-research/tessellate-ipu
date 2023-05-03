@@ -103,9 +103,9 @@ T load_postinc(T const** a, int i) {
 
 // https://docs.graphcore.ai/projects/poplar-api/en/latest/doxygen/namespaceipu.html#a2a81ec4b6956ea14fe230a137178ff48
 template <class T, size_t N>
-std::array<T, N> fma(std::array<T, N> const& x, std::array<T, N> const& y,
-                     std::array<T, N> const& z) {
-  std::array<T, N> ret = z;
+IpuVector<T, N> fma(IpuVector<T, N> const& x, IpuVector<T, N> const& y,
+                    IpuVector<T, N> const& z) {
+  IpuVector<T, N> ret = z;
   for (size_t i = 0; i < N; ++i) ret[i] += x[i] * y[i];
   return ret;
 }
@@ -134,8 +134,11 @@ struct __ipu_and_ipumodel_tas {
   float2 f32v2axpy(float2 const& x, float2 const& y) {
     const auto res = prev;
     prev = float2{
-        tas * x[0] + y[0],
-        tas * x[1] + y[1],
+        // TODO: understand ordering!?
+        // tas * x[0] + y[0],
+        // tas * x[1] + y[1],
+        tas * y[0] + x[0],
+        tas * y[1] + x[1],
     };
     return res;
   }
@@ -144,10 +147,10 @@ struct __ipu_and_ipumodel_tas {
 // And give useful error messages when people port from IPU to IPUModel, e.g.
 /* clang-format off */ // need these error messages on one line
 /*
-/workspaces/jax-ipu-experimental-addons/jax_ipu_experimental_addons/tile/vertex/intrinsics_utils.hpp:166:3: error: static_assert failed due to requirement '__ipu_false<std::array<float, 2>>()': *** Replace __builtin_ipu_f32v2axpy with __ipu_and_ipumodel_tas for TAS handling on IPUModel.
+/workspaces/jax-ipu-experimental-addons/jax_ipu_experimental_addons/tile/vertex/intrinsics_utils.hpp:166:3: error: static_assert failed due to requirement '__ipu_false<IpuVector<float, 2>>()': *** Replace __builtin_ipu_f32v2axpy with __ipu_and_ipumodel_tas for TAS handling on IPUModel.
   static_assert(__ipu_false<T>(), "*** Replace __builtin_ipu_f32v2axpy with __ipu_and_ipumodel_tas for TAS handling on IPUModel.");
   ^             ~~~~~~~~~~~~~~~~
-/workspaces/jax-ipu-experimental-addons/jax_ipu_experimental_addons/tile/vertex/tile_qr_vertex.cpp:231:12: note: in instantiation of function template specialization '__builtin_ipu_f32v2axpy<std::array<float, 2>>' requested here
+/workspaces/jax-ipu-experimental-addons/jax_ipu_experimental_addons/tile/vertex/tile_qr_vertex.cpp:231:12: note: in instantiation of function template specialization '__builtin_ipu_f32v2axpy<IpuVector<float, 2>>' requested here
     rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
 */
 template <typename T>
