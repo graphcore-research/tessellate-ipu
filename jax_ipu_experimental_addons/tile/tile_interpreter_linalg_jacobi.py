@@ -313,4 +313,8 @@ def ipu_eigh(
         indices = jax.lax.iota(np.int32, len(eigvalues))
         eigvalues, indices = jax.lax.sort_key_val(eigvalues, indices)
         eigvectors_tr = eigvectors_tr[indices]
-    return eigvectors_tr.T, eigvalues
+
+    # TODO: understand memory layout bug when not forcing the data to be re-organized.
+    # Is it related to host rearrangement?
+    eigvectors = tile_put_sharded(eigvectors_tr.T, tiles=tuple(range(N)))
+    return eigvectors.array, eigvalues

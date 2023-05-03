@@ -29,6 +29,7 @@ from jax_ipu_experimental_addons.utils import IpuTargetType
 
 # Skipping some tests if no local IPU hardware.
 ipu_hw_available = len(jax.devices("ipu")) > 0 and jax.devices("ipu")[0].target_type == IpuTargetType.IPU
+ipu_num_tiles = jax.devices("ipu")[0].num_tiles
 
 
 @pytest.mark.ipu_hardware
@@ -52,7 +53,6 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         npt.assert_array_equal(rot[:, 0], [0, 1, 2, 4])
         npt.assert_array_equal(rot[:, 1], [3, 5, 7, 6])
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     @parameterized.parameters(
         {"data": [[1.0, 2.0], [2.0, 3.0]]},
         {"data": [[3.0, 2.0], [2.0, 1.0]]},
@@ -77,7 +77,6 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         expected_Jschur = scipy.linalg.schur(data)[1]
         npt.assert_array_almost_equal(np.abs(cs)[0], np.abs(expected_Jschur[0]))
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__jacobi_sym_schur2_vertex__benchmark_performance(self):
         N = 128
         tiles = (0,)
@@ -104,7 +103,6 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__jacobi_update_first_step_vertex__benchmark_performance(self):
         N = 128
         tiles = (0,)
@@ -134,7 +132,6 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
     def test__jacobi_update_eigenvectors_vertex__benchmark_performance(self):
         N = 256
         tiles = (0,)
@@ -171,7 +168,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
+    @unittest.skipUnless(ipu_num_tiles >= 64, "Requires IPU with 64 tiles")
     def test__jacobi_eigh__single_iteration(self):
         N = 32
         x = np.random.randn(N, N).astype(np.float32)
@@ -185,7 +182,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # Same eigenvalues.
         npt.assert_array_almost_equal(np.linalg.eigh(A)[0], np.linalg.eigh(x)[0], decimal=5)
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
+    @unittest.skipUnless(ipu_num_tiles >= 16, "Requires IPU with 16 tiles")
     def test__jacobi_eigh_raw__proper_eigh_result(self):
         N = 8
         x = np.random.randn(N, N).astype(np.float32)
@@ -207,18 +204,17 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(eigvalues_sorted, expected_eigvalues, decimal=5)
         npt.assert_array_almost_equal(np.abs(eigvectors_sorted), np.abs(expected_eigvectors), decimal=5)
 
-    # @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
-    @unittest.skipUnless(False, "Broken test on IPU hardware. Needs to be fixed.")
+    @unittest.skipUnless(ipu_num_tiles >= 16, "Requires IPU with 16 tiles")
     def test__jacobi_eigh__not_sorting(self):
         N = 8
         x = np.random.randn(N, N).astype(np.float32)
         x = (x + x.T) / 2.0
 
         ipu_eigh_fn = jax.jit(lambda x: ipu_eigh(x, sort_eigenvalues=False, num_iters=5), backend="ipu")
-        # Should be enough iterations...
         eigvectors, eigvalues = ipu_eigh_fn(x)
         eigvalues = np.asarray(eigvalues)
         eigvectors = np.asarray(eigvectors)
+
         # Expected eigen values and vectors (from Lapack?)
         expected_eigvalues, expected_eigvectors = np.linalg.eigh(x)
 
@@ -229,8 +225,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(eigvalues_sorted, expected_eigvalues, decimal=5)
         npt.assert_array_almost_equal(np.abs(eigvectors_sorted), np.abs(expected_eigvectors), decimal=5)
 
-    # @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
-    @unittest.skipUnless(False, "Broken test on IPU hardware. Needs to be fixed.")
+    @unittest.skipUnless(ipu_num_tiles >= 16, "Requires IPU with 16 tiles")
     def test__jacobi_eigh__sorting(self):
         N = 8
         x = np.random.randn(N, N).astype(np.float32)
@@ -247,7 +242,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(eigvalues, expected_eigvalues, decimal=5)
         npt.assert_array_almost_equal(np.abs(eigvectors), np.abs(expected_eigvectors), decimal=5)
 
-    @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
+    @unittest.skipUnless(ipu_num_tiles >= 8, "Requires IPU with 8 tiles")
     def test__jacobi_eigh__sorting_failure_case(self):
         # Trivial diagonalization, but with multiple identical eigen values.
         x = np.diag([1.0, 2.0, 3.0, 2.0]).astype(np.float32)
@@ -263,8 +258,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(eigvalues, expected_eigvalues, decimal=5)
         npt.assert_array_almost_equal(np.abs(eigvectors), np.abs(expected_eigvectors), decimal=5)
 
-    # @unittest.skipUnless(ipu_hw_available, "Requires IPU hardware")
-    @unittest.skipUnless(False, "Broken test on IPU hardware. Needs to be fixed.")
+    @unittest.skipUnless(ipu_num_tiles >= 8, "Requires IPU with 8 tiles")
     def test__jacobi_eigh__jit_multi_calls__reused_buffer_bug(self):
         N = 4
         x = np.random.randn(N, N).astype(np.float32)
