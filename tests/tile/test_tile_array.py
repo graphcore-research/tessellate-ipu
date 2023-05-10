@@ -267,10 +267,10 @@ class TileDataBarrierTests(chex.TestCase, parameterized.TestCase):
         data = np.asarray([1, 2, 5], np.float32)
         tile_data_barrier_fn(data)
 
-    @parameterized.parameters(["cpu"])
+    @parameterized.parameters(["cpu", "ipu"])
     def test__tile_data_barrier__backend_jitting(self, backend):
         # Set of random tiles mapping.
-        inputs_tiles = [[0, 1], [2, 3]]
+        inputs_tiles = [[0, 1], [1, 2, 3]]
 
         @partial(jax.jit, backend=backend)
         def tile_data_barrier_fn(data) -> Tuple[TileShardedArray, ...]:
@@ -278,12 +278,13 @@ class TileDataBarrierTests(chex.TestCase, parameterized.TestCase):
             outputs = tile_data_barrier(*inputs)
             return outputs
 
-        data = np.asarray([1, 2, 5], np.float32)
+        # Nd input array
+        data = np.random.rand(2, 3).astype(np.float32)
         out0, out1 = tile_data_barrier_fn(data)
         assert out0.tiles == (0, 1)
-        assert out1.tiles == (2, 3)
-        assert out0.shape == (2, 3)
-        assert out1.shape == (2, 3)
+        assert out1.tiles == (1, 2, 3)
+        assert out0.shape == (2, *data.shape)
+        assert out1.shape == (3, *data.shape)
 
     def test__tile_data_barrier__single_input__noop(self):
         tiles = [0, 1]

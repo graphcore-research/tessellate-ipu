@@ -9,7 +9,7 @@ import pytest
 from absl.testing import parameterized
 
 from jax_ipu_experimental_addons import is_ipu_model
-from jax_ipu_experimental_addons.tile import TileShardedArray, ipu_hw_cycle_count, tile_put_replicated
+from jax_ipu_experimental_addons.tile import TileShardedArray, ipu_cycle_count, tile_put_replicated
 
 
 @pytest.mark.ipu_hardware
@@ -19,15 +19,15 @@ class IpuTileHardwarePrimitives(chex.TestCase, parameterized.TestCase):
         self.num_tiles = self.device.num_tiles
 
     @parameterized.parameters({"sync": True}, {"sync": False})
-    def test__ipu_hw_cycle_count__proper_hw_counter(self, sync: bool):
+    def test__ipu_cycle_count__proper_hw_counter(self, sync: bool):
         tiles = (1, 2, self.num_tiles - 1)
         val = np.random.rand(1).astype(np.float32)
 
         @partial(jax.jit, backend="ipu")
         def compute_fn(val):
             val = tile_put_replicated(val, tiles)
-            val, cycles0 = ipu_hw_cycle_count(val, sync=sync)
-            val, cycles1 = ipu_hw_cycle_count(val, sync=False)
+            val, cycles0 = ipu_cycle_count(val, sync=sync)
+            val, cycles1 = ipu_cycle_count(val, sync=False)
             return cycles0, cycles1
 
         cycles0_ipu, cycles1_ipu = compute_fn(val)
@@ -63,14 +63,30 @@ class IpuTileHardwarePrimitives(chex.TestCase, parameterized.TestCase):
         {"dtype": np.uint8},
         {"dtype": np.bool_},
     )
-    def test__ipu_hw_cycle_count__proper_barrier_dtypes_support(self, dtype):
+    def test__ipu_cycle_count__proper_barrier_dtypes_support(self, dtype):
         tiles = (0,)
-        val = np.random.randn(32).astype(dtype)
+        val = np.random.randn(8).astype(dtype)
 
         @partial(jax.jit, backend="ipu")
         def compute_fn(val):
             val = tile_put_replicated(val, tiles)
-            val, cycles = ipu_hw_cycle_count(val, sync=False)
+            val, cycles = ipu_cycle_count(val, sync=False)
             return val, cycles
 
         compute_fn(val)
+
+    @parameterized.parameters(
+        {"dtype": np.float32},
+    )
+    def test__ipu_cycle_count__multiple_inputs(self, dtype):
+        tiles = (0, 1)
+        data = np.random.randn(8).astype(dtype)
+
+        @partial(jax.jit, backend="ipu")
+        def compute_fn(data):
+            val0 = tile_put_replicated(data, tiles)
+            val1 = tile_put_replicated(data, tiles)
+            val0, val1, cycles = ipu_cycle_count(val0, val1, sync=False)
+            return val0, val1, cycles
+
+        compute_fn(data)

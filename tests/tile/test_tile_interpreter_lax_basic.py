@@ -11,7 +11,7 @@ from jax.core import ShapedArray
 
 from jax_ipu_experimental_addons.tile import (
     TileShardedArray,
-    ipu_hw_cycle_count,
+    ipu_cycle_count,
     tile_map_primitive,
     tile_put_replicated,
     tile_put_sharded,
@@ -337,9 +337,9 @@ class IpuTileMemcpyTests(chex.TestCase):
         @partial(jax.jit, backend="ipu")
         def copy_fn(indata):
             indata = tile_put_replicated(indata, tiles)
-            indata, start = ipu_hw_cycle_count(indata)
+            indata, start = ipu_cycle_count(indata)
             outdata = tile_copy(indata)
-            outdata, end = ipu_hw_cycle_count(outdata)
+            outdata, end = ipu_cycle_count(outdata)
             return start, end
 
         start, end = copy_fn(data)

@@ -269,7 +269,8 @@ class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
       const auto& in_reinterpret = tileBarrierReinterpretTensor(inputs[idx]);
       const auto& tiles = params.inputs_tiles[idx];
       for (size_t k = 0; k < tiles.size(); ++k) {
-        tensors_per_tiles[tiles[k]].push_back(in_reinterpret[k]);
+        // Flatten the tensor on every tile to 1D.
+        tensors_per_tiles[tiles[k]].push_back(in_reinterpret[k].flatten());
       }
     }
 

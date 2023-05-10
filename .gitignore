@@ -7,6 +7,7 @@ __pycache__/
 *.so
 *.rendered.*.cpp
 *.gp
+*.so.lock
 
 # Distribution / packaging
 .Python

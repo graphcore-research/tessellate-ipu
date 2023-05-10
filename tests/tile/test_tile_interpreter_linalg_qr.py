@@ -10,7 +10,7 @@ from absl.testing import parameterized
 
 from jax_ipu_experimental_addons.tile import (
     TileShardedArray,
-    ipu_hw_cycle_count,
+    ipu_cycle_count,
     tile_data_barrier,
     tile_map_primitive,
     tile_put_replicated,
@@ -134,10 +134,10 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
             w = tile_put_replicated(w, tiles)
             # Need a first call to force all data transfers to tile.
             x = tile_map_primitive(qr_householder_row_update_p, x, v, w, w, start_idx=N - M)
-            x, start = ipu_hw_cycle_count(x)
+            x, start = ipu_cycle_count(x)
             x = tile_map_primitive(qr_householder_row_update_p, x, v, w, w, start_idx=N - M)
             # x = tile_map_primitive(scaled_sub_p, x, v, w) # Comparison point.
-            x, end = ipu_hw_cycle_count(x)
+            x, end = ipu_cycle_count(x)
             return x, start, end
 
         qr_householder_update_fn_ipu = jax.jit(qr_householder_update_fn, backend="ipu")
@@ -184,10 +184,10 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
 
         def qr_correction_vector_fn(Rcol):
             Rcol = tile_put_replicated(Rcol, tiles)
-            Rcol, start = ipu_hw_cycle_count(Rcol)
+            Rcol, start = ipu_cycle_count(Rcol)
             # FIXME: having to pass the same data to get accurate cycle count.
             r, _ = tile_map_primitive(qr_correction_vector_p, Rcol, Rcol, col_idx=col_idx)  # type:ignore
-            r, end = ipu_hw_cycle_count(r)
+            r, end = ipu_cycle_count(r)
             return r, start, end
 
         qr_correction_vector_fn = jax.jit(qr_correction_vector_fn, backend="ipu")
@@ -234,9 +234,9 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
             Q, RT, sdiag = ipu_qr_shard_inputs(x, xsdiag)
             Q, RT, sdiag = tile_data_barrier(Q, RT, sdiag)
             # Benchmark QR main iterations.
-            Q, start = ipu_hw_cycle_count(Q)
+            Q, start = ipu_cycle_count(Q)
             Q, RT = ipu_qr_iterations(Q, RT, sdiag)
-            Q, end = ipu_hw_cycle_count(Q)
+            Q, end = ipu_cycle_count(Q)
             return Q, RT, start, end
 
         qr_decomposition_fn_ipu = jax.jit(qr_decomposition_fn, backend="ipu")
@@ -297,10 +297,10 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
             y = tile_put_replicated(y, tiles)
             x, y = tile_data_barrier(x, y)
             # Benchmark dot product1d vertex.
-            x, start = ipu_hw_cycle_count(x)
+            x, start = ipu_cycle_count(x)
             r = tile_map_primitive(dot_product1d_p, x, y)
             # r = tile_map_primitive(reduce_sum_p, r, axes=(0,)) # Optional final reduction.
-            r, end = ipu_hw_cycle_count(r)  # type:ignore
+            r, end = ipu_cycle_count(r)  # type:ignore
             return r, start, end
 
         dot_product1d_fn = jax.jit(dot_product1d_fn, backend="ipu")

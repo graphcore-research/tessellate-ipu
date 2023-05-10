@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 from jax import core
 
+from .tile_array import tile_data_barrier
 from .tile_interpreter import TileShardedArray, register_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
@@ -82,10 +83,29 @@ hw_cycle_count_p.def_abstract_eval(hw_cycle_count_abstract_eval)
 register_ipu_tile_primitive(hw_cycle_count_p, hw_cycle_count_tile_translation_ipu)
 
 
-def ipu_hw_cycle_count(arg: TileShardedArray, sync: bool = False) -> Tuple[TileShardedArray, TileShardedArray]:
-    """Get IPU hardware cycle count, with a given argument acting as barrier.
+def ipu_cycle_count(*args: TileShardedArray, **kwargs: Any) -> Tuple[TileShardedArray, ...]:
+    """Get IPU hardware cycle count, with arguments acting as barrier.
 
+    Cycle counts are measured on the collection of tiles of the first argument.
     See XLA/MLIR optimization barrier for more information on the expected behaviour of a barrier.
+
+    Args:
+        *args: Tile arrays used as barrier before cycle count.
+        sync: Should IPU tiles synced as well?
+    Returns:
+        (cycle count array, *args)
     """
-    assert isinstance(arg, TileShardedArray)
-    return tile_map_primitive(hw_cycle_count_p, arg, sync=sync)  # type:ignore
+    assert len(args) > 0
+    assert all([isinstance(v, TileShardedArray) for v in args])
+    sync = bool(kwargs.get("sync", False))
+    # Tile barrier on input arrays, blocking until all are available/ready.
+    if len(args) > 1:
+        args = tile_data_barrier(*args)
+
+    arg0, cycle_count = tile_map_primitive(hw_cycle_count_p, args[0], sync=sync)  # type:ignore
+    # Re-pack the arguments + cycle count.
+    return (arg0, *args[1:], cycle_count)
+
+
+# Backward compatibility naming.
+ipu_hw_cycle_count = ipu_cycle_count

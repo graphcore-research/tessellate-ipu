@@ -26,7 +26,7 @@ from .tile_interpreter import (
     register_ipu_tile_primitive,
     tile_map_primitive,
 )
-from .tile_interpreter_hw_primitives import hw_cycle_count_p, ipu_hw_cycle_count
+from .tile_interpreter_hw_primitives import hw_cycle_count_p, ipu_cycle_count, ipu_hw_cycle_count
 from .tile_interpreter_lax_binary import scaled_add_p, scaled_sub_p
 from .tile_interpreter_lax_dot import IpuConvVertexType
 from .tile_interpreter_lax_unary import tile_copy
