@@ -107,5 +107,13 @@ def ipu_cycle_count(*args: TileShardedArray, **kwargs: Any) -> Tuple[TileSharded
     return (arg0, *args[1:], cycle_count)
 
 
+def ipu_cycle_count_overhead() -> int:
+    """Overhead of measuring an IPU cycle count.
+
+    Experimental value, measured using two successive calls to `ipu_cycle_count`
+    """
+    return 45
+
+
 # Backward compatibility naming.
 ipu_hw_cycle_count = ipu_cycle_count

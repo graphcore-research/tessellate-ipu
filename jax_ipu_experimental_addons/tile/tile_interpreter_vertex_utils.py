@@ -6,6 +6,25 @@ import numpy as np
 from numpy.typing import DTypeLike
 
 
+def make_num_elements_per_worker(N: int, num_workers: int) -> np.ndarray:
+    """Build an array dividing (evenly) elements between workers.
+
+    Args:
+        N: Total number of elements.
+        num_workers: Number of worker threads.
+    Returns:
+        (num_workers,) Numpy array with the division of work.
+    """
+    assert num_workers > 0
+    num_elements = np.zeros((num_workers,), dtype=np.int32)
+    # Fill with the base number of elements.
+    num_elements.fill(N // num_workers)
+    # Spread remainers.
+    rem_num_elements = N - num_workers * num_elements[0]
+    num_elements[:rem_num_elements] += 1
+    return num_elements
+
+
 def make_ipu_vector1d_worker_offsets(
     size: int, vector_size: int = 2, num_workers: int = 6, wdtype: DTypeLike = np.uint16
 ) -> np.ndarray:

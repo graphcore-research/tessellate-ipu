@@ -19,14 +19,24 @@ from jax_ipu_experimental_addons.tile.tile_interpreter_lax_dot import (
 
 
 class IpuConvPartial1x1Utils(chex.TestCase, parameterized.TestCase):
-    def test__ConvPartial1x1__vertex_fullname(self):
+    def test__ConvPartial1x1StaticArgs__vertex_fullname(self):
         conv_static_args = IpuConvPartial1x1StaticArgs(np.float32, np.float32, True, False, 16, 2, False)
-        assert conv_static_args.vertex_name == "poplin::ConvPartial1x1Out<float,float,true,false,16,2,false>"
+        assert conv_static_args.vertex_name == "poplin::ConvPartial1x1Out<float,float,true,false,8,2,false>"
 
-    def test__ConvPartial1x1__worklist_dtypes(self):
+    def test__ConvPartial1x1StaticArgs__worklist_dtypes(self):
         conv_static_args = IpuConvPartial1x1StaticArgs(np.float32, np.float32, True, False, 16, 2, False)
         assert conv_static_args.worklist_dtype == np.uint16
         assert conv_static_args.worklist_num_field_dtype == np.int16
+
+    def test__ConvPartial1x1StaticArgs__proper_num_conv_units(self):
+        assert IpuConvPartial1x1StaticArgs(np.float32, np.float32).num_conv_units == 8
+        assert IpuConvPartial1x1StaticArgs(np.float16, np.float32).num_conv_units == 8
+        assert IpuConvPartial1x1StaticArgs(np.float16, np.float16).num_conv_units == 16
+
+    def test__ConvPartial1x1StaticArgs__conv_input_load_elems(self):
+        assert IpuConvPartial1x1StaticArgs(np.float32, np.float32).conv_input_load_elems == 2
+        assert IpuConvPartial1x1StaticArgs(np.float16, np.float32).conv_input_load_elems == 4
+        assert IpuConvPartial1x1StaticArgs(np.float16, np.float16).conv_input_load_elems == 4
 
     def test__ipuGetTransformedOutStride__proper_result(self):
         out_stride0 = 4
@@ -73,6 +83,7 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
         {"lhs_size": 17, "rhs_size": 128, "contract_size": 8, "indtype": np.float32, "accdtype": np.float32},
         # Float16, with different accumulator types.
         {"lhs_size": 15, "rhs_size": 32, "contract_size": 16, "indtype": np.float16, "accdtype": np.float32},
+        {"lhs_size": 11, "rhs_size": 16, "contract_size": 16, "indtype": np.float16, "accdtype": np.float16},
         {"lhs_size": 11, "rhs_size": 64, "contract_size": 16, "indtype": np.float16, "accdtype": np.float16},
         # Large size matmul, requiring num_in_groups > 1
         # {"lhs_size": 11, "rhs_size": 64, "contract_size": 32, "indtype": np.float16, "accdtype": np.float32},
