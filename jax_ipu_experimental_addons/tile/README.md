@@ -1,6 +1,6 @@
 # IPU basic tile API
 
-The sub-module `jax_ipu_experimental_addons.tile` provides basic tooling for programming the IPU at the low level directly in JAX (i.e. exposing some of the Poplar vertex API at the higher level).
+The sub-module `jax_ipu_experimental_addons.tile` provides basic tooling for programming the IPU at the low level directly in JAX (i.e. exposing some of the Poplar tensor and vertex API at the higher level).
 
 ## Tile mapping of an array
 
@@ -14,8 +14,7 @@ arr_sharded = tile_put_sharded(arr, tiles)
 # Tile replicate an array over a new first axis.
 arr_replicated = tile_put_replicated(arr, tiles)
 ```
-Both methods are returning a `TileShardedArray` object, where by convention, the tile sharding is always on the first axis (i.e. `arr_sharded[idx]` is located on a single tile, and is contiguous). (TODO: make sure these are no-op if the array is already properly sharded.)
-
+Both methods are returning a `TileShardedArray` object, where by convention, the tile sharding is always on the first axis (i.e. `arr_sharded[idx]` is located on a single tile, and is contiguous).
 
 ## Tile primitives
 
@@ -36,9 +35,6 @@ def compute_fn(in0, in1):
     # semantics: tile_put_replicated(x, tiles) = tile_put_sharded(repeat(X, len(tiles)), tiles)
     input2 = tile_put_replicated(in2, tiles)
 
-    # TODO: combination of tile_put_replicated and tile_put_sharded
-    # input2 = tile_put_partial_sharding(in2, tiles, axis=(...))
-
     output = tile_map_primitive(lax.add_p, [input0, input1])
     return output
 ```
@@ -56,6 +52,6 @@ def compute_fn():
     return output
 ```
 
-For more information and details, please refer to the test example:
+For more information and details, please refer to the test examples:
 * [tests/tile/custom_arange_primitive.py](../../tests/tile/custom_arange_primitive.py)
 * [tests/tile/custom_arange_vertex.cpp](../../tests/tile/custom_arange_vertex.cpp)

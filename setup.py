@@ -1,3 +1,4 @@
+# Copyright (c) 2023 Graphcore Ltd. All rights reserved.
 import glob
 import itertools
 import os.path
@@ -36,14 +37,15 @@ package_data_cpp = [f.replace(f"{PACKAGE_NAME}/", "") for f in package_data_cpp]
 
 setuptools.setup(
     name=PACKAGE_NAME,
-    author="Graphcore",
+    author="Graphcore Research team",
     version=__version__,
-    description="JAX IPU experimetal addons.",
+    description="JAX IPU experimental addons.",
     long_description=long_description,
-    packages=setuptools.find_packages(),
     long_description_content_type="text/markdown",
-    keywords="ipu, graphcore, jax, flax, haiku",
-    license="Graphcore copyright",
+    url="https://github.com/graphcore-research/jax-ipu-experimental-addons",
+    packages=setuptools.find_packages(),
+    keywords="ipu, graphcore, jax, flax",
+    license="Apache-2.0",
     test_suite="tests",
     tests_require=test_requirements,
     python_requires=">=3.8",
@@ -51,4 +53,9 @@ setuptools.setup(
     extras_require={"test": test_requirements},
     package_data={PACKAGE_NAME: ["py.typed"] + package_data_cpp},
     include_package_data=True,
+    classifiers=[
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+    ],
 )
