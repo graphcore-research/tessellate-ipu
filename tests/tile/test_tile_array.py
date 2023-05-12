@@ -320,7 +320,7 @@ class TileDataBarrierTests(chex.TestCase, parameterized.TestCase):
         tile_data_barrier_fn(data)
 
     # FIXME: reinterpret_cast of FP16 not supported on IPU model
-    @parameterized.parameters([np.int16, np.float32, np.int32])
+    @parameterized.parameters([np.int16, np.float16, np.float32, np.int32])
     def test__tile_data_barrier__dtypes__ipu_jitting(self, dtype):
         # Set of random tiles mapping.
         inputs_tiles = [[0, 1], [2, 3], [0, 1], [1, 4, 5]]

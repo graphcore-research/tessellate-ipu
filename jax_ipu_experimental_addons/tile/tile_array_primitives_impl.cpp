@@ -203,8 +203,12 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileDataBarrierParams, vname, inputs_tiles,
 
 /**
  * @brief Reinterpret tensor to a reference type used in the tile data barrier.
+ * @param t Poplar tensor to reinterpret.
+ * @param is_half_accurate Is FP16/half accurate? On IPU model, float is used
+ * for simulating half.
  */
-poplar::Tensor tileBarrierReinterpretTensor(const poplar::Tensor& t) {
+poplar::Tensor tileBarrierReinterpretTensor(const poplar::Tensor& t,
+                                            bool is_half_accurate) {
   // 8 bits data types.
   if (t.elementType() == poplar::BOOL)
     return t.reinterpret(poplar::UNSIGNED_CHAR);
@@ -219,8 +223,6 @@ poplar::Tensor tileBarrierReinterpretTensor(const poplar::Tensor& t) {
     return t.reinterpret(poplar::UNSIGNED_SHORT);
   else if (t.elementType() == poplar::UNSIGNED_SHORT)
     return t.reinterpret(poplar::UNSIGNED_SHORT);
-  else if (t.elementType() == poplar::HALF)
-    return t.reinterpret(poplar::UNSIGNED_SHORT);
   // 32 bits data types.
   else if (t.elementType() == poplar::INT)
     return t.reinterpret(poplar::UNSIGNED_INT);
@@ -228,6 +230,16 @@ poplar::Tensor tileBarrierReinterpretTensor(const poplar::Tensor& t) {
     return t.reinterpret(poplar::UNSIGNED_INT);
   else if (t.elementType() == poplar::FLOAT)
     return t.reinterpret(poplar::UNSIGNED_INT);
+  // Special case of FP16/Half!
+  else if (t.elementType() == poplar::HALF) {
+    if (is_half_accurate) {
+      // 16 bits format => can reinterpret as short.
+      return t.reinterpret(poplar::UNSIGNED_SHORT);
+    } else {
+      // IPU model: need to keep as HALF/FP16.
+      return t.reinterpret(poplar::HALF);
+    }
+  }
   // Can handle tensor :/
   throw std::runtime_error("Unknown Poplar tensor type in tile data barrier.");
 }
@@ -258,6 +270,10 @@ class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
       throw poputil::poplibs_error(
           "IPU tile data barrier expecting multiple input tensors.");
     }
+    // Half precision different on IPU model.
+    const auto& target = graph.getTarget();
+    const bool is_half_accurate =
+        (target.getTargetType() == poplar::TargetType::IPU);
     // Tile barrier parameters (with tile sharding).
     const auto params = ipu::from_json_str<TileDataBarrierParams>(attributes);
 
@@ -266,7 +282,8 @@ class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
                                                                1);
     for (size_t idx = 0; idx < inputs.size(); ++idx) {
       // Reinterpret input tensor to a reference type.
-      const auto& in_reinterpret = tileBarrierReinterpretTensor(inputs[idx]);
+      const auto& in_reinterpret =
+          tileBarrierReinterpretTensor(inputs[idx], is_half_accurate);
       const auto& tiles = params.inputs_tiles[idx];
       for (size_t k = 0; k < tiles.size(); ++k) {
         // Flatten the tensor on every tile to 1D.
@@ -286,7 +303,6 @@ class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
       auto v = graph.addVertex(cs, params.vname);
       graph.setTileMapping(v, tile);
       graph.setPerfEstimate(v, 14);
-
       // Map collection of tensors to vertex IO.
       graph.connect(v["data"], tensors);
     }

@@ -223,8 +223,11 @@ _tile_barrier_dtype_mapping: Dict[DType, DType] = {
 }
 
 
-def tile_data_barrier_refdtype(dtype: DType) -> DType:
+def tile_data_barrier_refdtype(dtype: DType, is_half_accurate: bool) -> DType:
     """Find the reference dtype to use in IPU tile data barrier."""
+    if not is_half_accurate and dtype == np.dtype(np.float16):
+        # Half type specific case on IPU model => need to keep FP16.
+        return dtype
     return _tile_barrier_dtype_mapping[dtype]
 
 
@@ -243,8 +246,11 @@ def tile_data_barrier_prim_mlir_lowering_ipu(
 
     inputs_tiles = params["inputs_tiles"]
     max_tile = max([max(s) for s in inputs_tiles])
+    # Is half type accurate on IPU? IPU model is simulating float.
+    # TODO: have specific property in IPU device.
+    is_half_accurate = not jax.devices("ipu")[0].is_ipu_model
     # Passing the tiles collections as a raw attributes to the C++ implementation.
-    refdtype = tile_data_barrier_refdtype(dtypes[0])
+    refdtype = tile_data_barrier_refdtype(dtypes[0], is_half_accurate)
     vname = make_ipu_vertex_name_templated("TileDataBarrierVertex", refdtype)
     barrier_params = TileDataBarrierParams(vname, inputs_tiles, max_tile)
     raw_attributes = barrier_params.to_json_str()

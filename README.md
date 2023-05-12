@@ -1,6 +1,6 @@
-# JAX IPU **research** addons
+# JAX IPU **experimental** addons
 
-JAX IPU **research** addons: JAX custom primitives and methods maintained by Graphcore research team.
+JAX IPU **experimental** addons: JAX custom primitives and methods maintained by Graphcore research team.
 
 ## Installation
 
