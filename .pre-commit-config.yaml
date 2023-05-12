@@ -53,3 +53,19 @@ repos:
       args: ['--profile=black']
     - id: nbqa-flake8
       args: ['--ignore=E501,E203,E302,E402,E731,W503']
+- repo: local
+  hooks:
+  - id: copyright-header-check-module
+    name: copyright-header-check-module
+    entry: python3 -m examples_utils test_copyright --amend ./jax_ipu_experimental_addons/tile/
+    pass_filenames: false
+    language: python
+    additional_dependencies:
+      - 'git+https://github.com/graphcore/examples-utils@latest_stable'
+  - id: copyright-header-check-tests
+    name: copyright-header-check-tests
+    entry: python3 -m examples_utils test_copyright --amend ./tests
+    pass_filenames: false
+    language: python
+    additional_dependencies:
+      - 'git+https://github.com/graphcore/examples-utils@latest_stable'
