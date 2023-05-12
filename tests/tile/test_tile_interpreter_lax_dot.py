@@ -20,23 +20,23 @@ from jax_ipu_experimental_addons.tile.tile_interpreter_lax_dot import (
 
 class IpuConvPartial1x1Utils(chex.TestCase, parameterized.TestCase):
     def test__ConvPartial1x1StaticArgs__vertex_fullname(self):
-        conv_static_args = IpuConvPartial1x1StaticArgs(np.float32, np.float32, True, False, 16, 2, False)
+        conv_static_args = IpuConvPartial1x1StaticArgs(np.float32, np.float32, True, False, 16, 2, False)  # type:ignore
         assert conv_static_args.vertex_name == "poplin::ConvPartial1x1Out<float,float,true,false,8,2,false>"
 
     def test__ConvPartial1x1StaticArgs__worklist_dtypes(self):
-        conv_static_args = IpuConvPartial1x1StaticArgs(np.float32, np.float32, True, False, 16, 2, False)
+        conv_static_args = IpuConvPartial1x1StaticArgs(np.float32, np.float32, True, False, 16, 2, False)  # type:ignore
         assert conv_static_args.worklist_dtype == np.uint16
         assert conv_static_args.worklist_num_field_dtype == np.int16
 
     def test__ConvPartial1x1StaticArgs__proper_num_conv_units(self):
-        assert IpuConvPartial1x1StaticArgs(np.float32, np.float32).num_conv_units == 8
-        assert IpuConvPartial1x1StaticArgs(np.float16, np.float32).num_conv_units == 8
-        assert IpuConvPartial1x1StaticArgs(np.float16, np.float16).num_conv_units == 16
+        assert IpuConvPartial1x1StaticArgs(np.float32, np.float32).num_conv_units == 8  # type:ignore
+        assert IpuConvPartial1x1StaticArgs(np.float16, np.float32).num_conv_units == 8  # type:ignore
+        assert IpuConvPartial1x1StaticArgs(np.float16, np.float16).num_conv_units == 16  # type:ignore
 
     def test__ConvPartial1x1StaticArgs__conv_input_load_elems(self):
-        assert IpuConvPartial1x1StaticArgs(np.float32, np.float32).conv_input_load_elems == 2
-        assert IpuConvPartial1x1StaticArgs(np.float16, np.float32).conv_input_load_elems == 4
-        assert IpuConvPartial1x1StaticArgs(np.float16, np.float16).conv_input_load_elems == 4
+        assert IpuConvPartial1x1StaticArgs(np.float32, np.float32).conv_input_load_elems == 2  # type:ignore
+        assert IpuConvPartial1x1StaticArgs(np.float16, np.float32).conv_input_load_elems == 4  # type:ignore
+        assert IpuConvPartial1x1StaticArgs(np.float16, np.float16).conv_input_load_elems == 4  # type:ignore
 
     def test__ipuGetTransformedOutStride__proper_result(self):
         out_stride0 = 4
@@ -48,7 +48,7 @@ class IpuConvPartial1x1Utils(chex.TestCase, parameterized.TestCase):
         assert out_stride1[1] == out_stride0
 
     def test__make_conv_partial1x1_attributes__proper_values(self):
-        conv_static_args = IpuConvPartial1x1StaticArgs(np.float32, np.float32, True, False, 16, 2, False)
+        conv_static_args = IpuConvPartial1x1StaticArgs(np.float32, np.float32, True, False, 16, 2, False)  # type:ignore
         conv_args = IpuConvPartial1x1Args(
             num_conv_groups=1,
             num_out_groups=2,

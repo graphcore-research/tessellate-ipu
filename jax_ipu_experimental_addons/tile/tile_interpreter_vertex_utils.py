@@ -3,10 +3,10 @@ import math
 from typing import List
 
 import numpy as np
-from numpy.typing import DTypeLike
+from numpy.typing import DTypeLike, NDArray
 
 
-def make_num_elements_per_worker(N: int, num_workers: int) -> np.ndarray:
+def make_num_elements_per_worker(N: int, num_workers: int) -> NDArray[np.int32]:
     """Build an array dividing (evenly) elements between workers.
 
     Args:
@@ -27,7 +27,7 @@ def make_num_elements_per_worker(N: int, num_workers: int) -> np.ndarray:
 
 def make_ipu_vector1d_worker_offsets(
     size: int, vector_size: int = 2, num_workers: int = 6, wdtype: DTypeLike = np.uint16
-) -> np.ndarray:
+) -> NDArray[np.int_]:
     """Make the QR householder row update worker sizes, i.e. how many
     data vectors per worker thread?
 

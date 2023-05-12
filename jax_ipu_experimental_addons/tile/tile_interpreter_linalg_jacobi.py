@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.core import ShapedArray
 
-from jax_ipu_experimental_addons.utils import Array
+from jax_ipu_experimental_addons.utils import NDArray
 
 from .tile_array import (
     TileShardedArray,
@@ -20,6 +20,8 @@ from .tile_array import (
 )
 from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
+
+Array = Any
 
 
 def get_jacobi_vertex_gp_filename() -> str:
@@ -80,13 +82,13 @@ jacobi_update_eigenvectors_p = create_ipu_tile_primitive(
 )
 
 
-def jacobi_initial_rotation_set(N: int) -> np.ndarray:
+def jacobi_initial_rotation_set(N: int) -> NDArray[np.uint32]:
     """Jacobi initial rotation array/set (N/2, 2)."""
     rot = np.arange(0, N).astype(np.uint32).reshape((-1, 2))
     return rot
 
 
-def jacobi_next_rotation_set(rot: np.ndarray) -> np.ndarray:
+def jacobi_next_rotation_set(rot: NDArray[np.uint32]) -> NDArray[np.uint32]:
     """Jacobi next rotation set (N/2, 2).
 
     In short: moving p columns to the right, q columns to the left, with
@@ -103,7 +105,7 @@ def jacobi_next_rotation_set(rot: np.ndarray) -> np.ndarray:
     return next_rot
 
 
-def jacobi_sort_rotation_set(rotset: np.ndarray) -> np.ndarray:
+def jacobi_sort_rotation_set(rotset: NDArray[np.uint32]) -> NDArray[np.uint32]:
     """Sort the p, q indices in the Jacobi rotation set, such p < q."""
     pindices, qindices = rotset[:, 0], rotset[:, 1]
     pindices, qindices = np.minimum(pindices, qindices), np.maximum(pindices, qindices)
@@ -232,8 +234,8 @@ def ipu_jacobi_eigh(x: Array, num_iters: int = 1) -> Tuple[Array, Array]:
 
 
 def permute_pq_indices(
-    pindices: np.ndarray, qindices: np.ndarray, rotset_permute_mask: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray]:
+    pindices: NDArray[np.int32], qindices: NDArray[np.int32], rotset_permute_mask: NDArray[np.bool_]
+) -> Tuple[NDArray[np.int32], NDArray[np.int32]]:
     """Permute p,q indices based on a mask.
 
     Args, Returns: (N//2,) shaped arrays.
@@ -242,7 +244,7 @@ def permute_pq_indices(
 
 
 def tile_rotate_columns(
-    pcols: TileShardedArray, qcols: TileShardedArray, rotset: np.ndarray
+    pcols: TileShardedArray, qcols: TileShardedArray, rotset: NDArray[np.uint32]
 ) -> Tuple[TileShardedArray, TileShardedArray]:
     """Rotate columns between tiles using a static `tile_gather`.
 

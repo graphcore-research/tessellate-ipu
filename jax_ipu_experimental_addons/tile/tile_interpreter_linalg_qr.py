@@ -1,16 +1,16 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import os
-from typing import Tuple
+from typing import Any, Tuple
 
 import jax.lax
 import numpy as np
 from jax.core import ShapedArray
 
-from jax_ipu_experimental_addons.utils import Array
-
 from .tile_array import TileShardedArray, tile_put_replicated, tile_put_sharded
 from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive
 from .tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
+
+Array = Any
 
 
 def get_qr_vertex_gp_filename() -> str:

@@ -14,10 +14,12 @@ from jax.interpreters.batching import primitive_batchers
 from jax.interpreters.mlir import LoweringRuleContext, ir
 from jax.ipu.primitive import ipu_mlir_lowering_custom_primitive
 
-from jax_ipu_experimental_addons.utils import Array
+from jax_ipu_experimental_addons.utils import NDArray
 
 from .tile_array_primitives import Base64Data, IpuType
 from .tile_common_utils import from_numpy_dtype_to_ipu_type, get_ipu_type_name
+
+Array = Any
 
 # Pybind11 extension import (and compilation if necessary).
 # Explicit path is more robust to different `pip install` usages.
@@ -83,7 +85,7 @@ def make_ipu_vertex_io_info(
     return IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type, vertex_dim2=int(vertex_dim2))
 
 
-def make_ipu_vertex_constant_info(name: str, data: np.ndarray, vertex_dim2: int = 0) -> IpuVertexIOInfo:
+def make_ipu_vertex_constant_info(name: str, data: NDArray[Any], vertex_dim2: int = 0) -> IpuVertexIOInfo:
     """Make IPU vertex constant input info.
 
     Args:
@@ -95,7 +97,7 @@ def make_ipu_vertex_constant_info(name: str, data: np.ndarray, vertex_dim2: int 
     """
     data = np.asarray(data)
     ipu_type = from_numpy_dtype_to_ipu_type(data.dtype)
-    constant_data = Base64Data(base64.b64encode(data))
+    constant_data = Base64Data(base64.b64encode(data))  # type: ignore
     return IpuVertexIOInfo(
         name=name,
         iotype=IpuVertexIOType.In,

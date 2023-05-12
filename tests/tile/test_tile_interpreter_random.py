@@ -1,5 +1,6 @@
 # Copyright (c) 2023 Graphcore Ltd. All rights reserved.
 from functools import partial
+from typing import Tuple
 
 import chex
 import jax
@@ -43,7 +44,7 @@ class IpuTilePrimitivesRandomSeeds(chex.TestCase):
         ipu_seeds_in = np.random.randint(0, 256, size=(len(tiles), self.num_worker_contexts, 4)).astype(np.uint32)
 
         @partial(jax.jit, backend="ipu")
-        def compute_fn(seeds):
+        def compute_fn(seeds) -> Tuple[TileShardedArray, TileShardedArray]:
             ipu_seeds_in = tile_put_sharded(seeds, tiles)
             ipu_seeds_in = ipu_set_hw_seeds_tmap(ipu_seeds_in)
             ipu_seeds_out = ipu_get_hw_seeds_tmap(tiles)
@@ -55,7 +56,7 @@ class IpuTilePrimitivesRandomSeeds(chex.TestCase):
         assert ipu_seeds_out.shape == ipu_seeds_in.shape
         # Random only properly implemented on IPU hardware
         if not is_ipu_model(self.device):
-            npt.assert_array_equal(ipu_seeds_out.array, ipu_seeds_in.array)
+            npt.assert_array_equal(np.asarray(ipu_seeds_out), np.asarray(ipu_seeds_in))
 
 
 class IpuTilePrimitivesRandomUniform(chex.TestCase, parameterized.TestCase):

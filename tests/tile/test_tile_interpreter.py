@@ -24,8 +24,8 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
     def test__tile_map_primitive__unary__no_jitting__proper_result(self, dtype):
         tiles = (3, 4, 5)
         inshape = (len(tiles), 7, 9)
-        input = np.random.randn(*inshape).astype(dtype)
-        input = tile_put_sharded(input, tiles)
+        data = np.random.randn(*inshape).astype(dtype)
+        input = tile_put_sharded(data, tiles)
         output = tile_map_primitive(lax.abs_p, input)
 
         assert isinstance(output, TileShardedArray)

@@ -1,23 +1,17 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-from typing import Any, Sequence, Union
+from typing import TYPE_CHECKING, Any, Sequence, Union
 
 import numpy as np
 
 # TODO: replace with upstream JAX when available.
-Array = Any
-DType = np.dtype
-DTypeLike = Union[Any, str, np.dtype]
+from numpy.typing import ArrayLike, DTypeLike, NDArray  # noqa:  F401
+
+# Supported only on Python 3.9 for running.
+if TYPE_CHECKING:
+    DType = np.dtype[Any]
+else:
+    DType = np.dtype
+DTypeLike = DTypeLike
 
 DimSize = Union[int, Any]
 Shape = Sequence[DimSize]
-
-ArrayLike = Union[
-    Array,  # JAX array type
-    np.ndarray,  # NumPy array type
-    np.bool_,
-    np.number,  # NumPy scalar types
-    bool,
-    int,
-    float,
-    complex,  # Python scalar types
-]

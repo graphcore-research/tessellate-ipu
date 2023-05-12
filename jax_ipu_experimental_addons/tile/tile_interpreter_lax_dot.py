@@ -6,7 +6,8 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 from jax.core import Primitive, ShapedArray
 from jax.lax import dot_general_p
-from numpy.typing import DTypeLike
+
+from jax_ipu_experimental_addons.utils import DType, DTypeLike, NDArray
 
 from .tile_interpreter import register_ipu_tile_primitive
 from .tile_interpreter_primitives import (
@@ -56,8 +57,8 @@ class IpuConvPartial1x1StaticArgs:
         disable_sr: Stochastic rounding config.
     """
 
-    fp_dtype: DTypeLike
-    accum_dtype: DTypeLike
+    fp_dtype: DType
+    accum_dtype: DType
     use_limited_ver: bool = True
     use_128bit_load: bool = True
     num_conv_units: int = 0
@@ -191,7 +192,7 @@ def make_conv_partial1x1_attributes(
 
 def make_conv_partial1x1_worklist_entry(
     out_offset: int, num_field_elems: int, in_offset: int, worklist_dtype: DTypeLike
-) -> np.ndarray:
+) -> NDArray[np.int32]:
     """Build an IPU `WorklistEntry` constant tensor, to feed to the `Conv1x1PartialOut` vertex."""
     # TODO: relax these conditions?
     assert out_offset >= 0
@@ -203,7 +204,7 @@ def make_conv_partial1x1_worklist_entry(
 
 def make_conv_partial1x1_worklists(
     N: int, num_workers: int, in_base_offset: int, out_base_offset: int, worklist_dtype: DTypeLike
-) -> np.ndarray:
+) -> NDArray[np.int32]:
     """Build IPU `Conv1x1PartialOut` vertex full worklists.
 
     Args:
@@ -358,7 +359,7 @@ def make_conv_partial_hmac_attributes(
 
 def make_conv_partial_hmac_worklist_entry(
     out_offset: int, num_conv: int, in_offset: int, worklist_dtype: DTypeLike
-) -> np.ndarray:
+) -> NDArray[np.uint32]:
     """Build an IPU `WorklistEntry` constant tensor, to feed to the `ConvPartialHorizontalMac` vertex."""
     assert out_offset >= 0
     assert num_conv >= 0

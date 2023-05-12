@@ -14,7 +14,7 @@ from jax.interpreters import mlir
 from jax.interpreters.mlir import LoweringRuleContext, ir, mhlo
 from jax.ipu.primitive import ipu_mlir_lowering_custom_primitive
 
-from jax_ipu_experimental_addons.utils import DType
+from jax_ipu_experimental_addons.utils import DTypeLike, NDArray
 
 from .tile_common_utils import make_ipu_shaped_array
 
@@ -211,7 +211,7 @@ def tile_data_barrier_prim_mlir_lowering_default(ctx, *args, **params):
     return mhlo.OptimizationBarrierOp([v.type for v in args], args).results
 
 
-_tile_barrier_dtype_mapping: Dict[DType, DType] = {
+_tile_barrier_dtype_mapping: Dict[DTypeLike, DTypeLike] = {
     np.dtype(np.int8): np.dtype(np.uint8),
     np.dtype(np.uint8): np.dtype(np.uint8),
     np.dtype(np.int16): np.dtype(np.uint16),
@@ -223,7 +223,7 @@ _tile_barrier_dtype_mapping: Dict[DType, DType] = {
 }
 
 
-def tile_data_barrier_refdtype(dtype: DType, is_half_accurate: bool) -> DType:
+def tile_data_barrier_refdtype(dtype: DTypeLike, is_half_accurate: bool) -> DTypeLike:
     """Find the reference dtype to use in IPU tile data barrier."""
     if not is_half_accurate and dtype == np.dtype(np.float16):
         # Half type specific case on IPU model => need to keep FP16.
@@ -284,7 +284,7 @@ def tile_constant_replicated_prim(data, tiles):
     return tile_constant_replicated_prim_p.bind(dummy, data=data, tiles=tiles)
 
 
-def tile_constant_replicated_prim_impl(dummy, data, tiles) -> np.ndarray:
+def tile_constant_replicated_prim_impl(dummy, data: NDArray[Any], tiles: Any) -> NDArray[Any]:
     return np.stack([data for _ in range(len(tiles))], axis=0)
 
 
@@ -307,11 +307,13 @@ def tile_constant_replicated_prim_mlir_translation_default(
 
 
 def tile_constant_replicated_prim_mlir_lowering_ipu(
-    ctx: LoweringRuleContext, dummy: ir.Value, data: np.ndarray, tiles: Any
+    ctx: LoweringRuleContext, dummy: ir.Value, data: NDArray[Any], tiles: Any
 ) -> Sequence[ir.Value]:
     """`tile_constant_replicated_prim` IPU backend MLIR lowering, as a custom primitive."""
     params = TileConstantParams(
-        aval=make_ipu_shaped_array(data.shape, data.dtype), tiles=tiles, data=Base64Data(base64.b64encode(data))
+        aval=make_ipu_shaped_array(data.shape, data.dtype),
+        tiles=tiles,
+        data=Base64Data(base64.b64encode(data)),  # type:ignore
     )
     # TODO: remove `dummy` when bug with zero inputs fixed.
     outputs = ipu_mlir_lowering_custom_primitive(
@@ -336,7 +338,7 @@ def tile_constant_sharded_prim(data, tiles):
     return tile_constant_sharded_prim_p.bind(dummy, data=data, tiles=tiles)
 
 
-def tile_constant_sharded_prim_impl(dummy, data, tiles) -> np.ndarray:
+def tile_constant_sharded_prim_impl(dummy, data: NDArray[Any], tiles: Any) -> NDArray[Any]:
     return data
 
 
@@ -355,11 +357,13 @@ def tile_constant_sharded_prim_mlir_translation_default(
 
 
 def tile_constant_sharded_prim_mlir_lowering_ipu(
-    ctx: LoweringRuleContext, dummy: ir.Value, data: np.ndarray, tiles: Any
+    ctx: LoweringRuleContext, dummy: ir.Value, data: NDArray[Any], tiles: Any
 ) -> Sequence[ir.Value]:
     """`tile_constant_sharded_prim` IPU backend MLIR lowering, as a custom primitive."""
     params = TileConstantParams(
-        aval=make_ipu_shaped_array(data.shape, data.dtype), tiles=tiles, data=Base64Data(base64.b64encode(data))
+        aval=make_ipu_shaped_array(data.shape, data.dtype),
+        tiles=tiles,
+        data=Base64Data(base64.b64encode(data)),  # type:ignore
     )
     # TODO: remove `dummy` when bug with zero inputs fixed.
     outputs = ipu_mlir_lowering_custom_primitive(
