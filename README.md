@@ -29,7 +29,7 @@ Note: `main` can be replaced by any tag (`v0.1`, ...) or commit hash in order to
 
 ## Features
 
-At the moment, the package features one module [`tile`](tile/README.md) bringing low-level Poplar IPU programming to JAX (and fully compatible with the standard JAX API). More specifically:
+At the moment, the package features one module [`tile`](jax_ipu_experimental_addons/tile/README.md) bringing low-level Poplar IPU programming to JAX (and fully compatible with the standard JAX API). More specifically:
 
 * Control tile mapping of arrays using `tile_put_replicated` or `tile_put_sharded`;
 * Support of standard JAX LAX operations at tile level (using `tile_map_primitive`);
@@ -93,14 +93,8 @@ JAX IPU tile programming is implemented using C++ custom operations. The later h
 
 | Component | Description | License |
 | --- | --- | --- |
-| [fastbase64](https://github.com/lemire/fastbase64) | Base64 fast decoder library | [Custom license](https://github.com/lemire/fastbase64/blob/master/LICENSE) |
+| [fastbase64](https://github.com/lemire/fastbase64) | Base64 fast decoder library | [Simplified BSD (FreeBSD) License](https://github.com/lemire/fastbase64/blob/master/LICENSE) |
 | [fmt](https://github.com/fmtlib/fmt) | A modern C++ formatting library | [MIT license](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst) |
 | [half](https://sourceforge.net/projects/half/) | IEEE-754 conformant half-precision library | MIT license |
 | [json](https://github.com/nlohmann/json) | JSON for modern C++ | [MIT license](https://github.com/nlohmann/json/blob/develop/LICENSE.MIT) |
-| [pybind11](https://github.com/pybind/pybind11) | C++11 python bindings | [BSD-style license](https://github.com/pybind/pybind11/blob/master/LICENSE) |
-
-<!-- | einops | Deep learning operations reinvented (for pytorch, tensorflow, jax and others) | MIT |
-| numpy | Array processing library | BSD 3-Clause |
-| ogb | Open Graph Benchmark (OGB) datasets and utilities | MIT |
-| urllib3 | HTTP client for Python | MIT |
-| poptorch-experimental-addons | Collection of addons for PopTorch | MIT | -->
+| [pybind11](https://github.com/pybind/pybind11) | C++11 python bindings | [BSD License 2.0](https://github.com/pybind/pybind11/blob/master/LICENSE) |

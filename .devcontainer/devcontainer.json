@@ -12,10 +12,6 @@
         3000,
         6006
     ],
-    "runArgs": [
-        "--gpus",
-        "all"
-    ],
     "mounts": [
       {
         "source": "${localEnv:HOME}",
