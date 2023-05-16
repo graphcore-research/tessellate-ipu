@@ -1,4 +1,4 @@
-name: CI_jax_ipu_experimental_addons_internal
+name: CI_jax_ipu_experimental_addons_public
 
 env:
   GIT_MAIN_BRANCH: "main"
@@ -15,7 +15,8 @@ on:
 
 jobs:
   lint_and_typecheck:
-    runs-on: [self-hosted, Linux, X64, 20.04, Ubuntu, intel]
+    if: github.repository == 'graphcore-research/jax-ipu-experimental-addons'
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Cancel previous
@@ -32,7 +33,8 @@ jobs:
 
   # JAX unit tests using IPU model
   jax_unit_tests_ipu_model:
-    runs-on: [self-hosted, Linux, X64, 20.04, Ubuntu, amd]
+    if: github.repository == 'graphcore-research/jax-ipu-experimental-addons'
+    runs-on: ubuntu-latest
     container: graphcore/pytorch:3.1.0-ubuntu-20.04
     timeout-minutes: 20
     steps:
@@ -74,46 +76,3 @@ jobs:
           rm -rf ./* || true
           rm -rf ./.??* || true
           ls -la ./
-
-
-  # JAX unit tests using IPU hardware
-  jax_unit_tests_ipu_hardware:
-    runs-on: [self-hosted, Linux, X64, 20.04, Ubuntu, pod16]
-    container:
-      image: graphcore/pytorch:3.1.0-ubuntu-20.04
-      options: --ulimit memlock=-1:-1  --cap-add=SYS_PTRACE --cap-add=IPC_LOCK --device=/dev/infiniband/ -e IPUOF_VIPU_API_HOST -e IPUOF_VIPU_API_PARTITION_ID --shm-size=128G
-    timeout-minutes: 20
-    steps:
-      - name: Cancel previous
-        uses: styfle/cancel-workflow-action@0.11.0
-        with:
-          access_token: ${{ github.token }}
-        if: ${{github.ref != 'refs/head/main'}}
-      - uses: actions/checkout@v3
-      - name: Instal Python base dependencies
-        id: pip-cache
-        run: |
-          python3 -m pip install --upgrade pip wheel setuptools docker
-      # Necessary for attaching IPU hardware.
-      - name: Attach RDMA Network
-        run: |
-          python3 -c "import docker; client=docker.from_env(); client.networks.get('macvlan_rdma_swarm').connect(client.containers.get('${{ job.container.id }}'))"
-          gc-monitor
-      # Install JAX for IPU.
-      - name: Install JAX for IPU
-        run: |
-          pip3 install --default-timeout=100 -U numpy==1.23.5 scipy etils pytest
-          pip3 install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk310 -f https://graphcore-research.github.io/jax-experimental/wheels.html
-          POPLAR_LOG_LEVEL=DEBUG TF_CPP_MIN_LOG_LEVEL=0 JAX_IPU_DEVICE_COUNT=1 python .github/scripts/check_ipu_hardware_device.py
-      - name: Install repository dependencies
-        run: |
-          pip3 install --default-timeout=100 -r ./requirements.txt
-          pip3 install --default-timeout=100 -r ./test-requirements.txt
-      - name: Install JAX IPU experimental addons
-        run: |
-          python3 setup.py bdist_wheel --universal
-          pip3 install dist/*.whl
-      # Run IPU hardware unit tests.
-      - name: Run JAX IPU experimental addons unit tests (hardware)
-        run: |
-          JAX_IPU_DEVICE_COUNT=2 pytest --tb=short -v --log-cli-level=INFO -m ipu_hardware ./tests/
