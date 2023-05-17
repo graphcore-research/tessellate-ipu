@@ -3,45 +3,53 @@
 </div>
 
 
-# JAX IPU **experimental** addons
+# JAX IPU **Experimental** Addons
 
-[**Install guide**](#installation)
-| [**Features**](#features)
+[**Features**](#features)
+| [**Installation guide**](#installation)
 | [**Quickstart**](#minimal-example)
 
-JAX IPU :red_circle: **experimental** :red_circle: addons: a collection of tools to bring low level Poplar IPU programming to JAX and Python.
+JAX IPU :red_circle: **experimental** :red_circle: Addons is a collection of tools to bring low-level Poplar IPU programming to JAX and Python.
 
-The library is maintained by Graphcore research team. Expect bugs and sharp edges. Please let us know what you think!
+The package is maintained by the Graphcore Research team. Expect bugs and sharp edges! Please let us know what you think!
 
-## Installation
+## Features
 
-This package requires **[JAX IPU experimental](https://github.com/graphcore-research/jax-experimental)** (available for Python 3.8 and Poplar SDK 3.1 or 3.2):
+At the moment, the package features one module [`tile`](jax_ipu_experimental_addons/tile/README.md) bringing low-level Poplar IPU programming to JAX (and is fully compatible with the standard JAX API). More specifically:
+
+* Control tile mapping of arrays using `tile_put_replicated` or `tile_put_sharded`
+* Support of standard JAX LAX operations at tile level (using `tile_map_primitive`)
+* Easy integration of custom IPU C++ vertex (see [vertex example](examples/demo/demo_vertex.py))
+* Access to low-level IPU hardware functionalities such as cycle count and random seed set/get
+* Full compatibility with other backends
+
+This additional API allows easy and quick implementation of algorithms on IPUs, while keeping compatibility with other backends (CPU/GPU/TPU).
+
+## Installation guide
+
+This package requires **[JAX IPU experimental](https://github.com/graphcore-research/jax-experimental)** (available for Python 3.8 and Poplar SDK versions 3.1 or 3.2).
+
+For Poplar SDK 3.1:
 ```bash
 pip install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk310 -f https://graphcore-research.github.io/jax-experimental/wheels.html
 ```
-For Poplar SDK 3.2, please change `jaxlib` version to `jaxlib==0.3.15+ipu.sdk320`.
+
+For Poplar SDK 3.2:
+```bash
+pip install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk320 -f https://graphcore-research.github.io/jax-experimental/wheels.html
+```
 
 As a pure Python repo, JAX IPU experimental addons can then be directly installed from Github using `pip`:
 ```bash
 pip install git+https://github.com/graphcore-research/jax-ipu-experimental-addons.git@main
 ```
-Note: `main` can be replaced by any tag (`v0.1`, ...) or commit hash in order to install a specific version.
+Note: `main` can be replaced with any tag (`v0.1`, ...) or commit hash in order to install a specific version.
 
-## Features
-
-At the moment, the package features one module [`tile`](jax_ipu_experimental_addons/tile/README.md) bringing low-level Poplar IPU programming to JAX (and fully compatible with the standard JAX API). More specifically:
-
-* Control tile mapping of arrays using `tile_put_replicated` or `tile_put_sharded`;
-* Support of standard JAX LAX operations at tile level (using `tile_map_primitive`);
-* Easy integration of custom IPU C++ vertex (see [vertex example](examples/demo/demo_vertex.py));
-* Access to low level IPU hardware functionalities such as cycle count, random seed set/get, ...
-* Full compatibility with other backends;
-
-This additional API allows easy and quick implementation of algorithms on IPU, while keeping compatibility with other backends (CPU/GPU/TPU).
 
 ## Minimal example
 
-Simple example showing how to set tile mapping of JAX arrays, and run a JAX LAX operation on these tiles.
+The following is a simple example showing how to set the tile mapping of JAX arrays, and run a JAX LAX operation on these tiles.
+
 ```python
 import numpy as np
 import jax
@@ -65,9 +73,9 @@ output = compute_fn(data, 3 * data)
 print("Output:", output)
 ```
 
-### Useful environment variables and flags:
+### Useful environment variables and flags
 
-JAX experimental for IPU flags, using `from jax.config import config`:
+JAX IPU experimental addons flags, using `from jax.config import config`:
 
 
 | Flag | Description |
@@ -78,12 +86,12 @@ JAX experimental for IPU flags, using `from jax.config import config`:
 | `config.FLAGS.jax_ipu_device_count = 2`       | Set the number of IPUs visible in JAX. Can be any local IPU available. |
 | `config.FLAGS.jax_ipu_visible_devices = '0,1'`  | Set the specific collection of local IPUs to be visible in JAX. |
 
-Alternatively, like other JAX flags, these can be set using environment variables (e.g. `JAX_IPU_USE_MODEL`, `JAX_IPU_MODEL_NUM_TILES`,...).
+Alternatively, like other JAX flags, these can be set using environment variables (for example `JAX_IPU_USE_MODEL` and `JAX_IPU_MODEL_NUM_TILES`).
 
 
 [PopVision](https://www.graphcore.ai/developer/popvision-tools) environment variables:
-* Generate PopVision Graph analyser profile: `PVTI_OPTIONS='{"enable":"true", "directory":"./reports"}'`
-* Generate PopVision system analyser profile: `POPLAR_ENGINE_OPTIONS='{"autoReport.all":"true", "debug.allowOutOfMemory":"true"}'`
+* Generate a PopVision Graph analyser profile: `PVTI_OPTIONS='{"enable":"true", "directory":"./reports"}'`
+* Generate a PopVision system analyser profile: `POPLAR_ENGINE_OPTIONS='{"autoReport.all":"true", "debug.allowOutOfMemory":"true"}'`
 
 ## License
 
