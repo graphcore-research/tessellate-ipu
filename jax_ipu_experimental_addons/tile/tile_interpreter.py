@@ -290,7 +290,10 @@ def create_ipu_tile_primitive_v2(
     def p_abstract_aval(*args, **kwargs):
         assert len(args) == num_inputs
         outputs, _, _, _ = initializer_fn(*args)
-        return outputs.values()
+        # Always set primitive `multiple_results`, just in case!
+        outputs = tuple(outputs.values())
+        p.multiple_results = len(outputs) > 1
+        return outputs if p.multiple_results else outputs[0]
 
     def p_tile_translation_ipu(
         p: Primitive,
@@ -301,6 +304,7 @@ def create_ipu_tile_primitive_v2(
         """IPU tile translation for custom vertex."""
         outputs, constants, temps, perf_estimate = initializer_fn(*in_avals)
 
+        # Always set primitive `multiple_results`, just in case!
         p.multiple_results = len(outputs) > 1
 
         # InOut entries.
@@ -330,6 +334,7 @@ def create_ipu_tile_primitive_v2(
         outputs_info = [
             make_ipu_vertex_io_info(outname, outputs_iotype[outname], outaval) for outname, outaval in outputs.items()
         ]
+        constants = constants if constants else {}
         constants_info = [
             make_ipu_vertex_constant_info(cname, data, vertex_dim2=0) for cname, data in constants.items()
         ]
@@ -350,7 +355,7 @@ def create_ipu_tile_primitive_v2(
             gp_filename=gp_filename,
             perf_estimate=perf_estimate,
         )
-        if temps is not None:
+        if temps is not None and len(temps) > 0:
             assert len(temps) == 1  # TODO: Decide whether or not to handle multiple tmps
             for name, aval in temps.items():
                 # Temporary scratch space to use by the vertex (zero=unused).

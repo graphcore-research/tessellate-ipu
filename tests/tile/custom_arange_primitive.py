@@ -16,6 +16,8 @@ from jax_ipu_experimental_addons.tile import (
 )
 from jax_ipu_experimental_addons.utils import DTypeLike
 
+custom_vertex_filename = os.path.join(os.path.dirname(__file__), "custom_arange_vertex.cpp")
+
 custom_arange_p = core.Primitive("custom_arange")
 
 
@@ -54,7 +56,7 @@ def custom_arange_tile_translation_ipu(
     outshape = (attributes["size"],)
     outdtype = attributes["dtype"]
     outaval = core.ShapedArray(outshape, outdtype)
-    gp_filename = os.path.join(os.path.dirname(__file__), "custom_arange_vertex.cpp")
+    gp_filename = custom_vertex_filename
 
     global_scale_data = np.array([7], dtype=outdtype)
     ipu_dtype = from_numpy_dtype_to_ipu_type(outdtype)
@@ -90,9 +92,23 @@ register_ipu_tile_primitive(custom_arange_p, custom_arange_tile_translation_ipu)
 
 
 # Declaring a tile primitive in a very simple & fast way.
-@declare_ipu_tile_primitive(
-    "CustomMultiOutVertex<{input}>", gp_filename=os.path.join(os.path.dirname(__file__), "custom_arange_vertex.cpp")
-)
+@declare_ipu_tile_primitive("CustomSingleOutVertex<{input}>", gp_filename=custom_vertex_filename)
+def custom_single_out_p(input):
+    outputs = {"output": input}
+    perf_estimate = 100
+    return outputs, None, None, perf_estimate
+
+
+# Provide a JAX Numpy implementation for other backends (CPU/GPU/TPU)
+def custom_single_out_impl(x):
+    return -x
+
+
+custom_single_out_p.def_impl(custom_single_out_impl)
+
+
+# Declaring a tile primitive in a very simple & fast way.
+@declare_ipu_tile_primitive("CustomMultiOutVertex<{input}>", gp_filename=custom_vertex_filename)
 def custom_multi_out_p(input):
     outputs = {"out0": input, "out1": input}
     constants = {"constant_scale": np.array([input.size], input.dtype)}

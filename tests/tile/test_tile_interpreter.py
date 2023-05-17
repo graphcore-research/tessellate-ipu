@@ -6,7 +6,7 @@ import jax
 import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
-from custom_arange_primitive import custom_arange_p, custom_multi_out_p
+from custom_arange_primitive import custom_arange_p, custom_multi_out_p, custom_single_out_p
 from jax import lax
 
 from jax_ipu_experimental_addons.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
@@ -86,7 +86,7 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
     #     assert output.dtype == dtype
 
     @parameterized.parameters([np.float32, np.int32])
-    def test__tile_map_primitive__custom_vertex__single_output__ipu_jitting(self, dtype):
+    def test__tile_map_primitive__custom_arange_vertex__single_output__ipu_jitting(self, dtype):
         size = 128
         tiles = (3, 4, 5)
         # 2d scaling tensor, per tile.
@@ -110,6 +110,23 @@ class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):
                 np.arange(size).astype(dtype) * scales[idx, 0] * scales[idx, 1] * global_scale,
                 decimal=0,
             )
+
+    @parameterized.parameters([(np.float32, "ipu"), (np.int32, "ipu"), (np.float32, "cpu")])
+    def test__tile_map_primitive__custom_vertex__single_output__ipu_jitting(self, dtype, backend):
+        size = 128
+        tiles = (3, 4, 5)
+        input = np.random.rand(len(tiles), size).astype(dtype) + 1
+
+        @partial(jax.jit, backend=backend)
+        def compute_fn(input):
+            input = tile_put_sharded(input, tiles)
+            return tile_map_primitive(custom_single_out_p, input)
+
+        output = compute_fn(input)
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        assert output.dtype == dtype
+        npt.assert_array_equal(output, -input)
 
     @parameterized.parameters([(np.float32, "ipu"), (np.int32, "ipu"), (np.float32, "cpu")])
     def test__tile_map_primitive__custom_vertex__multi_outputs__ipu_jitting(self, dtype, backend):
