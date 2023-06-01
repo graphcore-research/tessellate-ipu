@@ -8,6 +8,7 @@
 [**Features**](#features)
 | [**Installation guide**](#installation)
 | [**Quickstart**](#minimal-example)
+| [**Documentation**](#documentation)
 
 JAX IPU :red_circle: **experimental** :red_circle: Addons is a collection of tools to bring low-level Poplar IPU programming to JAX and Python.
 
@@ -92,6 +93,11 @@ Alternatively, like other JAX flags, these can be set using environment variable
 [PopVision](https://www.graphcore.ai/developer/popvision-tools) environment variables:
 * Generate a PopVision Graph analyser profile: `PVTI_OPTIONS='{"enable":"true", "directory":"./reports"}'`
 * Generate a PopVision system analyser profile: `POPLAR_ENGINE_OPTIONS='{"autoReport.all":"true", "debug.allowOutOfMemory":"true"}'`
+
+## Documentation
+
+* [Tile low-level API](jax_ipu_experimental_addons/tile/README.md)
+* [Library development](docs/development.md)
 
 ## License
 
