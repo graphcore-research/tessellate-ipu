@@ -155,7 +155,7 @@ def tile_gather_prim(x, previous_tiles, indices, tiles):
 
 
 def tile_gather_prim_impl(x, previous_tiles, indices, tiles):
-    # Numpy basic gather on axis=0
+    # NumPy basic gather on axis=0
     return x[list(indices)]
 
 
@@ -302,7 +302,7 @@ def tile_constant_replicated_prim_mlir_translation_default(
     data = params["data"]
     tiles = params["tiles"]
     replicated_data = tile_constant_replicated_prim_impl(args[0], data=data, tiles=tiles)
-    # MLIR constant from the replicated Numpy array.
+    # MLIR constant from the replicated NumPy array.
     return mlir._ndarray_constant_handler(replicated_data, canonicalize_types=False)
 
 

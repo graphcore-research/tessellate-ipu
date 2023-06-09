@@ -39,7 +39,7 @@ from .tile_interpreter_primitives_impl import (  # noqa: E402
 
 
 def primitive_has_impl(p: core.Primitive) -> bool:
-    """Check if a JAX primitive has a default Numpy-like implementation."""
+    """Check if a JAX primitive has a default NumPy-like implementation."""
     # Is it the default empty `impl` function?
     return not (inspect.ismethod(p.impl) and p.impl.__func__ == core.Primitive.impl)
 
@@ -90,7 +90,7 @@ def make_ipu_vertex_constant_info(name: str, data: NDArray[Any], vertex_dim2: in
 
     Args:
         name: IO field name.
-        data: Numpy array with the constant data.
+        data: NumPy array with the constant data.
         vertex_dim2: Vertex IO tensor 2nd dimension.
     Returns:
         IPU vertex IO info.

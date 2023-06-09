@@ -66,7 +66,7 @@ class IpuConvPartial1x1StaticArgs:
     disable_sr: bool = False
 
     def __post_init__(self):
-        # Make sure we have actual Numpy dtypes.
+        # Make sure we have actual NumPy dtypes.
         self.fp_dtype = np.dtype(self.fp_dtype)
         self.accum_dtype = np.dtype(self.accum_dtype)
         # Dtypes making sense!

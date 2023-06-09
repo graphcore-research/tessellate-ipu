@@ -215,7 +215,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
 
         qr_decomposition_fn_ipu = jax.jit(qr_decomposition_fn, backend="ipu")
         Q, RT = qr_decomposition_fn_ipu(x, xsdiag)
-        # Numpy as reference point!
+        # NumPy as reference point!
         Qexp, Rexp = np.linalg.qr(x)
 
         npt.assert_array_almost_equal(np.abs(Q.array), np.abs(Qexp), decimal=5)

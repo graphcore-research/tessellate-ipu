@@ -99,7 +99,7 @@ def custom_single_out_p(input):
     return outputs, None, None, perf_estimate
 
 
-# Provide a JAX Numpy implementation for other backends (CPU/GPU/TPU)
+# Provide a JAX NumPy implementation for other backends (CPU/GPU/TPU)
 def custom_single_out_impl(x):
     return -x
 
@@ -117,7 +117,7 @@ def custom_multi_out_p(input):
     return outputs, constants, tmp_space, perf_estimate
 
 
-# Provide a JAX Numpy implementation for other backends (CPU/GPU/TPU)
+# Provide a JAX NumPy implementation for other backends (CPU/GPU/TPU)
 def custom_multi_out_impl(x, scale_value):
     constant_scale = np.array([x.size], x.dtype)
     mytmp = constant_scale[0] * scale_value * x

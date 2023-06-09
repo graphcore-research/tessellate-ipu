@@ -13,7 +13,7 @@ def make_num_elements_per_worker(N: int, num_workers: int) -> NDArray[np.int32]:
         N: Total number of elements.
         num_workers: Number of worker threads.
     Returns:
-        (num_workers,) Numpy array with the division of work.
+        (num_workers,) NumPy array with the division of work.
     """
     assert num_workers > 0
     num_elements = np.zeros((num_workers,), dtype=np.int32)

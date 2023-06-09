@@ -25,12 +25,13 @@ MultiSliceType = Tuple[SliceType, ...]
 
 
 def check_tile_array_multi_slice(slices: MultiSliceType, shape: Shape) -> bool:
-    """Check if a tile array multi-slice is valid, i.e.
-    it will keep memort contiguity of the underlying IPU array.
+    """Check if a tile array multi-slice is valid.
+
+    This means it will keep memory contiguity of the underlying IPU array.
 
     Args:
-        slices: Tuple of slices.
-        shape: (full) Shape of the array to slice.
+        slices: A tuple of slices.
+        shape: (full) The shape of the array to slice.
     """
     assert isinstance(slices, tuple)
     # TODO: support `newaxis`
@@ -67,18 +68,19 @@ class TileShardedArray:
     """JAX array sharded over (IPU) tiles.
 
     An IPU tile sharded array should satisfy the following assumptions:
-        - Sharded over the first axis on a given collection of tiles;
+        - Must be sharded over the first axis on a given collection of tiles;
         - Each shard is contiguous in memory on every tile;
 
-    On CPU, GPU, devices ... a tile sharded array will just be a normal array, with
-    no particular assumption on memory layout.
+    On non-IPU hardware (for example, CPUs or GPUs), a tile sharded array will
+    just be a normal array, with no particular assumption of memory layout.
 
-    The constructor is assuming already proper tile mapping. Please use `tile_put_sharded`
-    and `tile_put_replicated` to build a proper tile sharded array.
+    The constructor assumes a proper tile mapping already exists. If this is
+    not the case, use `tile_put_sharded` and `tile_put_replicated` to build a
+    proper sharded array.
 
     Args:
-        array: Underlying JAX array.
-        tiles: Tuple of tiles on which the array is sharded.
+        array: The underlying JAX array.
+        tiles: A tuple of tiles on which the array is sharded.
     """
 
     array: chex.ArrayDevice
@@ -163,7 +165,7 @@ class TileShardedArray:
         return len(self.array)
 
     def __array__(self, dtype: DTypeLike = None):
-        # Force converting to Numpy array.
+        # Force converting to NumPy array.
         return np.asarray(self.array, dtype=dtype)
 
     def __getitem__(self, key: Union[SliceType, MultiSliceType]) -> "TileShardedArray":
@@ -188,10 +190,10 @@ def tile_put_sharded(array: DeviceArray, tiles: Sequence[int]) -> TileShardedArr
     """Shard a JAX array over tiles on the first axis.
 
     Args:
-        array: Array to shard on the first axis.
-        tiles: Collection of tiles ids to shard the array on.
+        array: The array to shard on the first axis.
+        tiles: A collection of tile IDs to shard the array on.
     Returns:
-        Tile sharded array.
+        The tile sharded array.
     """
     # TODO: support JAX pytrees.
     return TileShardedArray(array=tile_put_sharded_prim(array, tiles), tiles=tiles)  # type:ignore
@@ -201,10 +203,10 @@ def tile_put_replicated(array: DeviceArray, tiles: Sequence[int]) -> TileSharded
     """Replicate a JAX array over tiles on the first axis.
 
     Args:
-        array: Array to replicate on tiles
-        tiles: Collection of tiles ids to shard the array on.
+        array: The array to replicate on tiles
+        tiles: A collection of tile IDs to shard the array on.
     Returns:
-        Tile sharded array.
+        The tile sharded array.
     """
     # TODO: support JAX pytrees.
     return TileShardedArray(array=tile_put_replicated_prim(array, tiles), tiles=tiles)  # type:ignore
@@ -214,9 +216,9 @@ def tile_data_barrier(*args: TileShardedArray) -> Tuple[TileShardedArray, ...]:
     """Tile sharded arrays data barrier: force aligning between tiles in the Poplar program.
 
     Args:
-        *args: Input tile sharded arrays.
+        *args: The input tile sharded arrays.
     Returns:
-        Output tile arrays.
+        The output tile arrays.
     """
     assert all([isinstance(v, TileShardedArray) for v in args])
     # No need for a barrier when it is a single array.
@@ -238,16 +240,16 @@ def tile_gather(
 ) -> TileShardedArray:
     """Gather a JAX array over tiles on the first axis.
 
-    By default, if a slice of an input sharded array is already located on the proper tile,
-    data will not be copied (no `Memcpy` vertex inserted).
+    By default, if a slice of an input sharded array is already located on the
+    proper tile, data will not be copied (no `Memcpy` vertex inserted).
 
     Args:
-        arr: Array. Generic, or already tile sharded.
-        indices: Gather (static) indices.
-        tiles: IPU tiles sharding.
+        arr: An array. Can be generic, or already tile sharded.
+        indices: Indices for the (static) Gather operation.
+        tiles: The IPU tiles to shard over.
         copy: If True, data is always copied, even when already properly tile mapped.
     Returns:
-        Sharded array over IPU tiles.
+        The array sharded over the IPU tiles.
     """
     assert len(indices) == len(tiles)
     assert min(indices) >= 0
@@ -266,13 +268,13 @@ def tile_gather(
 
 
 def tile_constant_replicated(data: ArrayLike, tiles: Sequence[int]) -> TileShardedArray:
-    """Replicate a (constant) Numpy array over tiles on the first axis.
+    """Replicate a (constant) NumPy array over tiles on the first axis.
 
     Args:
-        data: Numpy array with data to replicate.
-        tiles: Tiles on which to replicate the data.
+        data: The NumPy array with data to replicate.
+        tiles: The tiles on which to replicate the data.
     Returns:
-        TileShardedArray with constant data.
+        `TileShardedArray` with constant data.
     """
     data = np.asarray(data)
     arr = tile_constant_replicated_prim(data, tiles)
@@ -280,13 +282,13 @@ def tile_constant_replicated(data: ArrayLike, tiles: Sequence[int]) -> TileShard
 
 
 def tile_constant_sharded(data: ArrayLike, tiles: Sequence[int]) -> TileShardedArray:
-    """Shard a (constant) Numpy array over tiles on the first axis.
+    """Shard a (constant) NumPy array over tiles on the first axis.
 
     Args:
-        data: Numpy array with data to replicate.
-        tiles: Tiles on which to replicate the data.
+        data: The NumPy array with data to replicate.
+        tiles: The tiles on which to replicate the data.
     Returns:
-        TileShardedArray with constant data.
+        `TileShardedArray` with constant data.
     """
     data = np.asarray(data)
     assert data.shape[0] == len(tiles)

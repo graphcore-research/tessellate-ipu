@@ -26,7 +26,7 @@ _numpy_dtype_to_ipu_type = {
     np.dtype(np.float16): IpuType.HALF,
     np.dtype(np.float32): IpuType.FLOAT,
 }
-"""Mapping from Numpy dtype to IPU datatype.
+"""Mapping from NumPy dtype to IPU datatype.
 """
 
 _ipu_type_to_numpy_dtype = {
@@ -40,7 +40,7 @@ _ipu_type_to_numpy_dtype = {
     IpuType.HALF: np.dtype(np.float16),
     IpuType.FLOAT: np.dtype(np.float32),
 }
-"""Mapping from IPU type to Numpy dtype.
+"""Mapping from IPU type to NumPy dtype.
 """
 
 _ipu_type_to_name = {
@@ -59,14 +59,14 @@ _ipu_type_to_name = {
 
 
 def from_numpy_dtype_to_ipu_type(v: Any) -> IpuType:
-    """Convert from Numpy dtype to IPU type."""
+    """Convert from NumPy dtype to IPU type."""
     if isinstance(v, IpuType):
         return v
     return _numpy_dtype_to_ipu_type[np.dtype(v)]
 
 
 def from_ipu_type_to_numpy_dtype(v: IpuType) -> Any:
-    """Convert from IPU type to Numpy dtype."""
+    """Convert from IPU type to NumPy dtype."""
     if isinstance(v, np.dtype) or (isinstance(v, type) and issubclass(v, np.number)):
         return np.dtype(v)
     return _ipu_type_to_numpy_dtype[v]

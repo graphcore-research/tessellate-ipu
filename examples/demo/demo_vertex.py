@@ -91,9 +91,9 @@ def demo_vertex_impl(x, scale_value=None):
     r, c = x.shape
     outshape = (r, c // 2)
     outsize = np.prod(outshape)
-    # Pre-computed constant as Numpy array.
+    # Pre-computed constant as NumPy array.
     constant_scale = 0.5 * np.ones((x.size,), dtype=x.dtype)
-    # JAX Numpy implementation, equivalent to C++ IPU vertex.
+    # JAX NumPy implementation, equivalent to C++ IPU vertex.
     tmp = constant_scale * scale_value * jnp.ravel(x)
     # A bit of complex slicing on the flatten array!
     out0 = jnp.reshape(tmp[1 : 2 * outsize : 2], outshape)
@@ -101,7 +101,7 @@ def demo_vertex_impl(x, scale_value=None):
     return out0, out1
 
 
-# Primitive default implementation, in JAX Numpy.
+# Primitive default implementation, in JAX NumPy.
 demo_vertex_p.def_impl(demo_vertex_impl)
 
 compute_fn_on_ipu = jax.jit(compute_fn, backend="ipu")
