@@ -1,4 +1,4 @@
-# Contributing to JAX IPU experimental addons
+# Contributing to Tessellate IPU library
 
 ## Issues
 

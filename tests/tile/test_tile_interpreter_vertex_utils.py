@@ -5,7 +5,7 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from jax_ipu_experimental_addons.tile.tile_interpreter_vertex_utils import (
+from tessellate_ipu.tile.tile_interpreter_vertex_utils import (
     make_ipu_vector1d_worker_offsets,
     make_num_elements_per_worker,
 )

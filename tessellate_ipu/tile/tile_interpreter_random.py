@@ -5,7 +5,7 @@ import jax
 import numpy as np
 from jax.core import Primitive, ShapedArray
 
-from jax_ipu_experimental_addons.utils import DTypeLike
+from tessellate_ipu.utils import DTypeLike
 
 from .tile_array import TileShardedArray
 from .tile_interpreter import register_ipu_tile_primitive, tile_map_primitive

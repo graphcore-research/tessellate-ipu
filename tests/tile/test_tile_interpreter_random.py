@@ -9,8 +9,8 @@ import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
 
-from jax_ipu_experimental_addons import is_ipu_model
-from jax_ipu_experimental_addons.tile import (
+from tessellate_ipu import is_ipu_model
+from tessellate_ipu.tile import (
     TileShardedArray,
     ipu_get_hw_seeds_tmap,
     ipu_random_normal_tmap,

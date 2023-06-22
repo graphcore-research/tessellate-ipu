@@ -6,9 +6,9 @@
 
 using namespace poplar;
 
-/* popc -O2 -I jax_ipu_experimental_addons/tile/vertex\
-     jax_ipu_experimental_addons/tile/vertex/tile_qr_vertex.cpp \
-     -o jax_ipu_experimental_addons/tile/vertex/tile_qr_vertex.gp
+/* popc -O2 -I tessellate/tile/vertex\
+     tessellate/tile/vertex/tile_qr_vertex.cpp \
+     -o tessellate/tile/vertex/tile_qr_vertex.gp
 */
 
 class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dVertex

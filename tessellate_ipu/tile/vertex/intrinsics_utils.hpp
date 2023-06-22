@@ -147,10 +147,10 @@ struct __ipu_and_ipumodel_tas {
 // And give useful error messages when people port from IPU to IPUModel, e.g.
 /* clang-format off */ // need these error messages on one line
 /*
-/workspaces/jax-ipu-experimental-addons/jax_ipu_experimental_addons/tile/vertex/intrinsics_utils.hpp:166:3: error: static_assert failed due to requirement '__ipu_false<IpuVector<float, 2>>()': *** Replace __builtin_ipu_f32v2axpy with __ipu_and_ipumodel_tas for TAS handling on IPUModel.
+/workspaces/tessellate-ipu/tessellate/tile/vertex/intrinsics_utils.hpp:166:3: error: static_assert failed due to requirement '__ipu_false<IpuVector<float, 2>>()': *** Replace __builtin_ipu_f32v2axpy with __ipu_and_ipumodel_tas for TAS handling on IPUModel.
   static_assert(__ipu_false<T>(), "*** Replace __builtin_ipu_f32v2axpy with __ipu_and_ipumodel_tas for TAS handling on IPUModel.");
   ^             ~~~~~~~~~~~~~~~~
-/workspaces/jax-ipu-experimental-addons/jax_ipu_experimental_addons/tile/vertex/tile_qr_vertex.cpp:231:12: note: in instantiation of function template specialization '__builtin_ipu_f32v2axpy<IpuVector<float, 2>>' requested here
+/workspaces/tessellate-ipu/tessellate/tile/vertex/tile_qr_vertex.cpp:231:12: note: in instantiation of function template specialization '__builtin_ipu_f32v2axpy<IpuVector<float, 2>>' requested here
     rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
 */
 template <typename T>

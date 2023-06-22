@@ -1,6 +1,6 @@
-# JAX IPU Experimental Addons development guidelines
+# Tessellate IPU development guidelines
 
-There are some guidelines for doing development on JAX IPU experimental addons.
+There are some guidelines for doing development on Tessellate IPU.
 
 ## Development
 

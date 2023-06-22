@@ -42,7 +42,7 @@ repos:
   hooks:
   - id: clang-format
     # Not formatting external dependencies.
-    files: jax_ipu_experimental_addons/tile/
+    files: tessellate/tile/
 - repo: https://github.com/nbQA-dev/nbQA
   rev: 1.5.3
   hooks:
@@ -57,7 +57,7 @@ repos:
   hooks:
   - id: copyright-header-check-module
     name: copyright-header-check-module
-    entry: python3 -m examples_utils test_copyright --amend ./jax_ipu_experimental_addons/tile/
+    entry: python3 -m examples_utils test_copyright --amend ./tessellate/tile/
     pass_filenames: false
     language: python
     additional_dependencies:

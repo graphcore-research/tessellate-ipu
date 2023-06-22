@@ -8,7 +8,7 @@ from jax.core import ShapedArray
 from jax.interpreters.xla import DeviceArray
 from jax.tree_util import register_pytree_node_class
 
-from jax_ipu_experimental_addons.utils import ArrayLike, DTypeLike, Shape
+from tessellate_ipu.utils import ArrayLike, DTypeLike, Shape
 
 from .tile_array_primitives import (
     tile_constant_replicated_prim,

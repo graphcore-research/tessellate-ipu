@@ -1,6 +1,6 @@
 # Tile Poplar Programming in Python
 
-The sub-module `jax_ipu_experimental_addons.tile` exposes Poplar tensor tile mapping and vertex calling directly in Python. This provides a low-level way of programming tiles for Poplar directly in JAX.
+The sub-module `tessellate_ipu.tile` exposes Poplar tensor tile mapping and vertex calling directly in Python. This provides a low-level way of programming tiles for Poplar directly in JAX.
 
 This light-weight API is based on three main concepts:
 * `TileShardedArray`: a data structure that wraps a classic JAX array with tile mapping information;
@@ -50,13 +50,13 @@ will return a `TileShardedArray` array of shape `(4, 5)`, with data sharded on t
 
 **Note:** `tile_put_sharded` and `tile_put_replicated` can be combined with standard JAX operations, for example slicing and transposing, to build complex IPU tile inter-exchange patterns.
 
-`jax_ipu_experimental_addons.tile` also provides equivalent functions (`tile_constant_replicated` and `tile_constant_sharded`) to build Poplar on tile constant arrays from NumPy tensors.
+`tessellate_ipu.tile` also provides equivalent functions (`tile_constant_replicated` and `tile_constant_sharded`) to build Poplar on tile constant arrays from NumPy tensors.
 
 ## IPU vertex call using `tile_map_primitive`
 
 Once array(s) have been sharded over IPU tiles, you can map a function on the former using `tile_map_primitive`. Under the hood, `tile_map_primitive` adds a Poplar vertex call to the graph on all tiles where data is present. The workloads of all tiles will run independently in parallel (no sync being required).
 
-The first `tile_map_primitive` argument is a [JAX LAX](https://jax.readthedocs.io/en/latest/jax.lax.html) primitive. `jax_ipu_experimental_addons.tile` provides a mapping from (most) standard JAX LAX primitives to Graphcore Poplibs optimized vertices, meaning you will be able to take full advantage of the IPU hardware in just a couple of lines of Python.
+The first `tile_map_primitive` argument is a [JAX LAX](https://jax.readthedocs.io/en/latest/jax.lax.html) primitive. `tessellate_ipu.tile` provides a mapping from (most) standard JAX LAX primitives to Graphcore Poplibs optimized vertices, meaning you will be able to take full advantage of the IPU hardware in just a couple of lines of Python.
 
 For instance, here is simple example calling a JAX LAX primitive on a collection of tiles:
 
@@ -81,7 +81,7 @@ The [PopVision Graph Analyser](https://www.graphcore.ai/developer/popvision-tool
 
 ## IPU custom vertex integration
 
-JAX can easily be extended with [custom primitives](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html#defining-new-jax-primitives). Using this extension API, we provide an easy way to integrate custom IPU C++ vertices in `jax_ipu_experimental_addons.tile`. In short, once you have a `Vertex` C++ class, you will only need to include the following lines to expose it in Python:
+JAX can easily be extended with [custom primitives](https://jax.readthedocs.io/en/latest/notebooks/How_JAX_primitives_work.html#defining-new-jax-primitives). Using this extension API, we provide an easy way to integrate custom IPU C++ vertices in `tessellate_ipu.tile`. In short, once you have a `Vertex` C++ class, you will only need to include the following lines to expose it in Python:
 ```python
 @declare_ipu_tile_primitive("DemoVertex<{x}>", gp_filename=demo_vertex_filename)
 def demo_vertex_p(x: jax.ShapedArray):

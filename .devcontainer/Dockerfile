@@ -1,6 +1,6 @@
-# JAX IPU currently built on top of SDK 3.1.
+# JAX IPU currently built on top of SDK 3.1/3.2
 # PyTorch rather than TF to avoid numpy version issues
-FROM graphcore/pytorch:3.1.0-ubuntu-20.04
+FROM graphcore/pytorch:3.2.0-ubuntu-20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \

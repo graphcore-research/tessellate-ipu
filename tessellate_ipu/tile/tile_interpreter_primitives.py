@@ -14,7 +14,7 @@ from jax.interpreters.batching import primitive_batchers
 from jax.interpreters.mlir import LoweringRuleContext, ir
 from jax.ipu.primitive import ipu_mlir_lowering_custom_primitive
 
-from jax_ipu_experimental_addons.utils import NDArray
+from tessellate_ipu.utils import NDArray
 
 from .tile_array_primitives import Base64Data, IpuType
 from .tile_common_utils import from_numpy_dtype_to_ipu_type, get_ipu_type_name
@@ -25,7 +25,7 @@ Array = Any
 # Explicit path is more robust to different `pip install` usages.
 ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_interpreter_primitives_impl.cpp"))
 tile_interpreter_primitives_impl = cppimport.imp_from_filepath(
-    ext_filename, "jax_ipu_experimental_addons.tile.tile_interpreter_primitives_impl"
+    ext_filename, "tessellate_ipu.tile.tile_interpreter_primitives_impl"
 )
 
 from .tile_interpreter_primitives_impl import (  # noqa: E402

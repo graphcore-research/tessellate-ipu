@@ -9,8 +9,8 @@ from custom_arange_primitive import custom_multi_out_p
 from jax import lax
 from jax.core import Primitive, ShapedArray
 
-from jax_ipu_experimental_addons.tile.tile_common_utils import Base64Data, IpuType, from_ipu_type_to_numpy_dtype
-from jax_ipu_experimental_addons.tile.tile_interpreter_primitives import (
+from tessellate_ipu.tile.tile_common_utils import Base64Data, IpuType, from_ipu_type_to_numpy_dtype
+from tessellate_ipu.tile.tile_interpreter_primitives import (
     from_numpy_dtype_to_ipu_type,
     make_ipu_vertex_attributes,
     make_ipu_vertex_constant_info,
@@ -21,7 +21,7 @@ from jax_ipu_experimental_addons.tile.tile_interpreter_primitives import (
     primitive_has_batching,
     primitive_has_impl,
 )
-from jax_ipu_experimental_addons.tile.tile_interpreter_primitives_impl import (
+from tessellate_ipu.tile.tile_interpreter_primitives_impl import (
     IpuTensorSlice,
     IpuTileMapEquation,
     IpuVertexAttributeF32,

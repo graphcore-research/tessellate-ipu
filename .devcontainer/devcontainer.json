@@ -1,5 +1,5 @@
 {
-    "name": "JAX-IPU-Python3",
+    "name": "Tessellate-IPU-Python3",
     "build": {
         "dockerfile": "Dockerfile",
         "context": "..",

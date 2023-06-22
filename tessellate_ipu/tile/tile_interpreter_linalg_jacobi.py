@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.core import ShapedArray
 
-from jax_ipu_experimental_addons.utils import NDArray
+from tessellate_ipu.utils import NDArray
 
 from .tile_array import (
     TileShardedArray,

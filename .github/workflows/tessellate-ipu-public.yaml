@@ -1,4 +1,4 @@
-name: CI_jax_ipu_experimental_addons_public
+name: CI_tessellate_public
 
 env:
   GIT_MAIN_BRANCH: "main"
@@ -15,7 +15,7 @@ on:
 
 jobs:
   lint_and_typecheck:
-    if: github.repository == 'graphcore-research/jax-ipu-experimental-addons'
+    if: github.repository == 'graphcore-research/tessellate-ipu'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -31,9 +31,9 @@ jobs:
           python-version: 3.8
       - uses: pre-commit/action@v3.0.0
 
-  # JAX unit tests using IPU model
-  jax_unit_tests_ipu_model:
-    if: github.repository == 'graphcore-research/jax-ipu-experimental-addons'
+  # Tessellate unit tests using IPU model
+  tessellate_unit_tests_ipu_model:
+    if: github.repository == 'graphcore-research/tessellate-ipu'
     runs-on: ubuntu-latest
     container: graphcore/pytorch:3.1.0-ubuntu-20.04
     timeout-minutes: 20
@@ -59,12 +59,12 @@ jobs:
           pip3 install --default-timeout=100 -r ./requirements.txt
           pip3 install --default-timeout=100 -r ./test-requirements.txt
       # Install repository.
-      - name: Install JAX IPU experimental addons
+      - name: Install Tessellate IPU
         run: |
           python3 setup.py bdist_wheel --universal
           pip3 install dist/*.whl
       # Run repository unit tests.
-      - name: Run JAX IPU experimental addons unit tests (model)
+      - name: Run Tessellate IPU unit tests (model)
         run: |
           JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=16 pytest --tb=short -v --log-cli-level=INFO ./tests/
       # Dockerized workflow known to create issues with self-hosted servers.

@@ -7,7 +7,7 @@ import numpy as np
 from jax.core import Primitive, ShapedArray
 from jax.lax import dot_general_p
 
-from jax_ipu_experimental_addons.utils import DType, DTypeLike, NDArray
+from tessellate_ipu.utils import DType, DTypeLike, NDArray
 
 from .tile_interpreter import register_ipu_tile_primitive
 from .tile_interpreter_primitives import (

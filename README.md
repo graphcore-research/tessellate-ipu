@@ -3,20 +3,22 @@
 </div>
 
 
-# JAX IPU **Experimental** Addons
+# Tessellate IPU library
 
 [**Features**](#features)
 | [**Installation guide**](#installation)
 | [**Quickstart**](#minimal-example)
 | [**Documentation**](#documentation)
 
-JAX IPU :red_circle: **experimental** :red_circle: Addons is a collection of tools to bring low-level Poplar IPU programming to JAX and Python.
+:red_circle: :warning: **Non-official Graphcore product** :warning: :red_circle:
+
+Tessellate for IPU is a small library bringing low-level Poplar IPU programming to Python (JAX, and Pytorch in the near future).
 
 The package is maintained by the Graphcore Research team. Expect bugs and sharp edges! Please let us know what you think!
 
 ## Features
 
-At the moment, the package features one module [`tile`](jax_ipu_experimental_addons/tile/README.md) bringing low-level Poplar IPU programming to JAX (and is fully compatible with the standard JAX API). More specifically:
+At the moment, the package features one module [`tile`](tessellate/tile/README.md) bringing low-level Poplar IPU programming to JAX (and is fully compatible with the standard JAX API). More specifically:
 
 * Control tile mapping of arrays using `tile_put_replicated` or `tile_put_sharded`
 * Support of standard JAX LAX operations at tile level (using `tile_map_primitive`)
@@ -40,9 +42,9 @@ For Poplar SDK 3.2:
 pip install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk320 -f https://graphcore-research.github.io/jax-experimental/wheels.html
 ```
 
-As a pure Python repo, JAX IPU experimental addons can then be directly installed from Github using `pip`:
+As a pure Python repo, Tessellate IPU can then be directly installed from Github using `pip`:
 ```bash
-pip install git+https://github.com/graphcore-research/jax-ipu-experimental-addons.git@main
+pip install git+https://github.com/graphcore-research/tessellate-ipu.git@main
 ```
 Note: `main` can be replaced with any tag (`v0.1`, ...) or commit hash in order to install a specific version.
 
@@ -54,7 +56,7 @@ The following is a simple example showing how to set the tile mapping of JAX arr
 ```python
 import numpy as np
 import jax
-from jax_ipu_experimental_addons.tile import tile_put_sharded, tile_map_primitive
+from tessellate_ipu.tile import tile_put_sharded, tile_map_primitive
 
 # Which IPU tiles do we want to use?
 tiles = (0, 1, 3)
@@ -76,7 +78,7 @@ print("Output:", output)
 
 ### Useful environment variables and flags
 
-JAX IPU experimental addons flags, using `from jax.config import config`:
+JAX IPU experimental flags, using `from jax.config import config`:
 
 
 | Flag | Description |
@@ -96,14 +98,14 @@ Alternatively, like other JAX flags, these can be set using environment variable
 
 ## Documentation
 
-* [Tile low-level API](jax_ipu_experimental_addons/tile/README.md)
+* [Tile low-level API](tessellate/tile/README.md)
 * [Library development](docs/development.md)
 
 ## License
 
 Copyright (c) 2023 Graphcore Ltd. The project is licensed under the [**Apache License 2.0**](LICENSE).
 
-JAX IPU tile programming is implemented using C++ custom operations. The later has the following [C++ libraries](jax_ipu_experimental_addons/external) as dependencies, statically compiled into a shared library:
+JAX IPU tile programming is implemented using C++ custom operations. The later has the following [C++ libraries](tessellate/external) as dependencies, statically compiled into a shared library:
 
 | Component | Description | License |
 | --- | --- | --- |

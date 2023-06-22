@@ -4,7 +4,7 @@ from functools import partial
 import jax
 import numpy as np
 
-from jax_ipu_experimental_addons.tile import tile_data_barrier, tile_map_primitive, tile_put_replicated
+from tessellate_ipu.tile import tile_data_barrier, tile_map_primitive, tile_put_replicated
 
 num_tiles = 64
 gp0_tiles = tuple(range(num_tiles))
