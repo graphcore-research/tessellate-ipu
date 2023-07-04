@@ -5,17 +5,17 @@ import jax
 import numpy as np
 from jax.core import Primitive, ShapedArray
 
-from tessellate_ipu.utils import DTypeLike
-
-from .tile_array import TileShardedArray
-from .tile_interpreter import register_ipu_tile_primitive, tile_map_primitive
-from .tile_interpreter_primitives import (
+from tessellate_ipu.core import (
     IpuTileMapEquation,
+    TileShardedArray,
     make_ipu_vertex_attributes,
     make_ipu_vertex_inputs,
     make_ipu_vertex_name_templated,
     make_ipu_vertex_outputs,
+    register_ipu_tile_primitive,
+    tile_map_primitive,
 )
+from tessellate_ipu.utils import DTypeLike
 
 """Bridging to the low level interface allowing to control IPU random seed for every tile.
 

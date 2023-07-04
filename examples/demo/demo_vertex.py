@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from tessellate_ipu.tile import declare_ipu_tile_primitive, tile_map_primitive, tile_put_sharded
+from tessellate_ipu import declare_ipu_tile_primitive, tile_map_primitive, tile_put_sharded
 
 # fmt: off
 demo_vertex_filename = os.path.join(os.path.dirname(__file__), "demo_vertex.cpp")

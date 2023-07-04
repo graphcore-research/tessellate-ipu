@@ -7,25 +7,25 @@ import jax.numpy as jnp
 import numpy as np
 from jax.core import ShapedArray
 
-from tessellate_ipu.utils import NDArray
-
-from .tile_array import (
+from tessellate_ipu import (
     TileShardedArray,
+    create_ipu_tile_primitive,
     tile_constant_replicated,
     tile_constant_sharded,
     tile_data_barrier,
     tile_gather,
+    tile_map_primitive,
     tile_put_replicated,
     tile_put_sharded,
 )
-from .tile_interpreter import create_ipu_tile_primitive, tile_map_primitive
-from .tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
+from tessellate_ipu.core.tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
+from tessellate_ipu.utils import NDArray
 
 Array = Any
 
 
 def get_jacobi_vertex_gp_filename() -> str:
-    return os.path.join(os.path.dirname(__file__), "vertex", "tile_jacobi_vertex.cpp")
+    return os.path.join(os.path.dirname(__file__), "../core", "vertex", "tile_jacobi_vertex.cpp")
 
 
 # Jacobi symmetric Schur2

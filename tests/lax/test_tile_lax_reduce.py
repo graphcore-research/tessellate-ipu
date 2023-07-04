@@ -7,8 +7,8 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from tessellate_ipu.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
-from tessellate_ipu.tile.tile_interpreter_lax_reduce import make_continuous_reduce_vertex_fullname
+from tessellate_ipu import TileShardedArray, tile_map_primitive, tile_put_sharded
+from tessellate_ipu.lax.tile_lax_reduce import make_continuous_reduce_vertex_fullname
 
 
 def test__make_continuous_reduce_vertex_fullname__proper_name():

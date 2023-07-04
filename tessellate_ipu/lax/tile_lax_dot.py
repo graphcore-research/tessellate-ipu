@@ -7,10 +7,8 @@ import numpy as np
 from jax.core import Primitive, ShapedArray
 from jax.lax import dot_general_p
 
-from tessellate_ipu.utils import DType, DTypeLike, NDArray
-
-from .tile_interpreter import register_ipu_tile_primitive
-from .tile_interpreter_primitives import (
+from tessellate_ipu.core.tile_interpreter import register_ipu_tile_primitive
+from tessellate_ipu.core.tile_interpreter_primitives import (
     IpuTileMapEquation,
     from_numpy_dtype_to_ipu_type,
     make_ipu_vertex_constant_info,
@@ -18,7 +16,7 @@ from .tile_interpreter_primitives import (
     make_ipu_vertex_out_info,
     tile_map_remove_ipu_attributes,
 )
-from .tile_interpreter_primitives_impl import (  # noqa: F401
+from tessellate_ipu.core.tile_interpreter_primitives_impl import (  # noqa: F401
     IpuVertexAttributeI32,
     ipuGetTransformedInRowStride,
     ipuGetTransformedInStride,
@@ -27,7 +25,8 @@ from .tile_interpreter_primitives_impl import (  # noqa: F401
     ipuReverseTransformedInStride,
     ipuReverseTransformedOutStride,
 )
-from .tile_interpreter_vertex_utils import make_num_elements_per_worker
+from tessellate_ipu.core.tile_interpreter_vertex_utils import make_num_elements_per_worker
+from tessellate_ipu.utils import DType, DTypeLike, NDArray
 
 
 class IpuConvVertexType(IntEnum):

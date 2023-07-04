@@ -21,7 +21,7 @@ from .tile_common_utils import make_ipu_shaped_array
 # Pybind11 extension import (and compilation if necessary).
 # Explicit path is more robust to different `pip install` usages.
 ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_array_primitives_impl.cpp"))
-tile_array_primitives_impl = cppimport.imp_from_filepath(ext_filename, "tessellate_ipu.tile.tile_array_primitives_impl")
+tile_array_primitives_impl = cppimport.imp_from_filepath(ext_filename, "tessellate_ipu.core.tile_array_primitives_impl")
 
 from .tile_array_primitives_impl import (  # noqa: E402, F401
     Base64Data,

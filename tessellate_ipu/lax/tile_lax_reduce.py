@@ -6,13 +6,13 @@ from jax.core import Primitive, ShapedArray
 from jax.lax import reduce_and_p, reduce_max_p, reduce_min_p, reduce_or_p, reduce_prod_p, reduce_sum_p
 from numpy.typing import DTypeLike
 
-from .tile_interpreter import register_ipu_tile_primitive
-from .tile_interpreter_primitives import (
+from tessellate_ipu.core import (
     IpuTileMapEquation,
     IpuVertexIOType,
     make_ipu_vertex_attributes,
     make_ipu_vertex_io_info,
     make_ipu_vertex_name_templated,
+    register_ipu_tile_primitive,
 )
 
 _reduce_primitive_to_basename: Dict[Primitive, str] = {

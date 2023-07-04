@@ -9,7 +9,7 @@ import pytest
 from absl.testing import parameterized
 
 from tessellate_ipu import is_ipu_model
-from tessellate_ipu.tile import TileShardedArray, ipu_cycle_count, tile_put_replicated
+from tessellate_ipu.core import TileShardedArray, ipu_cycle_count, tile_put_replicated
 
 
 @pytest.mark.ipu_hardware

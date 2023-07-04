@@ -9,7 +9,7 @@ from absl.testing import parameterized
 from custom_arange_primitive import custom_arange_p, custom_multi_out_p, custom_single_out_p
 from jax import lax
 
-from tessellate_ipu.tile import TileShardedArray, tile_map_primitive, tile_put_sharded
+from tessellate_ipu.core import TileShardedArray, tile_map_primitive, tile_put_sharded
 
 
 class IpuTileMapPrimitiveTests(chex.TestCase, parameterized.TestCase):

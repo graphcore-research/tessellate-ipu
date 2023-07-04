@@ -8,10 +8,11 @@ import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
 
-from tessellate_ipu.tile import IpuConvVertexType, TileShardedArray, tile_map_primitive, tile_put_sharded
-from tessellate_ipu.tile.tile_interpreter_lax_dot import (
+from tessellate_ipu import TileShardedArray, tile_map_primitive, tile_put_sharded
+from tessellate_ipu.lax.tile_lax_dot import (
     IpuConvPartial1x1Args,
     IpuConvPartial1x1StaticArgs,
+    IpuConvVertexType,
     ipuGetTransformedOutStride,
     ipuReverseTransformedOutStride,
     make_conv_partial1x1_attributes,

@@ -4,7 +4,7 @@ import base64
 import chex
 from absl.testing import parameterized
 
-from tessellate_ipu.tile.tile_common_utils import Base64Data, IpuShapedArray, IpuType
+from tessellate_ipu.core.tile_common_utils import Base64Data, IpuShapedArray, IpuType
 
 
 class Base64DataTests(chex.TestCase, parameterized.TestCase):

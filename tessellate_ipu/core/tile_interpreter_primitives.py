@@ -25,7 +25,7 @@ Array = Any
 # Explicit path is more robust to different `pip install` usages.
 ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_interpreter_primitives_impl.cpp"))
 tile_interpreter_primitives_impl = cppimport.imp_from_filepath(
-    ext_filename, "tessellate_ipu.tile.tile_interpreter_primitives_impl"
+    ext_filename, "tessellate_ipu.core.tile_interpreter_primitives_impl"
 )
 
 from .tile_interpreter_primitives_impl import (  # noqa: E402

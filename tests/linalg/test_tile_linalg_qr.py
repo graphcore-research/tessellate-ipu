@@ -8,7 +8,7 @@ import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
 
-from tessellate_ipu.tile import (
+from tessellate_ipu import (
     TileShardedArray,
     ipu_cycle_count,
     tile_data_barrier,
@@ -16,7 +16,7 @@ from tessellate_ipu.tile import (
     tile_put_replicated,
     tile_put_sharded,
 )
-from tessellate_ipu.tile.tile_interpreter_linalg_qr import (
+from tessellate_ipu.linalg.tile_linalg_qr import (
     dot_product1d_p,
     ipu_qr,
     ipu_qr_iterations,

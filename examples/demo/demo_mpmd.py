@@ -4,7 +4,7 @@ from functools import partial
 import jax
 import numpy as np
 
-from tessellate_ipu.tile import tile_map_primitive, tile_put_replicated, tile_put_sharded
+from tessellate_ipu import tile_map_primitive, tile_put_replicated, tile_put_sharded
 
 N = 5
 tiles0 = (0, 2, 5)

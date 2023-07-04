@@ -9,14 +9,12 @@ import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
 
-from tessellate_ipu import is_ipu_model
-from tessellate_ipu.tile import (
-    TileShardedArray,
+from tessellate_ipu import TileShardedArray, is_ipu_model, tile_put_sharded
+from tessellate_ipu.lax.tile_random import (
     ipu_get_hw_seeds_tmap,
     ipu_random_normal_tmap,
     ipu_random_uniform_tmap,
     ipu_set_hw_seeds_tmap,
-    tile_put_sharded,
 )
 
 

@@ -9,20 +9,10 @@ from absl.testing import parameterized
 from jax import lax
 from jax.core import ShapedArray
 
-from tessellate_ipu.tile import (
-    TileShardedArray,
-    ipu_cycle_count,
-    tile_map_primitive,
-    tile_put_replicated,
-    tile_put_sharded,
-)
-from tessellate_ipu.tile.tile_interpreter_lax_binary import scaled_add_p, scaled_sub_p
-from tessellate_ipu.tile.tile_interpreter_lax_unary import (
-    ipu_unary_primitive_translation,
-    make_unary1d_vertex_fullname,
-    tile_copy,
-)
-from tessellate_ipu.tile.tile_interpreter_primitives import IpuTileMapEquation, IpuType
+from tessellate_ipu import TileShardedArray, ipu_cycle_count, tile_map_primitive, tile_put_replicated, tile_put_sharded
+from tessellate_ipu.core.tile_interpreter_primitives import IpuTileMapEquation, IpuType
+from tessellate_ipu.lax.tile_lax_binary import scaled_add_p, scaled_sub_p
+from tessellate_ipu.lax.tile_lax_unary import ipu_unary_primitive_translation, make_unary1d_vertex_fullname, tile_copy
 
 
 class IpuTileUnaryPrimitiveTests(chex.TestCase):

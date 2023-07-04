@@ -10,8 +10,8 @@ import pytest
 import scipy.linalg
 from absl.testing import parameterized
 
-from tessellate_ipu.tile import ipu_cycle_count, tile_data_barrier, tile_map_primitive, tile_put_replicated
-from tessellate_ipu.tile.tile_interpreter_linalg_jacobi import (
+from tessellate_ipu.core import ipu_cycle_count, tile_data_barrier, tile_map_primitive, tile_put_replicated
+from tessellate_ipu.linalg.tile_linalg_jacobi import (
     ipu_eigh,
     ipu_jacobi_eigh,
     jacobi_initial_rotation_set,

@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 from jax import core
 
-from tessellate_ipu.tile import (
+from tessellate_ipu.core import (
     IpuTileMapEquation,
     declare_ipu_tile_primitive,
     from_numpy_dtype_to_ipu_type,

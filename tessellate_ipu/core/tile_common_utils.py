@@ -9,7 +9,7 @@ from numpy.typing import DTypeLike
 # Pybind11 extension import (and compilation if necessary).
 # Explicit path is more robust to different `pip install` usages.
 ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_array_primitives_impl.cpp"))
-tile_array_primitives_impl = cppimport.imp_from_filepath(ext_filename, "tessellate_ipu.tile.tile_array_primitives_impl")
+tile_array_primitives_impl = cppimport.imp_from_filepath(ext_filename, "tessellate_ipu.core.tile_array_primitives_impl")
 
 from .tile_array_primitives_impl import Base64Data, IpuShapedArray, IpuType  # noqa: E402, F401
 

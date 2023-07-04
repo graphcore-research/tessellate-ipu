@@ -5,17 +5,16 @@ import numpy as np
 from jax import lax
 from jax.core import Primitive, ShapedArray
 
-from tessellate_ipu.utils import DTypeLike
-
-from .tile_interpreter import register_ipu_tile_primitive
-from .tile_interpreter_primitives import (
+from tessellate_ipu.core import (
     IpuTileMapEquation,
     get_ipu_type_name,
     make_ipu_vertex_attributes,
     make_ipu_vertex_in_info,
     make_ipu_vertex_inout_info,
     make_ipu_vertex_out_info,
+    register_ipu_tile_primitive,
 )
+from tessellate_ipu.utils import DTypeLike
 
 # popops definitions.
 # enum class TernaryOpType { CLAMP, SELECT };

@@ -6,19 +6,19 @@ from jax import lax
 from jax._src.lax.lax import copy_p
 from jax.core import Primitive, ShapedArray
 
-from tessellate_ipu.utils import DTypeLike
-
-from .tile_array import TileShardedArray
-from .tile_interpreter import register_ipu_tile_primitive, tile_map_primitive
-from .tile_interpreter_primitives import (
+from tessellate_ipu.core import (
     IpuTileMapEquation,
+    TileShardedArray,
     from_numpy_dtype_to_ipu_type,
     get_ipu_type_name,
     make_ipu_vertex_attributes,
     make_ipu_vertex_in_info,
     make_ipu_vertex_name_templated,
     make_ipu_vertex_out_info,
+    register_ipu_tile_primitive,
+    tile_map_primitive,
 )
+from tessellate_ipu.utils import DTypeLike
 
 # popops definition.
 # enum class UnaryOpType {
@@ -234,7 +234,7 @@ def ipu_tile_memcpy(
     assert len(inavals) == 1
     inaval = inavals[0]
 
-    gp_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "vertex", "tile_prim_vertex.cpp"))
+    gp_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "../core", "vertex", "tile_prim_vertex.cpp"))
     vname = make_ipu_vertex_name_templated("TileMemcpyVertex", inaval.dtype)
     ipu_prim_info = IpuTileMapEquation(
         vname=vname,

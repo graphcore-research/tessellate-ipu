@@ -10,7 +10,7 @@ import pytest
 from absl.testing import parameterized
 from jax.lax import add_p, sub_p
 
-from tessellate_ipu.tile import (
+from tessellate_ipu.core import (
     TileShardedArray,
     tile_constant_replicated,
     tile_constant_sharded,
@@ -20,7 +20,7 @@ from tessellate_ipu.tile import (
     tile_put_replicated,
     tile_put_sharded,
 )
-from tessellate_ipu.tile.tile_array import check_tile_array_multi_slice
+from tessellate_ipu.core.tile_array import check_tile_array_multi_slice
 
 
 class TileShardedArrayTests(chex.TestCase, parameterized.TestCase):

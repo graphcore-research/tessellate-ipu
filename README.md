@@ -12,13 +12,13 @@
 
 :red_circle: :warning: **Non-official Graphcore product** :warning: :red_circle:
 
-Tessellate for IPU is a small library bringing low-level Poplar IPU programming to Python (JAX, and Pytorch in the near future).
+**Tessellate IPU** is a library bringing low-level Poplar IPU programming to Python ML frameworks (JAX at the moment, and Pytorch in the near future).
 
 The package is maintained by the Graphcore Research team. Expect bugs and sharp edges! Please let us know what you think!
 
 ## Features
 
-At the moment, the package features one module [`tile`](tessellate/tile/README.md) bringing low-level Poplar IPU programming to JAX (and is fully compatible with the standard JAX API). More specifically:
+Tessellate IPU brings low level Poplar IPU programming to Python, while being fully compatible with ML frameworks standard API. The main features are:
 
 * Control tile mapping of arrays using `tile_put_replicated` or `tile_put_sharded`
 * Support of standard JAX LAX operations at tile level (using `tile_map_primitive`)
@@ -26,7 +26,7 @@ At the moment, the package features one module [`tile`](tessellate/tile/README.m
 * Access to low-level IPU hardware functionalities such as cycle count and random seed set/get
 * Full compatibility with other backends
 
-This additional API allows easy and quick implementation of algorithms on IPUs, while keeping compatibility with other backends (CPU/GPU/TPU).
+Tessellate IPU API allows easy and efficient implementation of algorithms on IPUs, while keeping compatibility with other backends (CPU/GPU/TPU). the more details on the API, please refer to the [documentation](docs/basics.md).
 
 ## Installation guide
 
@@ -98,14 +98,14 @@ Alternatively, like other JAX flags, these can be set using environment variable
 
 ## Documentation
 
-* [Tile low-level API](tessellate/tile/README.md)
-* [Library development](docs/development.md)
+* [Tessellate API basics](docs/basics.md)
+* [Tessellate development guidelines](docs/development.md)
 
 ## License
 
 Copyright (c) 2023 Graphcore Ltd. The project is licensed under the [**Apache License 2.0**](LICENSE).
 
-JAX IPU tile programming is implemented using C++ custom operations. The later has the following [C++ libraries](tessellate/external) as dependencies, statically compiled into a shared library:
+Tessellate IPU is implemented using C++ custom operations. The later has the following [C++ libraries](tessellate_ipu/external) as dependencies, statically compiled into a shared library:
 
 | Component | Description | License |
 | --- | --- | --- |
