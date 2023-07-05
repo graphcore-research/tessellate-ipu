@@ -21,7 +21,7 @@ The package is maintained by the Graphcore Research team. Expect bugs and sharp 
 Tessellate IPU brings low level Poplar IPU programming to Python, while being fully compatible with ML frameworks standard API. The main features are:
 
 * Control tile mapping of arrays using `tile_put_replicated` or `tile_put_sharded`
-* Support of standard JAX LAX operations at tile level (using `tile_map_primitive`)
+* Support of standard JAX LAX operations at tile level (using `tile_map`)
 * Easy integration of custom IPU C++ vertex (see [vertex example](examples/demo/demo_vertex.py))
 * Access to low-level IPU hardware functionalities such as cycle count and random seed set/get
 * Full compatibility with other backends
@@ -56,7 +56,7 @@ The following is a simple example showing how to set the tile mapping of JAX arr
 ```python
 import numpy as np
 import jax
-from tessellate_ipu.tile import tile_put_sharded, tile_map_primitive
+from tessellate_ipu import tile_put_sharded, tile_map
 
 # Which IPU tiles do we want to use?
 tiles = (0, 1, 3)
@@ -67,7 +67,7 @@ def compute_fn(data0, data1):
     input0 = tile_put_sharded(data0, tiles)
     input1 = tile_put_sharded(data1, tiles)
     # Map a JAX LAX primitive on tiles.
-    output = tile_map_primitive(jax.lax.add_p, input0, input1)
+    output = tile_map(jax.lax.add_p, input0, input1)
     return output
 
 data = np.random.rand(len(tiles), 2, 3).astype(np.float32)

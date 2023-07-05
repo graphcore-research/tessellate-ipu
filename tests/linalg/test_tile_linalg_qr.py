@@ -12,7 +12,7 @@ from tessellate_ipu import (
     TileShardedArray,
     ipu_cycle_count,
     tile_data_barrier,
-    tile_map_primitive,
+    tile_map,
     tile_put_replicated,
     tile_put_sharded,
 )
@@ -76,7 +76,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
 
     #     def qr_decomposition_fn(in0):
     #         input0 = tile_put_sharded(in0, tiles)
-    #         return tile_map_primitive(qr_p, input0, full_matrices=True)
+    #         return tile_map(qr_p, input0, full_matrices=True)
 
     #     qr_decomposition_fn_ipu = jax.jit(qr_decomposition_fn, backend="ipu")
     #     qr_decomposition_fn_cpu = jax.jit(qr_decomposition_fn, backend="cpu")
@@ -107,7 +107,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
             v = tile_put_replicated(v, tiles)
             w = tile_put_replicated(w, tiles)
             # Two scaling factors passed.
-            return tile_map_primitive(qr_householder_row_update_p, x, v, w, w, start_idx=start_idx)
+            return tile_map(qr_householder_row_update_p, x, v, w, w, start_idx=start_idx)
 
         qr_householder_update_fn_ipu = jax.jit(qr_householder_update_fn, backend="ipu")
         ret_ipu = qr_householder_update_fn_ipu(x, v, w)
@@ -133,10 +133,10 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
             v = tile_put_replicated(v, tiles)
             w = tile_put_replicated(w, tiles)
             # Need a first call to force all data transfers to tile.
-            x = tile_map_primitive(qr_householder_row_update_p, x, v, w, w, start_idx=N - M)
+            x = tile_map(qr_householder_row_update_p, x, v, w, w, start_idx=N - M)
             x, start = ipu_cycle_count(x)
-            x = tile_map_primitive(qr_householder_row_update_p, x, v, w, w, start_idx=N - M)
-            # x = tile_map_primitive(scaled_sub_p, x, v, w) # Comparison point.
+            x = tile_map(qr_householder_row_update_p, x, v, w, w, start_idx=N - M)
+            # x = tile_map(scaled_sub_p, x, v, w) # Comparison point.
             x, end = ipu_cycle_count(x)
             return x, start, end
 
@@ -164,7 +164,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
         def qr_correction_vector_fn(Rcol, sdiag):
             Rcol = tile_put_replicated(Rcol, tiles)
             sdiag = tile_put_replicated(sdiag, tiles)
-            v_ipu, v_rescale = tile_map_primitive(qr_correction_vector_p, Rcol, sdiag, col_idx=col_idx)  # type:ignore
+            v_ipu, v_rescale = tile_map(qr_correction_vector_p, Rcol, sdiag, col_idx=col_idx)  # type:ignore
             # TODO: understand the issue when returning both?
             return (v_ipu,)
 
@@ -186,7 +186,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
             Rcol = tile_put_replicated(Rcol, tiles)
             Rcol, start = ipu_cycle_count(Rcol)
             # FIXME: having to pass the same data to get accurate cycle count.
-            r, _ = tile_map_primitive(qr_correction_vector_p, Rcol, Rcol, col_idx=col_idx)  # type:ignore
+            r, _ = tile_map(qr_correction_vector_p, Rcol, Rcol, col_idx=col_idx)  # type:ignore
             r, end = ipu_cycle_count(r)
             return r, start, end
 
@@ -272,7 +272,7 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
             x = tile_put_sharded(x, tiles)
             y = tile_put_sharded(y, tiles)
             x, y = tile_data_barrier(x, y)
-            r = tile_map_primitive(dot_product1d_p, x, y)
+            r = tile_map(dot_product1d_p, x, y)
             return r
 
         dot_product1d_fn = jax.jit(dot_product1d_fn, backend="ipu")
@@ -298,8 +298,8 @@ class IpuTileLinalgQR(chex.TestCase, parameterized.TestCase):
             x, y = tile_data_barrier(x, y)
             # Benchmark dot product1d vertex.
             x, start = ipu_cycle_count(x)
-            r = tile_map_primitive(dot_product1d_p, x, y)
-            # r = tile_map_primitive(reduce_sum_p, r, axes=(0,)) # Optional final reduction.
+            r = tile_map(dot_product1d_p, x, y)
+            # r = tile_map(reduce_sum_p, r, axes=(0,)) # Optional final reduction.
             r, end = ipu_cycle_count(r)  # type:ignore
             return r, start, end
 

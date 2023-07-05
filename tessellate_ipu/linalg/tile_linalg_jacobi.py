@@ -14,7 +14,7 @@ from tessellate_ipu import (
     tile_constant_sharded,
     tile_data_barrier,
     tile_gather,
-    tile_map_primitive,
+    tile_map,
     tile_put_replicated,
     tile_put_sharded,
 )
@@ -147,7 +147,7 @@ def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtile
         rotset_sharded = tile_constant_sharded(rotset_sorted, tiles=Atiles)
 
         # Compute Schur decomposition + on-tile update of columns.
-        cs_per_tile, Apcols, Aqcols = tile_map_primitive(  # type:ignore
+        cs_per_tile, Apcols, Aqcols = tile_map(  # type:ignore
             jacobi_update_first_step_p, rotset_sharded, Apcols, Aqcols, N=N
         )
         # Replicate Schur decomposition across all A tiles: (2*N//2) comms.
@@ -156,7 +156,7 @@ def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtile
         cs_Vtiles = tile_put_sharded(cs_per_tile.array, tiles=Vtiles)
 
         # Second Jacobi update step.
-        cs_replicated, Apcols, Aqcols = tile_map_primitive(  # type:ignore
+        cs_replicated, Apcols, Aqcols = tile_map(  # type:ignore
             jacobi_update_second_step_p,
             cs_replicated,
             rotset_replicated,
@@ -166,7 +166,7 @@ def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtile
             halfN=halfN,
         )
         # Jacobi eigenvectors update step.
-        Vpcols, Vqcols = tile_map_primitive(  # type:ignore
+        Vpcols, Vqcols = tile_map(  # type:ignore
             jacobi_update_eigenvectors_p,
             cs_Vtiles,
             Vpcols,

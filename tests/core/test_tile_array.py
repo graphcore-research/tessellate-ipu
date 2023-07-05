@@ -16,7 +16,7 @@ from tessellate_ipu.core import (
     tile_constant_sharded,
     tile_data_barrier,
     tile_gather,
-    tile_map_primitive,
+    tile_map,
     tile_put_replicated,
     tile_put_sharded,
 )
@@ -240,10 +240,10 @@ class TileGatherTests(chex.TestCase, parameterized.TestCase):
         @partial(jax.jit, backend="ipu")
         def tile_gather_fn(data) -> Tuple[TileShardedArray]:
             x = tile_put_sharded(data, tiles)
-            x = tile_map_primitive(add_p, x, x)  # type:ignore
+            x = tile_map(add_p, x, x)  # type:ignore
             # Complex rotation: partially keep inplace + rotation.
             x = tile_gather(x, (0, 2, 3, 1), tiles)
-            x = tile_map_primitive(sub_p, x, x)  # type:ignore
+            x = tile_map(sub_p, x, x)  # type:ignore
             return x  # type:ignore
 
         output = tile_gather_fn(data)

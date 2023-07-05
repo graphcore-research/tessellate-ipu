@@ -4,7 +4,7 @@ from functools import partial
 import jax
 import numpy as np
 
-from tessellate_ipu import tile_map_primitive, tile_put_replicated, tile_put_sharded
+from tessellate_ipu import tile_map, tile_put_replicated, tile_put_sharded
 
 N = 5
 tiles0 = (0, 2, 5)
@@ -24,8 +24,8 @@ def compute_fn(input0, input1):
     input11 = tile_put_replicated(input1, tiles1)
 
     # No need for explicit parallel call: Poplar compiler doing a great job here!
-    output0 = tile_map_primitive(jax.lax.add_p, input00, input10)
-    output1 = tile_map_primitive(jax.lax.mul_p, input01, input11)
+    output0 = tile_map(jax.lax.add_p, input00, input10)
+    output1 = tile_map(jax.lax.mul_p, input01, input11)
     return output0, output1
 
 

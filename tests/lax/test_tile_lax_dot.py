@@ -8,7 +8,7 @@ import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
 
-from tessellate_ipu import TileShardedArray, tile_map_primitive, tile_put_sharded
+from tessellate_ipu import TileShardedArray, tile_map, tile_put_sharded
 from tessellate_ipu.lax.tile_lax_dot import (
     IpuConvPartial1x1Args,
     IpuConvPartial1x1StaticArgs,
@@ -98,7 +98,7 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
         def dot_general_fn(lhs, rhs):
             lhs = tile_put_sharded(lhs, tiles)
             rhs = tile_put_sharded(rhs, tiles)
-            output = tile_map_primitive(
+            output = tile_map(
                 jax.lax.dot_general_p,
                 lhs,
                 rhs,
@@ -137,7 +137,7 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
         def dot_general_fn(lhs, rhs):
             lhs = tile_put_sharded(lhs, tiles)
             rhs = tile_put_sharded(rhs, tiles)
-            output = tile_map_primitive(
+            output = tile_map(
                 jax.lax.dot_general_p,
                 lhs,
                 rhs,
@@ -167,7 +167,7 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
         def dot_general_fn(lhs, rhs):
             lhs = tile_put_sharded(lhs, tiles)
             rhs = tile_put_sharded(rhs, tiles)
-            output = tile_map_primitive(
+            output = tile_map(
                 jax.lax.dot_general_p,
                 lhs,
                 rhs,
@@ -203,7 +203,7 @@ class IpuConvPartial1x1DotPrimitive(chex.TestCase, parameterized.TestCase):
         def dot_general_fn(lhs, rhs):
             lhs = tile_put_sharded(lhs, tiles)
             rhs = tile_put_sharded(rhs, tiles)
-            output = tile_map_primitive(
+            output = tile_map(
                 jax.lax.dot_general_p,
                 lhs,
                 rhs,

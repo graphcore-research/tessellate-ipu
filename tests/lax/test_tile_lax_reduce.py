@@ -7,7 +7,7 @@ import numpy as np
 import numpy.testing as npt
 from absl.testing import parameterized
 
-from tessellate_ipu import TileShardedArray, tile_map_primitive, tile_put_sharded
+from tessellate_ipu import TileShardedArray, tile_map, tile_put_sharded
 from tessellate_ipu.lax.tile_lax_reduce import make_continuous_reduce_vertex_fullname
 
 
@@ -30,7 +30,7 @@ class IpuTilePrimitivesLaxReduce(chex.TestCase, parameterized.TestCase):
         {"backend": "ipu", "jitting": False},
         {"backend": "ipu", "jitting": True},
     )
-    def test__tile_map_primitive__reduce__jitting_options__proper_result(self, backend, jitting):
+    def test__tile_map__reduce__jitting_options__proper_result(self, backend, jitting):
         device = jax.devices(backend)[0]
         tiles = (1, 2, self.num_tiles - 1)
         indata = np.random.randn(len(tiles), 100).astype(np.float32)
@@ -38,7 +38,7 @@ class IpuTilePrimitivesLaxReduce(chex.TestCase, parameterized.TestCase):
 
         def compute_fn(in0):
             input0 = tile_put_sharded(in0, tiles)
-            output = tile_map_primitive(reduce_p, input0, axes=(0,))
+            output = tile_map(reduce_p, input0, axes=(0,))
             return output
 
         compute_fn = partial(jax.jit, backend=backend)(compute_fn) if jitting else compute_fn
@@ -63,13 +63,13 @@ class IpuTilePrimitivesLaxReduce(chex.TestCase, parameterized.TestCase):
         {"dtype": np.bool_, "reduce_p": jax.lax.reduce_or_p},
         {"dtype": np.bool_, "reduce_p": jax.lax.reduce_and_p},
     )
-    def test__tile_map_primitive__reduce_primitives__ipu_jitting__proper_result(self, dtype, reduce_p):
+    def test__tile_map__reduce_primitives__ipu_jitting__proper_result(self, dtype, reduce_p):
         tiles = (1, 2, self.num_tiles - 1)
         indata = np.random.randn(len(tiles), 13).astype(dtype)
 
         def compute_fn(in0):
             input0 = tile_put_sharded(in0, tiles)
-            output = tile_map_primitive(reduce_p, input0, axes=(0,))
+            output = tile_map(reduce_p, input0, axes=(0,))
             return output
 
         compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)
@@ -88,7 +88,7 @@ class IpuTilePrimitivesLaxReduce(chex.TestCase, parameterized.TestCase):
         {"dtype": np.float32, "axes": (2, 3)},
         {"dtype": np.float32, "axes": (3,)},
     )
-    def test__tile_map_primitive__reduce_sum_partial__ipu_jitting__proper_result(self, dtype, axes):
+    def test__tile_map__reduce_sum_partial__ipu_jitting__proper_result(self, dtype, axes):
         tiles = (1, 2, self.num_tiles - 1)
         shape = (3, 5, 7, 9)
         indata = np.random.randn(len(tiles), *shape).astype(dtype)
@@ -96,7 +96,7 @@ class IpuTilePrimitivesLaxReduce(chex.TestCase, parameterized.TestCase):
 
         def compute_fn(in0):
             input0 = tile_put_sharded(in0, tiles)
-            output = tile_map_primitive(reduce_p, input0, axes=axes)
+            output = tile_map(reduce_p, input0, axes=axes)
             return output
 
         compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)
@@ -114,14 +114,14 @@ class IpuTilePrimitivesLaxReduce(chex.TestCase, parameterized.TestCase):
         {"dtype": np.float32, "axes": (1, 3)},
         {"dtype": np.float32, "axes": (2,)},
     )
-    def test__tile_map_primitive__reduce_partial__unsupported_axes(self, dtype, axes):
+    def test__tile_map__reduce_partial__unsupported_axes(self, dtype, axes):
         tiles = (1, 2, self.num_tiles - 1)
         shape = (3, 5, 7, 9)
 
         @partial(jax.jit, backend="ipu")
         def compute_fn(in0):
             input0 = tile_put_sharded(in0, tiles)
-            output = tile_map_primitive(jax.lax.reduce_sum_p, input0, axes=axes)
+            output = tile_map(jax.lax.reduce_sum_p, input0, axes=axes)
             return output
 
         indata = np.random.randn(len(tiles), *shape).astype(dtype)

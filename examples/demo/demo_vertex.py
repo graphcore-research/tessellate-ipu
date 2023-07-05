@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from tessellate_ipu import declare_ipu_tile_primitive, tile_map_primitive, tile_put_sharded
+from tessellate_ipu import declare_ipu_tile_primitive, tile_map, tile_put_sharded
 
 # fmt: off
 demo_vertex_filename = os.path.join(os.path.dirname(__file__), "demo_vertex.cpp")
@@ -72,7 +72,7 @@ def compute_fn(input):
     assert M == len(tiles)
     input_sharded = tile_put_sharded(input, tiles)
 
-    out0, out1 = tile_map_primitive(demo_vertex_p, input_sharded, scale_value=1.23)  # type:ignore
+    out0, out1 = tile_map(demo_vertex_p, input_sharded, scale_value=1.23)  # type:ignore
     print("First out0 shape", out0.shape)
     assert out0.shape == (M, N, N1 // 2)
 
@@ -82,7 +82,7 @@ def compute_fn(input):
     assert transpose.shape[0] == len(tiles_t)
     transpose_sharded = tile_put_sharded(transpose, tiles_t)
 
-    out0, out1 = tile_map_primitive(demo_vertex_p, transpose_sharded, scale_value=1.23)  # type:ignore
+    out0, out1 = tile_map(demo_vertex_p, transpose_sharded, scale_value=1.23)  # type:ignore
 
     return out0, out1
 

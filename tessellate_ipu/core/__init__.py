@@ -17,7 +17,7 @@ from .tile_interpreter import (
     create_ipu_tile_primitive_v2,
     declare_ipu_tile_primitive,
     register_ipu_tile_primitive,
-    tile_map_primitive,
+    tile_map,
 )
 from .tile_interpreter_hw_primitives import (
     hw_cycle_count_p,

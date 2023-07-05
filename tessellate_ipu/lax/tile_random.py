@@ -13,7 +13,7 @@ from tessellate_ipu.core import (
     make_ipu_vertex_name_templated,
     make_ipu_vertex_outputs,
     register_ipu_tile_primitive,
-    tile_map_primitive,
+    tile_map,
 )
 from tessellate_ipu.utils import DTypeLike
 
@@ -65,7 +65,7 @@ def tile_set_hw_seeds(seeds: TileShardedArray) -> TileShardedArray:
     Args:
         seeds: Seeds tile sharded array of shape (TILES, NCONTEXTS, 4) and dtype uint32.
     """
-    return tile_map_primitive(ipu_set_hw_seeds_p, seeds)  # type:ignore
+    return tile_map(ipu_set_hw_seeds_p, seeds)  # type:ignore
 
 
 ipu_set_hw_seeds_p.def_abstract_eval(ipu_set_hw_seeds_abstract_eval)
@@ -106,7 +106,7 @@ def tile_get_hw_seeds(tiles: Tuple[int, ...]) -> TileShardedArray:
     Returns:
         Seeds as a tile sharded array of shape (TILES, NCONTEXTS, 4) and dtype uint32.
     """
-    return tile_map_primitive(ipu_get_hw_seeds_p, tiles=tiles)  # type:ignore
+    return tile_map(ipu_get_hw_seeds_p, tiles=tiles)  # type:ignore
 
 
 ipu_get_hw_seeds_p.def_abstract_eval(ipu_get_hw_seeds_abstract_eval)
@@ -170,7 +170,7 @@ def tile_random_uniform(
     Returns:
         TileShardedArray of randomly sampled data.
     """
-    return tile_map_primitive(  # type:ignore
+    return tile_map(  # type:ignore
         ipu_random_uniform_p, size=size, dtype=dtype, offset=offset, scale=scale, tiles=tiles
     )
 
@@ -232,6 +232,6 @@ def tile_random_normal(
     Returns:
         TileShardedArray of randomly sampled data.
     """
-    return tile_map_primitive(  # type:ignore
+    return tile_map(  # type:ignore
         ipu_random_normal_p, size=size, dtype=dtype, mean=mean, stddev=stddev, tiles=tiles
     )

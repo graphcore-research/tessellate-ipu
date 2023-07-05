@@ -16,7 +16,7 @@ from tessellate_ipu.core import (
     make_ipu_vertex_name_templated,
     make_ipu_vertex_out_info,
     register_ipu_tile_primitive,
-    tile_map_primitive,
+    tile_map,
 )
 from tessellate_ipu.utils import DTypeLike
 
@@ -265,5 +265,5 @@ def tile_copy(input: TileShardedArray) -> TileShardedArray:
     Returns:
         Copied array, with same tile-mapping.
     """
-    r: TileShardedArray = tile_map_primitive(copy_p, input)  # type:ignore
+    r: TileShardedArray = tile_map(copy_p, input)  # type:ignore
     return r

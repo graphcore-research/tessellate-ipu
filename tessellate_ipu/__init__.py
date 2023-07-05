@@ -11,7 +11,7 @@ from .core import (
     tile_constant_sharded,
     tile_data_barrier,
     tile_gather,
-    tile_map_primitive,
+    tile_map,
     tile_put_replicated,
     tile_put_sharded,
 )

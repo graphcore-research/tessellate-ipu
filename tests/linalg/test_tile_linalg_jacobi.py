@@ -10,7 +10,7 @@ import pytest
 import scipy.linalg
 from absl.testing import parameterized
 
-from tessellate_ipu.core import ipu_cycle_count, tile_data_barrier, tile_map_primitive, tile_put_replicated
+from tessellate_ipu.core import ipu_cycle_count, tile_data_barrier, tile_map, tile_put_replicated
 from tessellate_ipu.linalg.tile_linalg_jacobi import (
     ipu_eigh,
     ipu_jacobi_eigh,
@@ -63,7 +63,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
             pq = tile_put_replicated(pq, tiles)
             pcol = tile_put_replicated(pcol, tiles)
             qcol = tile_put_replicated(qcol, tiles)
-            cs = tile_map_primitive(jacobi_sym_schur2_p, pq, pcol, qcol)
+            cs = tile_map(jacobi_sym_schur2_p, pq, pcol, qcol)
             return cs
 
         jacobi_sym_schur2_fn = jax.jit(jacobi_sym_schur2_fn, backend="ipu")
@@ -85,7 +85,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
             # Force synchronization at this point, before cycle count.
             pq, pcol, qcol = tile_data_barrier(pq, pcol, qcol)
             pcol, start = ipu_cycle_count(pcol)
-            cs = tile_map_primitive(jacobi_sym_schur2_p, pq, pcol, qcol)
+            cs = tile_map(jacobi_sym_schur2_p, pq, pcol, qcol)
             cs, end = ipu_cycle_count(cs)  # type:ignore
             return cs, start, end
 
@@ -112,7 +112,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
             # Force synchronization at this point, before cycle count.
             pq, pcol, qcol = tile_data_barrier(pq, pcol, qcol)
             pcol, start = ipu_cycle_count(pcol)
-            cs, _, _ = tile_map_primitive(  # type:ignore
+            cs, _, _ = tile_map(  # type:ignore
                 jacobi_update_first_step_p, pq, pcol, qcol, N=N
             )
             cs, end = ipu_cycle_count(cs)
@@ -141,7 +141,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
             # Force synchronization at this point, before cycle count.
             cs, pcol, qcol = tile_data_barrier(cs, pcol, qcol)
             pcol, start = ipu_cycle_count(pcol)
-            pcol, qcol = tile_map_primitive(  # type:ignore
+            pcol, qcol = tile_map(  # type:ignore
                 jacobi_update_eigenvectors_p, cs, pcol, qcol
             )
             pcol, end = ipu_cycle_count(pcol)

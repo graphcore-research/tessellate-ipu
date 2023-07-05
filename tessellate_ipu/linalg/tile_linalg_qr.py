@@ -6,13 +6,7 @@ import jax.lax
 import numpy as np
 from jax.core import ShapedArray
 
-from tessellate_ipu import (
-    TileShardedArray,
-    create_ipu_tile_primitive,
-    tile_map_primitive,
-    tile_put_replicated,
-    tile_put_sharded,
-)
+from tessellate_ipu import TileShardedArray, create_ipu_tile_primitive, tile_map, tile_put_replicated, tile_put_sharded
 from tessellate_ipu.core.tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
 
 Array = Any
@@ -113,7 +107,7 @@ def ipu_qr_iterations(
         Rcol = RT[cidx]
         sdiag = sdiag_full[cidx]
         # Correction vector. NOTE: computed on a single tile, changing at every loop.
-        v, vrescale = tile_map_primitive(qr_correction_vector_p, Rcol, sdiag, col_idx=cidx)  # type:ignore
+        v, vrescale = tile_map(qr_correction_vector_p, Rcol, sdiag, col_idx=cidx)  # type:ignore
 
         # Replicate to all Q and R tiles.
         vQ = tile_put_replicated(v.array[0], Q_tiles)
@@ -124,18 +118,18 @@ def ipu_qr_iterations(
 
         # Using "smart" slicing to reduce compute to do.
         # w = R^T @ v
-        w = tile_map_primitive(dot_product1d_p, vR[:, start_idx:], RT[:, start_idx:])
-        w = tile_map_primitive(jax.lax.reduce_sum_p, w, axes=(0,))  # type:ignore
+        w = tile_map(dot_product1d_p, vR[:, start_idx:], RT[:, start_idx:])
+        w = tile_map(jax.lax.reduce_sum_p, w, axes=(0,))  # type:ignore
         # Inplace update of R.
-        RT = tile_map_primitive(  # type:ignore
+        RT = tile_map(  # type:ignore
             qr_householder_row_update_p, RT, vR[:, start_idx:], w, vrescaleR, start_idx=start_idx  # type:ignore
         )
 
         # w = Q @ v
-        w = tile_map_primitive(dot_product1d_p, vQ[:, start_idx:], Q[:, start_idx:])
-        w = tile_map_primitive(jax.lax.reduce_sum_p, w, axes=(0,))  # type:ignore
+        w = tile_map(dot_product1d_p, vQ[:, start_idx:], Q[:, start_idx:])
+        w = tile_map(jax.lax.reduce_sum_p, w, axes=(0,))  # type:ignore
         # Inplace update of Q.
-        Q = tile_map_primitive(
+        Q = tile_map(
             qr_householder_row_update_p, Q, vQ[:, start_idx:], w, vrescaleQ, start_idx=start_idx  # type:ignore
         )
 

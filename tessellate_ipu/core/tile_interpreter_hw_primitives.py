@@ -6,7 +6,7 @@ import numpy as np
 from jax import core
 
 from .tile_array import tile_data_barrier
-from .tile_interpreter import TileShardedArray, register_ipu_tile_primitive, tile_map_primitive
+from .tile_interpreter import TileShardedArray, register_ipu_tile_primitive, tile_map
 from .tile_interpreter_primitives import (
     IpuTileMapEquation,
     make_ipu_vertex_inout_info,
@@ -102,7 +102,7 @@ def ipu_cycle_count(*args: TileShardedArray, **kwargs: Any) -> Tuple[TileSharded
     if len(args) > 1:
         args = tile_data_barrier(*args)
 
-    arg0, cycle_count = tile_map_primitive(hw_cycle_count_p, args[0], sync=sync)  # type:ignore
+    arg0, cycle_count = tile_map(hw_cycle_count_p, args[0], sync=sync)  # type:ignore
     # Re-pack the arguments + cycle count.
     return (arg0, *args[1:], cycle_count)
 

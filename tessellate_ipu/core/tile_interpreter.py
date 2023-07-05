@@ -178,7 +178,7 @@ def create_ipu_tile_primitive(
     return p
 
 
-def tile_map_primitive(
+def tile_map(
     primitive: Primitive, *args: TileShardedArray, **kwargs: Any
 ) -> Union[TileShardedArray, Sequence[TileShardedArray]]:
     """Map a JAX primitive over tiles.

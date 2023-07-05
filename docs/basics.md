@@ -4,8 +4,8 @@ Tessellate IPU exposes Poplar tensor tile mapping and vertex calling directly in
 
 This lightweight API is based on three main concepts:
 * `TileShardedArray`: a data structure that wraps a classic JAX array with tile mapping information;
-* `tile_put_replicated` and `tile_put_sharded`: tile mapping functions;
-* `tile_map_primitive`: a tile vertex mapping function;
+* `tile_put_replicated` and `tile_put_sharded`: explicit mapping tensors/arrays to IPU tiles;
+* `tile_map`: a tile vertex mapping function (with basics JAX LAX primitives support);
 
 Note that even though these APIs are IPU-specific, they are still compatible with other backends (for example CPU and GPU). On non-IPU backends, any of these calls is either a no-op, or a redirection to the JAX standard `vmap`.
 
@@ -25,7 +25,7 @@ At the moment, `TileShardedArray` can only represent tile sharding over the firs
 
 `TileShardedArray` implements the basic NumPy array API (such as `dtype`, `shape` slicing) and is fully compatible with the standard JAX NumPy API.
 
-Consider an example `TileShardedArray` array `v` of shape `(3, 4)` sharded over the first axis on tiles `(0, 2, 5)`. This means that every slice `v[0]`, `v[1]` and `v[2]` will be contiguous arrays living on tiles `0`, `2` and `5` in SRAM memory. The on-tile memory contiguity is always ensured, meaning that no additional on-tile copy is necessary when calling an IPU vertex with `tile_map_primitive` (with the exception of some memory alignment edge cases).
+Consider an example `TileShardedArray` array `v` of shape `(3, 4)` sharded over the first axis on tiles `(0, 2, 5)`. This means that every slice `v[0]`, `v[1]` and `v[2]` will be contiguous arrays living on tiles `0`, `2` and `5` in SRAM memory. The on-tile memory contiguity is always ensured, meaning that no additional on-tile copy is necessary when calling an IPU vertex with `tile_map` (with the exception of some memory alignment edge cases).
 
 ## IPU tile sharding using `tile_put_replicated` and `tile_put_sharded`
 
@@ -52,11 +52,11 @@ will return a `TileShardedArray` array of shape `(4, 5)`, with data sharded on t
 
 `tessellate_ipu.tile` also provides equivalent functions (`tile_constant_replicated` and `tile_constant_sharded`) to build Poplar on tile constant arrays from NumPy tensors.
 
-## IPU vertex call using `tile_map_primitive`
+## IPU vertex call using `tile_map`
 
-Once array(s) have been sharded over IPU tiles, you can map a function on the former using `tile_map_primitive`. Under the hood, `tile_map_primitive` adds a Poplar vertex call to the graph on all tiles where data is present. The workloads of all tiles will run independently in parallel (no sync being required).
+Once array(s) have been sharded over IPU tiles, you can map a function on the former using `tile_map`. Under the hood, `tile_map` adds a Poplar vertex call to the graph on all tiles where data is present. The workloads of all tiles will run independently in parallel (no sync being required).
 
-The first `tile_map_primitive` argument is a [JAX LAX](https://jax.readthedocs.io/en/latest/jax.lax.html) primitive. `tessellate_ipu.tile` provides a mapping from (most) standard JAX LAX primitives to Graphcore Poplibs optimized vertices, meaning you will be able to take full advantage of the IPU hardware in just a couple of lines of Python.
+The first `tile_map` argument is a [JAX LAX](https://jax.readthedocs.io/en/latest/jax.lax.html) primitive. `tessellate_ipu.tile` provides a mapping from (most) standard JAX LAX primitives to Graphcore Poplibs optimized vertices, meaning you will be able to take full advantage of the IPU hardware in just a couple of lines of Python.
 
 For instance, here is simple example calling a JAX LAX primitive on a collection of tiles:
 
@@ -69,7 +69,7 @@ def compute_fn(input):
     # Shard data over tiles.
     input = tile_put_sharded(input, tiles)
     # Call Popops NEG vertex on tiles (0, 2, 5).
-    return tile_map_primitive(jax.lax.neg_p, input)
+    return tile_map(jax.lax.neg_p, input)
 
 output = compute_fn(data) # Returns TileShardedArray
 ```
@@ -77,7 +77,7 @@ output = compute_fn(data) # Returns TileShardedArray
 The [PopVision Graph Analyser](https://www.graphcore.ai/developer/popvision-tools) will generate a profile exactly reflecting the code written in Python:
 ![tile_map_popvision](../../docs/images/tile_map_popvision.png)
 
-**Note:** Since `tile_map_primitive` is built on top of the standard JAX LAX primitive, the previous example is fully compatible with other backends (for example, `cpu` or `gpu`). The `tile_map_primitive` call will just be translated into a standard JAX `vmap`.
+**Note:** Since `tile_map` is built on top of the standard JAX LAX primitive, the previous example is fully compatible with other backends (for example, `cpu` or `gpu`). The `tile_map` call will just be translated into a standard JAX `vmap`.
 
 ## IPU custom vertex integration
 
@@ -104,13 +104,13 @@ def demo_vertex_p(x: jax.ShapedArray):
     return outputs, constants, temps, perf_estimate
 ```
 
-Once declared in this way, the custom vertex can easily be called using `tile_map_primitive`:
+Once declared in this way, the custom vertex can easily be called using `tile_map`:
 ```python
 @partial(jax.jit, backend="ipu")
 def compute_fn(input):
     input = tile_put_sharded(input, tiles)
     # Poplar call to custom vertex `DemoVertex`.
-    return tile_map_primitive(demo_vertex_p, input)
+    return tile_map(demo_vertex_p, input)
 ```
 
 Can you maintain compatibility with other backends? Yes! For that, you will need to provide a default JAX NumPy implementation of the custom primitive:
