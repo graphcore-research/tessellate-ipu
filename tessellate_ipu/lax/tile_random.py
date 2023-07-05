@@ -30,7 +30,7 @@ def get_ipu_num_worker_contexts() -> int:
 
 
 def ipu_set_hw_seeds_abstract_eval(seeds: ShapedArray) -> ShapedArray:
-    # Poplar tensor: poplar::UNSIGNED_INT, {numTiles, numWorkerContexts, 4}
+    # Poplar seed tensor: poplar::UNSIGNED_INT, {numTiles, numWorkerContexts, 4}
     assert seeds.shape[0] == get_ipu_num_worker_contexts()
     assert seeds.shape[1] == 4
     assert seeds.dtype == np.uint32
@@ -59,8 +59,12 @@ def ipu_set_hw_seeds_translation_ipu(
     return ipu_prim_info
 
 
-def ipu_set_hw_seeds_tmap(seeds: TileShardedArray) -> TileShardedArray:
-    """Set IPU hardware seeds on a collection of tiles."""
+def tile_set_hw_seeds(seeds: TileShardedArray) -> TileShardedArray:
+    """Set IPU hardware seeds on a collection of tiles.
+
+    Args:
+        seeds: Seeds tile sharded array of shape (TILES, NCONTEXTS, 4) and dtype uint32.
+    """
     return tile_map_primitive(ipu_set_hw_seeds_p, seeds)  # type:ignore
 
 
@@ -96,8 +100,12 @@ def ipu_get_hw_seeds_translation_ipu(
     return ipu_prim_info
 
 
-def ipu_get_hw_seeds_tmap(tiles: Tuple[int, ...]) -> TileShardedArray:
-    """Get IPU hardware seeds from a collection of tiles."""
+def tile_get_hw_seeds(tiles: Tuple[int, ...]) -> TileShardedArray:
+    """Get IPU hardware seeds from a collection of tiles.
+
+    Returns:
+        Seeds as a tile sharded array of shape (TILES, NCONTEXTS, 4) and dtype uint32.
+    """
     return tile_map_primitive(ipu_get_hw_seeds_p, tiles=tiles)  # type:ignore
 
 
@@ -148,10 +156,20 @@ ipu_random_uniform_p.def_abstract_eval(ipu_random_uniform_abstract_eval)
 register_ipu_tile_primitive(ipu_random_uniform_p, ipu_random_uniform_translation_ipu)
 
 
-def ipu_random_uniform_tmap(
+def tile_random_uniform(
     tiles: Tuple[int, ...], size: int, dtype: DTypeLike, offset: float = 0.0, scale: float = 1.0
 ) -> TileShardedArray:
-    """IPU Uniform sampling on a collection of tiles."""
+    """IPU Uniform sampling on a collection of tiles.
+
+    Args:
+        tiles: Tiles on which to randomly sample.
+        size: Number of samples per tile.
+        dtype: Output dtype.
+        offset: Offset of the uniform distribution.
+        scale: Scale of the uniform distribution.
+    Returns:
+        TileShardedArray of randomly sampled data.
+    """
     return tile_map_primitive(  # type:ignore
         ipu_random_uniform_p, size=size, dtype=dtype, offset=offset, scale=scale, tiles=tiles
     )
@@ -200,10 +218,20 @@ ipu_random_normal_p.def_abstract_eval(ipu_random_normal_abstract_eval)
 register_ipu_tile_primitive(ipu_random_normal_p, ipu_random_normal_translation_ipu)
 
 
-def ipu_random_normal_tmap(
+def tile_random_normal(
     tiles: Tuple[int, ...], size: int, dtype: DTypeLike, mean: float = 0.0, stddev: float = 1.0
 ) -> TileShardedArray:
-    """IPU Normal sampling on a collection of tiles."""
+    """IPU Normal sampling on a collection of tiles.
+
+    Args:
+        tiles: Tiles on which to randomly sample.
+        size: Number of samples per tile.
+        dtype: Output dtype.
+        Mean: Mean of the normal distribution.
+        stddev: Standard deviation of the normal distribution.
+    Returns:
+        TileShardedArray of randomly sampled data.
+    """
     return tile_map_primitive(  # type:ignore
         ipu_random_normal_p, size=size, dtype=dtype, mean=mean, stddev=stddev, tiles=tiles
     )
