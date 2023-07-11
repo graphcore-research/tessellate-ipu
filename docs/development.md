@@ -1,4 +1,4 @@
-# Tessellate IPU development guidelines
+# Tessellate IPU Development Guidelines
 
 There are some guidelines for doing development on Tessellate IPU.
 
