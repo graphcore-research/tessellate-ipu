@@ -1,4 +1,4 @@
-# Contributing to Tessellate IPU library
+# Contributing to the TessellateIPU Library
 
 ## Issues
 
@@ -8,7 +8,7 @@ To help respond effectively to issues:
 * Please include the version of JAX you are running, and the IPU hardware type.
 * Please provide a minimal reproducing example.
 
-## Pull Requests
+## Pull requests
 
 We'd love to accept your patches and contributions to this project. There are
 just a few small guidelines you need to follow.

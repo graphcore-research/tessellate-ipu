@@ -59,12 +59,12 @@ jobs:
           pip3 install --default-timeout=100 -r ./requirements.txt
           pip3 install --default-timeout=100 -r ./test-requirements.txt
       # Install repository.
-      - name: Install Tessellate IPU
+      - name: Install TessellateIPU
         run: |
           python3 setup.py bdist_wheel --universal
           pip3 install dist/*.whl
       # Run repository unit tests.
-      - name: Run Tessellate IPU unit tests (model)
+      - name: Run TessellateIPU unit tests (model)
         run: |
           JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=16 pytest --tb=short -v --log-cli-level=INFO ./tests/
       # Dockerized workflow known to create issues with self-hosted servers.
