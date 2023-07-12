@@ -3,7 +3,7 @@
 </div>
 
 
-# Tessellate IPU Library
+# TessellateIPU Library
 
 [**Features**](#features)
 | [**Installation guide**](#installation)
@@ -12,13 +12,13 @@
 
 :red_circle: :warning: **Non-official Graphcore Product** :warning: :red_circle:
 
-**Tessellate IPU** is a library bringing low-level Poplar IPU programming to Python ML frameworks (JAX at the moment, and PyTorch in the near future).
+**TessellateIPU** is a library bringing low-level Poplar IPU programming to Python ML frameworks (JAX at the moment, and PyTorch in the near future).
 
 The package is maintained by the Graphcore Research team. Expect bugs and sharp edges! Please let us know what you think!
 
 ## Features
 
-Tessellate IPU brings low-level Poplar IPU programming to Python, while being fully compatible with ML framework standard APIs. The main features are:
+TessellateIPU brings low-level Poplar IPU programming to Python, while being fully compatible with ML framework standard APIs. The main features are:
 
 * Control tile mapping of arrays using `tile_put_replicated` or `tile_put_sharded`
 * Support of standard JAX LAX operations at tile level (using `tile_map`)
@@ -26,7 +26,7 @@ Tessellate IPU brings low-level Poplar IPU programming to Python, while being fu
 * Access to low-level IPU hardware functionalities such as cycle count and random seed set/get
 * Full compatibility with other backends
 
-The Tessellate IPU API allows easy and efficient implementation of algorithms on IPUs, while keeping compatibility with other backends (CPU, GPU, TPU). For more details on the API, please refer to the [Tessellate IPU documentation](docs/basics.md).
+The TessellateIPU API allows easy and efficient implementation of algorithms on IPUs, while keeping compatibility with other backends (CPU, GPU, TPU). For more details on the API, please refer to the [TessellateIPU documentation](docs/basics.md).
 
 ## Installation guide
 
@@ -42,7 +42,7 @@ For Poplar SDK 3.2:
 pip install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk320 -f https://graphcore-research.github.io/jax-experimental/wheels.html
 ```
 
-As a pure Python repo, Tessellate IPU can then be directly installed from GitHub using `pip`:
+As a pure Python repo, TessellateIPU can then be directly installed from GitHub using `pip`:
 ```bash
 pip install git+https://github.com/graphcore-research/tessellate-ipu.git@main
 ```
@@ -105,7 +105,7 @@ Alternatively, like other JAX flags, these can be set using environment variable
 
 Copyright (c) 2023 Graphcore Ltd. The project is licensed under the [**Apache License 2.0**](LICENSE).
 
-Tessellate IPU is implemented using C++ custom operations. These have the following [C++ libraries](tessellate_ipu/external) as dependencies, statically compiled into a shared library:
+TessellateIPU is implemented using C++ custom operations. These have the following [C++ libraries](tessellate_ipu/external) as dependencies, statically compiled into a shared library:
 
 | Component | Description | License |
 | --- | --- | --- |

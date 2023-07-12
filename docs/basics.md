@@ -1,6 +1,6 @@
-# Tessellate IPU Basics
+# TessellateIPU Basics
 
-Tessellate IPU exposes Poplar tensor tile mapping and vertex calling directly in Python. This provides a low-level way of programming tiles for Poplar directly in JAX.
+TessellateIPU exposes Poplar tensor tile mapping and vertex calling directly in Python. This provides a low-level way of programming tiles for Poplar directly in JAX.
 
 This lightweight API is based on three main concepts:
 * `TileShardedArray`: a data structure that wraps a classic JAX array with tile mapping information.
