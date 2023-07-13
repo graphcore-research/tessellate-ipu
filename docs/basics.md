@@ -1,17 +1,17 @@
-# Tessellate IPU basics
+# TessellateIPU Basics
 
-Tessellate IPU exposes Poplar tensor tile mapping and vertex calling directly in Python. This provides a low-level way of programming tiles for Poplar directly in JAX.
+TessellateIPU exposes Poplar tensor tile mapping and vertex calling directly in Python. This provides a low-level way of programming tiles for Poplar directly in JAX.
 
 This lightweight API is based on three main concepts:
-* `TileShardedArray`: a data structure that wraps a classic JAX array with tile mapping information;
-* `tile_put_replicated` and `tile_put_sharded`: explicit mapping tensors/arrays to IPU tiles;
-* `tile_map`: a tile vertex mapping function (with basics JAX LAX primitives support);
+* `TileShardedArray`: a data structure that wraps a classic JAX array with tile mapping information.
+* `tile_put_replicated` and `tile_put_sharded`: explicit mapping of tensors and arrays to IPU tiles.
+* `tile_map`: a tile vertex mapping function (with basic JAX LAX primitives support).
 
-Note that even though these APIs are IPU-specific, they are still compatible with other backends (for example CPU and GPU). On non-IPU backends, any of these calls is either a no-op, or a redirection to the JAX standard `vmap`.
+Note: Even though these APIs are IPU-specific, they are still compatible with other backends (for example, CPU and GPU). On non-IPU backends, any of these calls is either a no-op, or a redirection to the JAX standard `vmap`.
 
 ## `TileShardedArray` data structure
 
-`TileShardedArray` is a thin wrapper on top of a JAX array adding IPU tile mapping information, and is compatible with the JAX pytree mechanism. In short:
+`TileShardedArray` is a thin wrapper on top of a JAX array, adding IPU tile mapping information, and is compatible with the JAX pytree mechanism. In short:
 ```python
 @register_pytree_node_class
 @dataclass(frozen=True)
@@ -23,9 +23,9 @@ class TileShardedArray:
 ```
 At the moment, `TileShardedArray` can only represent tile sharding over the first array axis (which means `axis=0` in the NumPy world). Some extensions to represent multi-axis sharding are planned. Compatibility with JAX `vmap` and `grad` is also part of future improvements.
 
-`TileShardedArray` implements the basic NumPy array API (such as `dtype`, `shape` slicing) and is fully compatible with the standard JAX NumPy API.
+`TileShardedArray` implements the basic NumPy array API (such as `dtype`, and `shape` slicing) and is fully compatible with the standard JAX NumPy API.
 
-Consider an example `TileShardedArray` array `v` of shape `(3, 4)` sharded over the first axis on tiles `(0, 2, 5)`. This means that every slice `v[0]`, `v[1]` and `v[2]` will be contiguous arrays living on tiles `0`, `2` and `5` in SRAM memory. The on-tile memory contiguity is always ensured, meaning that no additional on-tile copy is necessary when calling an IPU vertex with `tile_map` (with the exception of some memory alignment edge cases).
+Consider an example `TileShardedArray` array `v` of shape (3, 4) sharded over the first axis on tiles (0, 2, 5). This means that every slice `v[0]`, `v[1]` and `v[2]` will be contiguous arrays living on tiles 0, 2 and 5 in SRAM memory. The on-tile memory contiguity is always ensured, meaning that no additional on-tile copy is necessary when calling an IPU vertex with `tile_map` (with the exception of some memory alignment edge cases).
 
 ## IPU tile sharding using `tile_put_replicated` and `tile_put_sharded`
 
@@ -38,7 +38,7 @@ Two methods are provided to construct `TileShardedArray` arrays (these mimic the
 v = ... # JAX array of shape (4, 5)
 out = tile_put_replicated(v, (1, 2, 5))
 ```
-will return a `TileShardedArray` array of shape `(3, 4, 5)`, with identical data on tiles `1`, `2` and `5`.
+will return a `TileShardedArray` array of shape (3, 4, 5), with identical data on tiles 1, 2 and 5.
 
 
 Similarly, `tile_put_sharded` shards an array over the first axis, splitting the data between the provided collection of tiles. For example:
@@ -46,17 +46,17 @@ Similarly, `tile_put_sharded` shards an array over the first axis, splitting the
 v = ... # JAX array of shape (4, 5)
 out = tile_put_sharded(v, (1, 2, 5, 8))
 ```
-will return a `TileShardedArray` array of shape `(4, 5)`, with data sharded on tiles `1`, `2`, `5` and `8`. `tile_put_sharded` raises an exception if the number of tiles does not correspond to the size of the first dimension.
+will return a `TileShardedArray` array of shape (4, 5), with data sharded on tiles 1, 2, 5 and 8. `tile_put_sharded` raises an exception if the number of tiles does not correspond to the size of the first dimension.
 
 **Note:** `tile_put_sharded` and `tile_put_replicated` can be combined with standard JAX operations, for example slicing and transposing, to build complex IPU tile inter-exchange patterns.
 
-`tessellate_ipu.tile` also provides equivalent functions (`tile_constant_replicated` and `tile_constant_sharded`) to build Poplar on tile constant arrays from NumPy tensors.
+`tessellate_ipu.tile` also provides equivalent functions (`tile_constant_replicated` and `tile_constant_sharded`) to build Poplar on-tile constant arrays from NumPy tensors.
 
 ## IPU vertex call using `tile_map`
 
-Once array(s) have been sharded over IPU tiles, you can map a function on the former using `tile_map`. Under the hood, `tile_map` adds a Poplar vertex call to the graph on all tiles where data is present. The workloads of all tiles will run independently in parallel (no sync being required).
+Once array(s) have been sharded over IPU tiles, you can map a function on the arrays using `tile_map`. Under the hood, `tile_map` adds a Poplar vertex call to the graph on all tiles where data is present. The workloads of all tiles will run independently in parallel (no sync is required).
 
-The first `tile_map` argument is a [JAX LAX](https://jax.readthedocs.io/en/latest/jax.lax.html) primitive. `tessellate_ipu.tile` provides a mapping from (most) standard JAX LAX primitives to Graphcore Poplibs optimized vertices, meaning you will be able to take full advantage of the IPU hardware in just a couple of lines of Python.
+The first `tile_map` argument is a [JAX LAX](https://jax.readthedocs.io/en/latest/jax.lax.html) primitive. `tessellate_ipu.tile` provides a mapping from (most) standard JAX LAX primitives to Graphcore PopLibs optimized vertices, meaning you will be able to take full advantage of the IPU hardware in just a couple of lines of Python.
 
 For instance, here is simple example calling a JAX LAX primitive on a collection of tiles:
 

@@ -1,6 +1,6 @@
-# Tessellate IPU development guidelines
+# TessellateIPU Development Guidelines
 
-There are some guidelines for doing development on Tessellate IPU.
+There are some guidelines for doing development on the TessellateIPU library.
 
 ## Development
 

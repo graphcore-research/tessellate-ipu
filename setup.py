@@ -39,7 +39,7 @@ setuptools.setup(
     name=PACKAGE_NAME,
     author="Graphcore Research team",
     version=__version__,
-    description="Tessellate IPU library.",
+    description="TessellateIPU library.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/graphcore-research/tessellate-ipu",
