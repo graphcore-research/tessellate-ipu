@@ -1,4 +1,4 @@
-name: CI_tessellate_internal
+name: tests_internal
 
 env:
   GIT_MAIN_BRANCH: "main"

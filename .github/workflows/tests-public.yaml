@@ -1,4 +1,4 @@
-name: CI_tessellate_public
+name: tests
 
 env:
   GIT_MAIN_BRANCH: "main"
