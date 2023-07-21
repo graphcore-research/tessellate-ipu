@@ -14,6 +14,7 @@
 | [**Installation guide**](#installation-guide)
 | [**Quickstart**](#minimal-example)
 | [**Documentation**](#documentation)
+| [**Projects**](#projects-using-tessellateipu)
 
 :red_circle: :warning: **Non-official Graphcore Product** :warning: :red_circle:
 
@@ -31,21 +32,16 @@ TessellateIPU brings low-level Poplar IPU programming to Python, while being ful
 * Access to low-level IPU hardware functionalities such as cycle count and random seed set/get
 * Full compatibility with other backends
 
-The TessellateIPU API allows easy and efficient implementation of algorithms on IPUs, while keeping compatibility with other backends (CPU, GPU, TPU). For more details on the API, please refer to the [TessellateIPU documentation](docs/basics.md).
+The TessellateIPU API allows easy and efficient implementation of algorithms on IPUs, while keeping compatibility with other backends (CPU, GPU, TPU). For more details on the API, please refer to the [TessellateIPU documentation](docs/basics.md), or try it on [IPU Paperspace Gradient](https://console.paperspace.com/github/graphcore-research/tessellate-ipu?container=graphcore%2Fpytorch-jupyter%3A3.2.0-ubuntu-20.04&machine=Free-IPU-POD4&file=%2Fnotebooks%2F01-tessellate-ipu-tile-api-basics.ipynb)
+.
 
 ## Installation guide
 
-This package requires **[JAX IPU experimental](https://github.com/graphcore-research/jax-experimental)** (available for Python 3.8 and Poplar SDK versions 3.1 or 3.2).
-
-For Poplar SDK 3.1:
-```bash
-pip install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk310 -f https://graphcore-research.github.io/jax-experimental/wheels.html
-```
-
-For Poplar SDK 3.2:
+This package requires **[JAX IPU experimental](https://github.com/graphcore-research/jax-experimental)** (available for Python 3.8 and Poplar SDK versions 3.1 or 3.2). For Poplar SDK 3.2:
 ```bash
 pip install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk320 -f https://graphcore-research.github.io/jax-experimental/wheels.html
 ```
+Please change `sdk320` into `sdk310` if using Poplar SDK 3.1.
 
 As a pure Python repo, TessellateIPU can then be directly installed from GitHub using `pip`:
 ```bash
@@ -105,6 +101,10 @@ Alternatively, like other JAX flags, these can be set using environment variable
 
 * [Tessellate API basics](docs/basics.md)
 * [Tessellate development guidelines](docs/development.md)
+
+## Projects using TessellateIPU
+
+* [PySCF IPU](https://github.com/graphcore-research/pyscf-ipu): Molecular quantum chemistry simulation on Graphcore IPUs;
 
 ## License
 
