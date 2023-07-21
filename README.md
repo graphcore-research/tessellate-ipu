@@ -5,6 +5,7 @@
 
 [![Run on Gradient](https://assets.paperspace.io/img/gradient-badge.svg)](https://console.paperspace.com/github/graphcore-research/tessellate-ipu?container=graphcore%2Fpytorch-jupyter%3A3.2.0-ubuntu-20.04&machine=Free-IPU-POD4&file=%2Fnotebooks%2F01-tessellate-ipu-tile-api-basics.ipynb)
 [![tests](https://github.com/graphcore-research/tessellate-ipu/actions/workflows/tests-public.yaml/badge.svg)](https://github.com/graphcore-research/tessellate-ipu/actions/workflows/tests-public.yaml)
+[![notebook-tests](https://github.com/graphcore-research/tessellate-ipu/actions/workflows/notebook-tests-public.yaml/badge.svg)](https://github.com/graphcore-research/tessellate-ipu/actions/workflows/notebook-tests-public.yaml)
 [![license](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/graphcore-research/tessellate-ipu/blob/main/LICENSE)
 [![GitHub Repo stars](https://img.shields.io/github/stars/graphcore-research/tessellate-ipu)](https://github.com/graphcore-research/tessellate-ipu/stargazers)
 
