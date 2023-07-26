@@ -1,8 +1,9 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #pragma once
 
-#include "common.hpp"
-#include "poplin/ConvPartialsStridesPacking.hpp"
+#include <pybind11/pybind11.h>
+
+#include "ConvPartialsStridesPacking.hpp"
 
 namespace ipu {
 

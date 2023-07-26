@@ -16,7 +16,8 @@ from tessellate_ipu.core.tile_interpreter_primitives import (
     make_ipu_vertex_out_info,
     tile_map_remove_ipu_attributes,
 )
-from tessellate_ipu.core.tile_interpreter_primitives_impl import (  # noqa: F401
+from tessellate_ipu.core.tile_interpreter_vertex_utils import make_num_elements_per_worker
+from tessellate_ipu.lib.pytessellate_ipu_core import (  # noqa: F401
     IpuVertexAttributeI32,
     ipuGetTransformedInRowStride,
     ipuGetTransformedInStride,
@@ -25,7 +26,6 @@ from tessellate_ipu.core.tile_interpreter_primitives_impl import (  # noqa: F401
     ipuReverseTransformedInStride,
     ipuReverseTransformedOutStride,
 )
-from tessellate_ipu.core.tile_interpreter_vertex_utils import make_num_elements_per_worker
 from tessellate_ipu.utils import DType, DTypeLike, NDArray
 
 

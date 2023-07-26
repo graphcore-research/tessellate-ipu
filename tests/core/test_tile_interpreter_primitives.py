@@ -21,7 +21,7 @@ from tessellate_ipu.core.tile_interpreter_primitives import (
     primitive_has_batching,
     primitive_has_impl,
 )
-from tessellate_ipu.core.tile_interpreter_primitives_impl import (
+from tessellate_ipu.lib.pytessellate_ipu_core import (
     IpuTensorSlice,
     IpuTileMapEquation,
     IpuVertexAttributeF32,

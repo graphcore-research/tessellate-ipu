@@ -50,6 +50,11 @@ pip install git+https://github.com/graphcore-research/tessellate-ipu.git@main
 ```
 Note: `main` can be replaced with any tag (`v0.1`, ...) or commit hash in order to install a specific version.
 
+Local pip install is also supported after cloning the Github repository:
+```bash
+git clone git@github.com:graphcore-research/tessellate-ipu.git
+pip install ./tessellate_ipu
+```
 
 ## Minimal example
 

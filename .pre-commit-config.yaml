@@ -42,7 +42,18 @@ repos:
   hooks:
   - id: clang-format
     # Not formatting external dependencies.
-    files: tessellate/tile/
+    files: tessellate_ipu/lib/
+
+# CMake formatting
+- repo: https://github.com/cheshirekow/cmake-format-precommit
+  rev: v0.6.13
+  hooks:
+  - id: cmake-format
+    additional_dependencies: [pyyaml]
+    types: [file]
+    files: (\.cmake|CMakeLists.txt)(.in)?$
+
+# Jupyter notebook checks
 - repo: https://github.com/nbQA-dev/nbQA
   rev: 1.5.3
   hooks:
@@ -53,6 +64,8 @@ repos:
       args: ['--profile=black']
     - id: nbqa-flake8
       args: ['--ignore=E501,E203,E302,E402,E722,E731,F401,F811,W503']
+
+# Graphcore copyright
 - repo: local
   hooks:
   - id: copyright-header-check-module

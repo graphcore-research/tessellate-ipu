@@ -2,6 +2,24 @@
 
 There are some guidelines for doing development on the TessellateIPU library.
 
+## Local install & packaging
+
+For local development, we recommend using a pip editable install:
+```bash
+pip install cmake ninja pybind11 scikit-build-core[pyproject]
+pip install --no-build-isolation -ve .
+```
+The first line will install the required build dependencies, and the second will create an editable install
+of TessellateIPU. Note that the argument `--no-build-isolation` is optional, but speed up the compilation by avoiding re-creating a compilation virtual environnment at every call.
+
+Source (sdist) and build (wheels) packages can easily be generated using `build` Python package:
+```bash
+pip install build
+python -m build --no-isolation
+```
+Source tarball and compiled wheels will be created in the `dist` directory.
+
+
 ## Development
 
 We rely on `pre-commit` to perform basic checks on the Python code. Set up `pre-commit` with:
@@ -13,15 +31,9 @@ pre-commit run --all-files
 
 Run unit tests using `pytest`:
 ```bash
+pip install --no-build-isolation -ve .
 pip install -r test-requirements.txt
-export PYTHONPATH=$(pwd):$PYTHONPATH
-JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=8 pytest -v --tb=short ./tests/
-```
-
-Create the wheel package with:
-```bash
-pip install -U wheel setuptools
-python setup.py bdist_wheel --universal
+JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=16 pytest -v --tb=short ./tests/
 ```
 
 Run a terminal with an IPU model (useful for local debugging):

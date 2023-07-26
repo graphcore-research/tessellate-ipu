@@ -1,20 +1,8 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-#pragma once
-
-#include <algorithm>
-
-#include "common.hpp"
+#include "tile_array_utils.hpp"
 
 namespace ipu {
-
-/**
- * @brief Prepend an axis with given size to a shape object.
- * @param d Size of the new dimension to prepend.
- * @param shape Existing shape.
- * @return New shape instance (d, *shape).
- */
-inline ShapeType shapePrependAxis(std::size_t d,
-                                  poplar::ArrayRef<std::size_t> shape) {
+ShapeType shapePrependAxis(std::size_t d, poplar::ArrayRef<std::size_t> shape) {
   ShapeType ext_shape;
   ext_shape.reserve(shape.size() + 1);
   ext_shape.push_back(d);
@@ -24,42 +12,15 @@ inline ShapeType shapePrependAxis(std::size_t d,
   return ext_shape;
 }
 
-/**
- * @brief Get the size (number elements) from a shape object.
- */
-inline std::size_t sizeFromShape(poplar::ArrayRef<std::size_t> shape) noexcept {
+std::size_t sizeFromShape(poplar::ArrayRef<std::size_t> shape) noexcept {
   return std::accumulate(shape.begin(), shape.end(), 1,
                          std::multiplies<std::size_t>());
 }
 
-/**
- * @brief Slice an array, extracting a view.
- * @param arr Array to slice.
- * @param start Start index (included).
- * @param end End index (excluded).
- * @return Slice of the array.
- */
-template <typename T>
-poplar::ArrayRef<T> arraySlice(poplar::ArrayRef<T> arr, std::size_t start,
-                               std::size_t end) noexcept {
-  const std::size_t size = end - start;
-  return poplar::ArrayRef<T>(arr.data() + start, size);
-}
-
-/**
- * @brief Create a tensor/variable sharded over IPU tiles
- *
- * @param graph Poplar graph.
- * @param type Datatype of the tensor.
- * @param shape Tensor shape on every tile.
- * @param tiles Tiles on which to shard the tensor/variable.
- * @param debugContext Optional debug context.
- * @return Allocated variable/tensor of shape (T, *shape)
- */
-inline poplar::Tensor createShardedVariable(
+poplar::Tensor createShardedVariable(
     poplar::Graph& graph, const poplar::Type& type,
     poplar::ArrayRef<std::size_t> shape, poplar::ArrayRef<TileIndexType> tiles,
-    const poplar::DebugContext& debug_context = {}) {
+    const poplar::DebugContext& debug_context) {
   // Full shape of the sharded tensor.
   const auto sharded_shape = shapePrependAxis(tiles.size(), shape);
   // Create Poplar variable + map on tiles.
@@ -70,13 +31,11 @@ inline poplar::Tensor createShardedVariable(
   return t;
 }
 
-/**
- * @brief Create a constant tensor from dtype, shape and raw values.
- */
-inline poplar::Tensor createConstantTensor(
-    poplar::Graph& graph, const IpuType& ipu_type,
-    poplar::ArrayRef<std::size_t> shape, poplar::ArrayRef<char> raw_values,
-    const poplar::DebugContext& debug_context = {}) {
+poplar::Tensor createConstantTensor(poplar::Graph& graph,
+                                    const IpuType& ipu_type,
+                                    poplar::ArrayRef<std::size_t> shape,
+                                    poplar::ArrayRef<char> raw_values,
+                                    const poplar::DebugContext& debug_context) {
   auto poplar_type = toPoplar(ipu_type);
   // Special case of FP16: need to use a different API.
   if (ipu_type == IpuType::HALF) {
@@ -90,21 +49,11 @@ inline poplar::Tensor createConstantTensor(
       raw_values, ipu_type);
 }
 
-/**
- * @brief Create a replicated constant tensor.
- * @param graph Poplar graph.
- * @param ipu_type IPU datatype of the tensor.
- * @param shape Tensor shape on every tile.
- * @param raw_values Constant data raw values.
- * @param tiles Tiles on which to replicate the tensor/variable.
- * @param debugContext Optional debug context.
- * @return Allocated constant tensor of shape (T, *shape)
- */
-inline poplar::Tensor createReplicatedConstantTensor(
+poplar::Tensor createReplicatedConstantTensor(
     poplar::Graph& graph, const IpuType& ipu_type,
     poplar::ArrayRef<std::size_t> shape, poplar::ArrayRef<char> raw_values,
     poplar::ArrayRef<TileIndexType> tiles,
-    const poplar::DebugContext& debug_context = {}) {
+    const poplar::DebugContext& debug_context) {
   // TODO: check raw_values, dtype and shape are consistent.
   // TODO: get it working with FP16!
   // Expanded shape (used in concat).
@@ -120,21 +69,11 @@ inline poplar::Tensor createReplicatedConstantTensor(
   return poplar::concat(tensor_list, 0);
 }
 
-/**
- * @brief Create a sharded constant tensor.
- * @param graph Poplar graph.
- * @param ipu_type IPU datatype of the tensor.
- * @param shape Tensor shape on every tile.
- * @param raw_values Constant data raw values (of the full tensor).
- * @param tiles Tiles on which to shard the tensor/variable.
- * @param debugContext Optional debug context.
- * @return Allocated constant tensor of shape (T, *shape)
- */
-inline poplar::Tensor createShardedConstantTensor(
+poplar::Tensor createShardedConstantTensor(
     poplar::Graph& graph, const IpuType& ipu_type,
     poplar::ArrayRef<std::size_t> shape, poplar::ArrayRef<char> raw_values,
     poplar::ArrayRef<TileIndexType> tiles,
-    const poplar::DebugContext& debug_context = {}) {
+    const poplar::DebugContext& debug_context) {
   // TODO: check consistent raw values size.
   // Expanded shape on every tile.
   const auto expand_shape =
