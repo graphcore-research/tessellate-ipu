@@ -2,8 +2,6 @@
 #pragma once
 
 #include <fastbase64/fastavxbase64.h>
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
 
 #include <cstdint>
 #include <half/half.hpp>
@@ -16,6 +14,7 @@ using json = nlohmann::json;
 
 // Standard tile index used.
 using TileIndexType = int32_t;
+using TileArrayType = std::vector<TileIndexType>;
 // Shape type. TODO: use compact one from poplar?
 using ShapeType = std::vector<std::size_t>;
 
@@ -40,69 +39,11 @@ enum class IpuType : int8_t {
 /**
  * @brief Convert IPU type enum to Poplar type.
  */
-poplar::Type toPoplar(IpuType type) {
-  switch (type) {
-    case IpuType::BOOL:
-      return poplar::BOOL;
-    case IpuType::CHAR:
-      return poplar::CHAR;
-    case IpuType::UNSIGNED_CHAR:
-      return poplar::UNSIGNED_CHAR;
-    case IpuType::SHORT:
-      return poplar::SHORT;
-    case IpuType::UNSIGNED_SHORT:
-      return poplar::UNSIGNED_SHORT;
-    case IpuType::INT:
-      return poplar::INT;
-    case IpuType::UNSIGNED_INT:
-      return poplar::UNSIGNED_INT;
-    case IpuType::LONG:
-      return poplar::LONG;
-    case IpuType::UNSIGNED_LONG:
-      return poplar::UNSIGNED_LONG;
-    case IpuType::QUARTER:
-      return poplar::QUARTER;
-    case IpuType::HALF:
-      return poplar::HALF;
-    case IpuType::FLOAT:
-      return poplar::FLOAT;
-  }
-  throw std::runtime_error("Unknown IPU datatype.");
-}
-
+poplar::Type toPoplar(IpuType type);
 /**
  * @brief Get the size (in bytes) of IPU datatype.
  */
-std::size_t ipuTypeSize(IpuType type) {
-  switch (type) {
-    case IpuType::BOOL:
-      return 1;
-    case IpuType::CHAR:
-      return 1;
-    case IpuType::UNSIGNED_CHAR:
-      return 1;
-    case IpuType::SHORT:
-      return 2;
-    case IpuType::UNSIGNED_SHORT:
-      return 2;
-    case IpuType::INT:
-      return 4;
-    case IpuType::UNSIGNED_INT:
-      return 4;
-    case IpuType::LONG:
-      return 4;
-    case IpuType::UNSIGNED_LONG:
-      return 4;
-    case IpuType::QUARTER:
-      return 1;
-    case IpuType::HALF:
-      return 2;
-    case IpuType::FLOAT:
-      return 4;
-  }
-  throw std::runtime_error("Unknown IPU datatype.");
-}
-
+std::size_t ipuTypeSize(IpuType type);
 /**
  * @brief IPU type traits.
  */
@@ -183,27 +124,6 @@ decltype(auto) applyFnToArray(Fn&& fn, poplar::ArrayRef<char> raw_array,
 }
 
 /**
- * @brief Make pybind11 bindings of IpuType enum.
- */
-inline void makeIpuTypeBindings(pybind11::module& m) {
-  pybind11::enum_<IpuType>(m, "IpuType", pybind11::arithmetic())
-      .value("BOOL", IpuType::BOOL)
-      .value("CHAR", IpuType::CHAR)
-      .value("UNSIGNED_CHAR", IpuType::UNSIGNED_CHAR)
-      .value("SHORT", IpuType::SHORT)
-      .value("UNSIGNED_SHORT", IpuType::UNSIGNED_SHORT)
-      .value("INT", IpuType::INT)
-      .value("UNSIGNED_INT", IpuType::UNSIGNED_INT)
-      .value("LONG", IpuType::LONG)
-      .value("UNSIGNED_LONG", IpuType::UNSIGNED_LONG)
-      .value("QUARTER", IpuType::QUARTER)
-      .value("HALF", IpuType::HALF)
-      .value("FLOAT", IpuType::FLOAT)
-      .def_property_readonly("bytesize",
-                             [](IpuType t) { return ipuTypeSize(t); });
-}
-
-/**
  * @brief Convert an object to JSON string.
  */
 template <typename T>
@@ -238,23 +158,6 @@ struct ShapedArray {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ShapedArray, shape, dtype)
 
 /**
- * @brief Make pybind11 bindings of ShapeArray class.
- */
-inline void makeShapeArrayBindings(pybind11::module& m) {
-  pybind11::class_<ShapedArray>(m, "IpuShapedArray")
-      .def(pybind11::init<>())
-      .def(pybind11::init<const ShapeType&, IpuType>(), pybind11::arg("shape"),
-           pybind11::arg("dtype"))
-      .def("to_json_str", [](const ShapedArray& v) { return to_json_str(v); })
-      .def_static(
-          "from_json_str",
-          [](const std::string& j) { return from_json_str<ShapedArray>(j); })
-      .def_readwrite("shape", &ShapedArray::shape)
-      .def_readwrite("dtype", &ShapedArray::dtype)
-      .def_property_readonly("size", &ShapedArray::size);
-}
-
-/**
  * @brief Data encoded in base64.
  */
 struct Base64Data {
@@ -276,33 +179,7 @@ struct Base64Data {
   std::string decode() const { return chromium_base64_decode(encoded_data); }
 };
 // JSON encoding/decoding, supporting empty fields.
-void to_json(json& j, const Base64Data& v) {
-  if (!v.empty()) {
-    j = json{{"encoded_data", v.encoded_data}};
-  }
-}
-void from_json(const json& j, Base64Data& v) {
-  const auto it = j.find("encoded_data");
-  if (it != j.end()) {
-    it->get_to(v.encoded_data);
-  }
-}
-
-/**
- * @brief Make pybind11 bindings of ShapeArray class.
- */
-inline void makeBase64DataBindings(pybind11::module& m) {
-  pybind11::class_<Base64Data>(m, "Base64Data")
-      .def(pybind11::init<>())
-      .def(pybind11::init<const std::string&>(), pybind11::arg("encoded_data"))
-      .def_readwrite("encoded_data", &Base64Data::encoded_data)
-      .def_static("from_decoded_data", &Base64Data::fromDecodedData)
-      .def_property_readonly("decoded_data", &Base64Data::decode)
-      .def_property_readonly("is_empty", &Base64Data::empty)
-      .def("to_json_str", [](const Base64Data& v) { return to_json_str(v); })
-      .def_static("from_json_str", [](const std::string& j) {
-        return from_json_str<Base64Data>(j);
-      });
-}
+void to_json(json& j, const Base64Data& v);
+void from_json(const json& j, Base64Data& v);
 
 }  // namespace ipu

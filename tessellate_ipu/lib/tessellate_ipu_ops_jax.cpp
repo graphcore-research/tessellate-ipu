@@ -1,20 +1,14 @@
-// cppimport
-// NOTE: comment necessary for automatic JIT compilation of the module!
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
-#include <ipu_custom_primitive.hpp>
-#include <json/json.hpp>
-
-#include "tile_array_utils.hpp"
+#include "base_types.hpp"
+#include "ipu_custom_primitive.hpp"
+#include "tile_array_ops.hpp"
+#include "tile_map_ops.hpp"
 
 using namespace ipu;
-
-// Standard tile indexing.
-using TileIndexType = int32_t;
-using TileArrayType = std::vector<TileIndexType>;
 
 /**
  * @brief Base class for tile put primitives, with common features.
@@ -118,19 +112,6 @@ class TilePutReplicatedPrimitive : public TilePutBase {
 };
 
 /**
- * @brief IPU tile gather op parameters.
- */
-struct TileGatherParams {
-  /** Previous input tile mapping (if existing). */
-  TileArrayType previous_tiles;
-  /** Gather indices. */
-  TileArrayType indices;
-  /** New tile mapping */
-  TileArrayType tiles;
-};
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileGatherParams, previous_tiles, indices,
-                                   tiles)
-/**
  * @brief IPU tile array (general) gather op across tiles.
  */
 class TileGatherPrimitive : public jax::ipu::PrimitiveInterface {
@@ -186,63 +167,6 @@ class TileGatherPrimitive : public jax::ipu::PrimitiveInterface {
     return seq;
   }
 };
-
-/**
- * @brief Tile data Poplar barrier parameters.
- */
-struct TileDataBarrierParams {
-  /** Vertex name to use. */
-  std::string vname;
-  /** Input tensors tiles. */
-  std::vector<TileArrayType> inputs_tiles;
-  /** Max tile index used by inputs. */
-  TileIndexType max_tile;
-};
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileDataBarrierParams, vname, inputs_tiles,
-                                   max_tile)
-
-/**
- * @brief Reinterpret tensor to a reference type used in the tile data barrier.
- * @param t Poplar tensor to reinterpret.
- * @param is_half_accurate Is FP16/half accurate? On IPU model, float is used
- * for simulating half.
- */
-poplar::Tensor tileBarrierReinterpretTensor(const poplar::Tensor& t,
-                                            bool is_half_accurate) {
-  // 8 bits data types.
-  if (t.elementType() == poplar::BOOL)
-    return t.reinterpret(poplar::UNSIGNED_CHAR);
-  else if (t.elementType() == poplar::CHAR)
-    return t.reinterpret(poplar::UNSIGNED_CHAR);
-  else if (t.elementType() == poplar::SIGNED_CHAR)
-    return t.reinterpret(poplar::UNSIGNED_CHAR);
-  else if (t.elementType() == poplar::UNSIGNED_CHAR)
-    return t.reinterpret(poplar::UNSIGNED_CHAR);
-  // 16 bits data types.
-  else if (t.elementType() == poplar::SHORT)
-    return t.reinterpret(poplar::UNSIGNED_SHORT);
-  else if (t.elementType() == poplar::UNSIGNED_SHORT)
-    return t.reinterpret(poplar::UNSIGNED_SHORT);
-  // 32 bits data types.
-  else if (t.elementType() == poplar::INT)
-    return t.reinterpret(poplar::UNSIGNED_INT);
-  else if (t.elementType() == poplar::UNSIGNED_INT)
-    return t.reinterpret(poplar::UNSIGNED_INT);
-  else if (t.elementType() == poplar::FLOAT)
-    return t.reinterpret(poplar::UNSIGNED_INT);
-  // Special case of FP16/Half!
-  else if (t.elementType() == poplar::HALF) {
-    if (is_half_accurate) {
-      // 16 bits format => can reinterpret as short.
-      return t.reinterpret(poplar::UNSIGNED_SHORT);
-    } else {
-      // IPU model: need to keep as HALF/FP16.
-      return t.reinterpret(poplar::HALF);
-    }
-  }
-  // Can handle tensor :/
-  throw std::runtime_error("Unknown Poplar tensor type in tile data barrier.");
-}
 
 /**
  * @brief IPU tile array data barrier: force to introduce a barrier in Poplar
@@ -311,19 +235,6 @@ class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
     return prog;
   }
 };
-
-/**
- * @brief IPU tile constant (replicated or sharded) parameters.
- */
-struct TileConstantParams {
-  /** Abstract shaped array (per tile). */
-  ShapedArray aval;
-  /** Tile mapping of the constant. */
-  TileArrayType tiles;
-  /** Raw data, encoded as base64. */
-  Base64Data data = Base64Data();
-};
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileConstantParams, aval, tiles, data)
 
 /**
  * @brief IPU tile constant replicated primitive: replicating a constant array
@@ -397,60 +308,46 @@ EXPORT_IPU_JAX_PRIMITIVE(TileDataBarrierPrimitive);
 EXPORT_IPU_JAX_PRIMITIVE(TileConstantReplicatedPrimitive);
 EXPORT_IPU_JAX_PRIMITIVE(TileConstantShardedPrimitive);
 
-// Declare a pybind11, to provide easy compilation & import from Python.
-PYBIND11_MODULE(tile_array_primitives_impl, m) {
-  // Common classes bindings.
-  makeIpuTypeBindings(m);
-  makeShapeArrayBindings(m);
-  makeBase64DataBindings(m);
+/**
+ * @brief IPU tile put sharded primitive: sharding an array over tiles on
+ * the first axis.
+ */
+class TileMapEquationCall : public jax::ipu::PrimitiveInterface {
+ public:
+  static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
+    // TODO. check InOut tensors for aliasing.
+    return jax::ipu::PrimitiveMetadata{.num_inputs = num_inputs,
+                                       .is_elementwise = false,
+                                       .is_stateless = true,
+                                       .is_hashable = true,
+                                       .input_to_output_tensor_aliasing = {},
+                                       .allocating_indices = {}};
+  }
 
-  pybind11::class_<TileGatherParams>(m, "TileGatherParams")
-      .def(pybind11::init<>())
-      .def(pybind11::init<const TileArrayType&, const TileArrayType&,
-                          const TileArrayType&>(),
-           pybind11::arg("previous_tiles"), pybind11::arg("indices"),
-           pybind11::arg("tiles"))
-      .def("to_json_str",
-           [](const TileGatherParams& v) { return to_json_str(v); })
-      .def_static("from_json_str",
-                  [](const std::string& j) {
-                    return from_json_str<TileGatherParams>(j);
-                  })
-      .def_readwrite("previous_tiles", &TileGatherParams::previous_tiles)
-      .def_readwrite("indices", &TileGatherParams::indices)
-      .def_readwrite("tiles", &TileGatherParams::tiles);
+  static poplar::program::Program program(
+      poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+      std::vector<poplar::Tensor>& outputs, const std::string& attributes,
+      const std::string& debug_prefix) {
+    const auto debug_context = poplar::DebugContext(debug_prefix);
+    // Deserialize tile mapped equation, and add to the graph.
+    const auto tile_equation =
+        ipu::from_json_str<ipu::TileMapEquation>(attributes);
+    auto prog = poplar::program::Sequence();
+    // IPU tiles synchronization before compute set.
+    if (tile_equation.sync) {
+      const auto sync_type = poplar::SyncType::INTERNAL;
+      prog.add(poplar::program::Sync(sync_type, debug_context));
+    }
+    outputs = tile_equation.add(graph, prog, inputs, debug_context);
+    return prog;
+  }
+};
 
-  pybind11::class_<TileDataBarrierParams>(m, "TileDataBarrierParams")
-      .def(pybind11::init<>())
-      .def(pybind11::init<const std::string&, const std::vector<TileArrayType>&,
-                          TileIndexType>(),
-           pybind11::arg("vname"), pybind11::arg("inputs_tiles"),
-           pybind11::arg("max_tile"))
-      .def("to_json_str",
-           [](const TileDataBarrierParams& v) { return to_json_str(v); })
-      .def_static("from_json_str",
-                  [](const std::string& j) {
-                    return from_json_str<TileDataBarrierParams>(j);
-                  })
-      .def_readwrite("vname", &TileDataBarrierParams::vname)
-      .def_readwrite("inputs_tiles", &TileDataBarrierParams::inputs_tiles)
-      .def_readwrite("max_tile", &TileDataBarrierParams::max_tile);
+// Export the IPU JAX primitives in the shared library.
+EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCall);
 
-  pybind11::class_<TileConstantParams>(m, "TileConstantParams")
-      .def(pybind11::init<>())
-      .def(pybind11::init<const ShapedArray&, const TileArrayType&,
-                          const Base64Data&>(),
-           pybind11::arg("aval"), pybind11::arg("tiles"), pybind11::arg("data"))
-      .def("to_json_str",
-           [](const TileConstantParams& v) { return to_json_str(v); })
-      .def_static("from_json_str",
-                  [](const std::string& j) {
-                    return from_json_str<TileConstantParams>(j);
-                  })
-      .def_readwrite("aval", &TileConstantParams::aval)
-      .def_readwrite("tiles", &TileConstantParams::tiles)
-      .def_readwrite("data", &TileConstantParams::data);
-
+PYBIND11_MODULE(pytessellate_ipu_ops_jax, m) {
+  // Tile array operations.
   pybind11::class_<TilePutShardedPrimitive>(m, "TilePutShardedPrimitive")
       .def_static("metadata", &TilePutShardedPrimitive::metadata,
                   pybind11::arg("num_inputs"));
@@ -471,19 +368,9 @@ PYBIND11_MODULE(tile_array_primitives_impl, m) {
                                                  "TileConstantShardedPrimitive")
       .def_static("metadata", &TileConstantShardedPrimitive::metadata,
                   pybind11::arg("num_inputs"));
-}
 
-// cppimport configuration for compiling the pybind11 module.
-// clang-format off
-/*
-<%
-cfg['extra_compile_args'] = ['-std=c++17', '-fPIC', '-O2', '-Wall', '-mavx2']
-cfg['libraries'] = ['poplar', 'poputil']
-cfg['include_dirs'] = []
-cfg['sources'] = [
-  '../external/fastbase64/chromiumbase64.cpp',
-  '../external/fastbase64/fastavxbase64.cpp'
-]
-setup_pybind11(cfg)
-%>
-*/
+  // Tile map operations.
+  pybind11::class_<TileMapEquationCall>(m, "TileMapEquationCall")
+      .def_static("metadata", &TileMapEquationCall::metadata,
+                  pybind11::arg("num_inputs"));
+}

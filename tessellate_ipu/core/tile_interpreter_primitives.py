@@ -5,7 +5,6 @@ import os
 from copy import copy
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
-import cppimport
 import numpy as np
 from jax import core, vmap
 from jax.core import ShapedArray
@@ -21,21 +20,14 @@ from .tile_common_utils import from_numpy_dtype_to_ipu_type, get_ipu_type_name
 
 Array = Any
 
-# Pybind11 extension import (and compilation if necessary).
-# Explicit path is more robust to different `pip install` usages.
-ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_interpreter_primitives_impl.cpp"))
-tile_interpreter_primitives_impl = cppimport.imp_from_filepath(
-    ext_filename, "tessellate_ipu.core.tile_interpreter_primitives_impl"
-)
-
-from .tile_interpreter_primitives_impl import (  # noqa: E402
+from tessellate_ipu.lib.pytessellate_ipu_core import (  # noqa: E402
     IpuTileMapEquation,
     IpuVertexAttributeF32,
     IpuVertexAttributeI32,
     IpuVertexIOInfo,
     IpuVertexIOType,
-    TileMapEquationCall,
 )
+from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TileMapEquationCall  # noqa: E402
 
 
 def primitive_has_impl(p: core.Primitive) -> bool:

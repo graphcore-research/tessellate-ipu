@@ -4,7 +4,6 @@ import json
 import os
 from typing import Any, Dict, Sequence, Tuple, Union
 
-import cppimport
 import jax.lax
 import jax.numpy as jnp
 import numpy as np
@@ -14,29 +13,25 @@ from jax.interpreters import mlir
 from jax.interpreters.mlir import LoweringRuleContext, ir, mhlo
 from jax.ipu.primitive import ipu_mlir_lowering_custom_primitive
 
-from tessellate_ipu.utils import DTypeLike, NDArray
-
-from .tile_common_utils import make_ipu_shaped_array
-
-# Pybind11 extension import (and compilation if necessary).
-# Explicit path is more robust to different `pip install` usages.
-ext_filename = os.path.abspath(os.path.join(os.path.dirname(__file__), "tile_array_primitives_impl.cpp"))
-tile_array_primitives_impl = cppimport.imp_from_filepath(ext_filename, "tessellate_ipu.core.tile_array_primitives_impl")
-
-from .tile_array_primitives_impl import (  # noqa: E402, F401
+from tessellate_ipu.lib.pytessellate_ipu_core import (  # noqa: E402, F401
     Base64Data,
     IpuShapedArray,
     IpuType,
     TileConstantParams,
+    TileDataBarrierParams,
+    TileGatherParams,
+)
+from tessellate_ipu.lib.pytessellate_ipu_ops_jax import (  # noqa: E402, F401
     TileConstantReplicatedPrimitive,
     TileConstantShardedPrimitive,
-    TileDataBarrierParams,
     TileDataBarrierPrimitive,
-    TileGatherParams,
     TileGatherPrimitive,
     TilePutReplicatedPrimitive,
     TilePutShardedPrimitive,
 )
+from tessellate_ipu.utils import DTypeLike, NDArray
+
+from .tile_common_utils import make_ipu_shaped_array
 
 tile_put_sharded_prim_p = core.Primitive("tile_put_sharded")
 tile_put_replicated_prim_p = core.Primitive("tile_put_replicated")

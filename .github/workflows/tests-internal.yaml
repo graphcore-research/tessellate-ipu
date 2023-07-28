@@ -35,7 +35,7 @@ jobs:
   tessellate_unit_tests_ipu_model:
     if: github.repository != 'graphcore-research/tessellate-ipu'
     runs-on: [self-hosted, Linux, X64, 20.04, Ubuntu, amd]
-    container: graphcore/pytorch:3.1.0-ubuntu-20.04
+    container: graphcore/pytorch:3.2.0-ubuntu-20.04
     timeout-minutes: 20
     steps:
       - name: Cancel previous
@@ -48,25 +48,26 @@ jobs:
         id: pip-cache
         run: |
           python3 -m pip install --upgrade pip wheel setuptools
+          python3 -m pip install --upgrade build cmake ninja pybind11 scikit_build_core[pyproject]
       # Install JAX for IPU.
       - name: Install JAX for IPU
         run: |
           pip3 install --default-timeout=100 -U numpy==1.23.5 scipy etils pytest
-          pip3 install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk310 -f https://graphcore-research.github.io/jax-experimental/wheels.html
+          pip3 install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk320 -f https://graphcore-research.github.io/jax-experimental/wheels.html
       # Install other dependencies.
       - name: Install dependencies
         run: |
-          pip3 install --default-timeout=100 -r ./requirements.txt
           pip3 install --default-timeout=100 -r ./test-requirements.txt
-      # Install repository.
+      # Build & install sdist package.
       - name: Install TessellateIPU
         run: |
-          python3 setup.py bdist_wheel --universal
-          pip3 install dist/*.whl
+          python3 -m build --no-isolation
+          pip3 install dist/*.tar.gz
       # Run repository unit tests.
       - name: Run TessellateIPU unit tests (model)
         run: |
-          JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=16 pytest --tb=short -v --log-cli-level=INFO ./tests/
+          cd ./tests/
+          JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=16 pytest --tb=short -v --log-cli-level=INFO ./
       # Dockerized workflow known to create issues with self-hosted servers.
       # Solution is to fully cleanup the workspace for the next action.
       # See: https://stackoverflow.com/questions/70483902/how-to-actually-clean-up-the-repository-on-self-hosted-runner-after-github-actio
@@ -83,7 +84,7 @@ jobs:
     if: github.repository != 'graphcore-research/tessellate-ipu'
     runs-on: [self-hosted, Linux, X64, 20.04, Ubuntu, pod16]
     container:
-      image: graphcore/pytorch:3.1.0-ubuntu-20.04
+      image: graphcore/pytorch:3.2.0-ubuntu-20.04
       options: --ulimit memlock=-1:-1  --cap-add=SYS_PTRACE --cap-add=IPC_LOCK --device=/dev/infiniband/ -e IPUOF_VIPU_API_HOST -e IPUOF_VIPU_API_PARTITION_ID --shm-size=128G
     timeout-minutes: 20
     steps:
@@ -97,6 +98,7 @@ jobs:
         id: pip-cache
         run: |
           python3 -m pip install --upgrade pip wheel setuptools docker
+          python3 -m pip install --upgrade build cmake ninja pybind11 scikit_build_core[pyproject]
       # Necessary for attaching IPU hardware.
       - name: Attach RDMA Network
         run: |
@@ -106,17 +108,17 @@ jobs:
       - name: Install JAX for IPU
         run: |
           pip3 install --default-timeout=100 -U numpy==1.23.5 scipy etils pytest
-          pip3 install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk310 -f https://graphcore-research.github.io/jax-experimental/wheels.html
+          pip3 install jax==0.3.16+ipu jaxlib==0.3.15+ipu.sdk320 -f https://graphcore-research.github.io/jax-experimental/wheels.html
           POPLAR_LOG_LEVEL=DEBUG TF_CPP_MIN_LOG_LEVEL=0 JAX_IPU_DEVICE_COUNT=1 python .github/scripts/check_ipu_hardware_device.py
       - name: Install repository dependencies
         run: |
-          pip3 install --default-timeout=100 -r ./requirements.txt
           pip3 install --default-timeout=100 -r ./test-requirements.txt
       - name: Install TessellateIPU
         run: |
-          python3 setup.py bdist_wheel --universal
+          python3 -m build --no-isolation
           pip3 install dist/*.whl
       # Run IPU hardware unit tests.
       - name: Run TessellateIPU unit tests (hardware)
         run: |
-          JAX_IPU_DEVICE_COUNT=2 pytest --tb=short -v --log-cli-level=INFO -m ipu_hardware ./tests/
+          cd ./tests/
+          JAX_IPU_DEVICE_COUNT=2 pytest --tb=short -v --log-cli-level=INFO -m ipu_hardware ./

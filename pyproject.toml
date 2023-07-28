@@ -1,3 +1,63 @@
+[build-system]
+requires = ["ninja", "scikit-build-core>=0.3.3", "pybind11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "tessellate_ipu"
+version = "0.1"
+description="TessellateIPU library."
+readme = "README.md"
+authors = [
+  { name = "Paul Balanca", email = "paulb@graphcore.ai" },
+]
+requires-python = ">=3.8"
+classifiers = [
+  "License :: Apache 2.0",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+  "chex == 0.1.6",
+  "jax >= 0.3.16",
+  "jaxlib >= 0.3.15",
+  "numpy >= 1.22.4"
+]
+
+[project.urls]
+Website = "https://github.com/graphcore-research/tessellate-ipu/#readme"
+"Source Code" = "https://github.com/graphcore-research/tessellate-ipu/"
+"Bug Tracker" = "https://github.com/graphcore-research/tessellate-ipu/issues"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+
+[tool.scikit-build]
+wheel.expand-macos-universal-tags = true
+sdist.exclude = [".devcontainer", ".github", ".gradient", "notebooks"]
+
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = ["-ra", "--showlocals", "--strict-config", "-p no:hypothesispytest"]
+xfail_strict = true
+filterwarnings = [
+  "error",
+  "ignore:(ast.Str|Attribute s|ast.NameConstant|ast.Num) is deprecated:DeprecationWarning:_pytest",  # Python 3.12
+]
+testpaths = ["tests"]
+markers = ["ipu_hardware"]
+
+
+[tool.cibuildwheel]
+test-command = "pytest {project}/tests"
+test-extras = ["test"]
+test-skip = ["*universal2:arm64"]
+build-verbosity = 1
+
+
 [tool.black]
 line-length = 120
-target-version = ['py38', 'py39']
+target-version = ['py38', 'py39', 'py310']
