@@ -13,21 +13,21 @@ from jax.interpreters.batching import primitive_batchers
 from jax.interpreters.mlir import LoweringRuleContext, ir
 from jax.ipu.primitive import ipu_mlir_lowering_custom_primitive
 
-from tessellate_ipu.utils import NDArray
-
-from .tile_array_primitives import Base64Data, IpuType
-from .tile_common_utils import from_numpy_dtype_to_ipu_type, get_ipu_type_name
-
-Array = Any
-
 from tessellate_ipu.lib.pytessellate_ipu_core import (  # noqa: E402
+    Base64Data,
     IpuTileMapEquation,
+    IpuType,
     IpuVertexAttributeF32,
     IpuVertexAttributeI32,
     IpuVertexIOInfo,
     IpuVertexIOType,
 )
 from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TileMapEquationCall  # noqa: E402
+from tessellate_ipu.utils import NDArray
+
+from .tile_common_utils import from_numpy_dtype_to_ipu_type, get_ipu_type_name
+
+Array = Any
 
 
 def primitive_has_impl(p: core.Primitive) -> bool:
@@ -74,7 +74,8 @@ def make_ipu_vertex_io_info(
         IPU vertex IO info.
     """
     ipu_type = from_numpy_dtype_to_ipu_type(aval.dtype)
-    return IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type, vertex_dim2=int(vertex_dim2))
+    vinfo = IpuVertexIOInfo(name=name, iotype=iotype, shape=aval.shape, dtype=ipu_type, vertex_dim2=int(vertex_dim2))
+    return vinfo
 
 
 def make_ipu_vertex_constant_info(name: str, data: NDArray[Any], vertex_dim2: int = 0) -> IpuVertexIOInfo:

@@ -124,4 +124,4 @@ TessellateIPU is implemented using C++ custom operations. These have the followi
 | [fmt](https://github.com/fmtlib/fmt) | A modern C++ formatting library | [MIT license](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst) |
 | [half](https://sourceforge.net/projects/half/) | IEEE-754 conformant half-precision library | MIT license |
 | [json](https://github.com/nlohmann/json) | JSON for modern C++ | [MIT license](https://github.com/nlohmann/json/blob/develop/LICENSE.MIT) |
-| [pybind11](https://github.com/pybind/pybind11) | C++11 python bindings | [BSD License 2.0](https://github.com/pybind/pybind11/blob/master/LICENSE) |
+| [nanobind](https://github.com/wjakob/nanobind) | Tiny C++/Python bindings | [BSD 3-Clause License](https://github.com/wjakob/nanobind/blob/master/LICENSE) |

@@ -1,17 +1,20 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #pragma once
 
-#include <pybind11/numpy.h>
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
 
 #include "base_types.hpp"
 
+namespace nb = nanobind;
+
 namespace ipu {
 /**
- * @brief Make pybind11 bindings of IpuType enum.
+ * @brief Make nanobind bindings of IpuType enum.
  */
-inline void makeIpuTypeBindings(pybind11::module& m) {
-  pybind11::enum_<IpuType>(m, "IpuType", pybind11::arithmetic())
+inline void makeIpuTypeBindings(nanobind::module_& m) {
+  nanobind::enum_<IpuType>(m, "IpuType", nanobind::is_arithmetic())
       .value("BOOL", IpuType::BOOL)
       .value("CHAR", IpuType::CHAR)
       .value("UNSIGNED_CHAR", IpuType::UNSIGNED_CHAR)
@@ -24,38 +27,47 @@ inline void makeIpuTypeBindings(pybind11::module& m) {
       .value("QUARTER", IpuType::QUARTER)
       .value("HALF", IpuType::HALF)
       .value("FLOAT", IpuType::FLOAT)
-      .def_property_readonly("bytesize",
-                             [](IpuType t) { return ipuTypeSize(t); });
+      .def_prop_ro("bytesize", [](IpuType t) { return ipuTypeSize(t); })
+      // TODO: remove once integrated in Nanobind.
+      .def_prop_ro("name",
+                   [](nb::object obj) { return nb::getattr(obj, "__name__"); });
 }
 
 /**
- * @brief Make pybind11 bindings of ShapeArray class.
+ * @brief Make nanobind bindings of ShapeArray class.
  */
-inline void makeShapeArrayBindings(pybind11::module& m) {
-  pybind11::class_<ShapedArray>(m, "IpuShapedArray")
-      .def(pybind11::init<>())
-      .def(pybind11::init<const ShapeType&, IpuType>(), pybind11::arg("shape"),
-           pybind11::arg("dtype"))
+inline void makeShapeArrayBindings(nanobind::module_& m) {
+  nanobind::class_<ShapedArray>(m, "IpuShapedArray")
+      .def(nanobind::init<>())
+      .def(nanobind::init<const ShapeType&, IpuType>(), nanobind::arg("shape"),
+           nanobind::arg("dtype"))
       .def("to_json_str", [](const ShapedArray& v) { return to_json_str(v); })
       .def_static(
           "from_json_str",
           [](const std::string& j) { return from_json_str<ShapedArray>(j); })
-      .def_readwrite("shape", &ShapedArray::shape)
-      .def_readwrite("dtype", &ShapedArray::dtype)
-      .def_property_readonly("size", &ShapedArray::size);
+      .def_rw("shape", &ShapedArray::shape)
+      .def_rw("dtype", &ShapedArray::dtype)
+      .def_prop_ro("size", &ShapedArray::size);
 }
 
 /**
- * @brief Make pybind11 bindings of ShapeArray class.
+ * @brief Make nanobind bindings of Base64Data class.
  */
-inline void makeBase64DataBindings(pybind11::module& m) {
-  pybind11::class_<Base64Data>(m, "Base64Data")
-      .def(pybind11::init<>())
-      .def(pybind11::init<const std::string&>(), pybind11::arg("encoded_data"))
-      .def_readwrite("encoded_data", &Base64Data::encoded_data)
+inline void makeBase64DataBindings(nanobind::module_& m) {
+  nanobind::class_<Base64Data>(m, "Base64Data")
+      .def(nanobind::init<>())
+      .def(nanobind::init<const std::string&>(), nanobind::arg("encoded_data"))
+      .def("__init__",
+           [](Base64Data* t, nb::bytes data) {
+             new (t) Base64Data(data.c_str(), data.size());
+           })
+      .def_rw("encoded_data", &Base64Data::encoded_data)
+      .def_static(
+          "from_encoded_data",
+          [](nb::bytes data) { return Base64Data(data.c_str(), data.size()); })
       .def_static("from_decoded_data", &Base64Data::fromDecodedData)
-      .def_property_readonly("decoded_data", &Base64Data::decode)
-      .def_property_readonly("is_empty", &Base64Data::empty)
+      .def_prop_ro("decoded_data", &Base64Data::decode)
+      .def_prop_ro("is_empty", &Base64Data::empty)
       .def("to_json_str", [](const Base64Data& v) { return to_json_str(v); })
       .def_static("from_json_str", [](const std::string& j) {
         return from_json_str<Base64Data>(j);

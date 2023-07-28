@@ -13,25 +13,7 @@ from jax.interpreters import mlir
 from jax.interpreters.mlir import LoweringRuleContext, ir, mhlo
 from jax.ipu.primitive import ipu_mlir_lowering_custom_primitive
 
-from tessellate_ipu.lib.pytessellate_ipu_core import (  # noqa: E402, F401
-    Base64Data,
-    IpuShapedArray,
-    IpuType,
-    TileConstantParams,
-    TileDataBarrierParams,
-    TileGatherParams,
-)
-from tessellate_ipu.lib.pytessellate_ipu_ops_jax import (  # noqa: E402, F401
-    TileConstantReplicatedPrimitive,
-    TileConstantShardedPrimitive,
-    TileDataBarrierPrimitive,
-    TileGatherPrimitive,
-    TilePutReplicatedPrimitive,
-    TilePutShardedPrimitive,
-)
 from tessellate_ipu.utils import DTypeLike, NDArray
-
-from .tile_common_utils import make_ipu_shaped_array
 
 tile_put_sharded_prim_p = core.Primitive("tile_put_sharded")
 tile_put_replicated_prim_p = core.Primitive("tile_put_replicated")
@@ -71,6 +53,8 @@ def tile_put_sharded_prim_mlir_lowering_default(ctx, xc, tiles):
 
 def tile_put_sharded_prim_mlir_lowering_ipu(ctx: LoweringRuleContext, xc: ir.Value, tiles: Any) -> Sequence[ir.Value]:
     """`tile_put_sharded_prim` IPU backend MLIR lowering, as a custom primitive."""
+    from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TilePutShardedPrimitive
+
     inputs = [xc]
     # Passing the tiles collections as a raw attributes to the C++ implementation.
     raw_attributes = make_tiles_raw_attributes(tiles)
@@ -123,6 +107,8 @@ def tile_put_replicated_prim_mlir_lowering_ipu(
     ctx: LoweringRuleContext, xc: ir.Value, tiles: Any
 ) -> Sequence[ir.Value]:
     """`tile_put_replicated_prim` IPU backend MLIR lowering, as a custom primitive."""
+    from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TilePutReplicatedPrimitive
+
     inputs = [xc]
     # Passing the tiles collections as a raw attributes to the C++ implementation.
     raw_attributes = make_tiles_raw_attributes(tiles)
@@ -168,6 +154,10 @@ def tile_gather_prim_mlir_lowering_ipu(
     ctx: LoweringRuleContext, xc: ir.Value, previous_tiles: Any, indices: Any, tiles: Any
 ) -> Sequence[ir.Value]:
     """`tile_gather_prim` IPU backend MLIR lowering, as a custom primitive."""
+    # FIXME: Local imports to deal with JAX/typing(?) leaked references.
+    from tessellate_ipu.lib.pytessellate_ipu_core import TileGatherParams
+    from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TileGatherPrimitive
+
     inputs = [xc]
     # Til gather parameters, to pass to the XLA/HLO op.
     gather_params = TileGatherParams(previous_tiles, indices, tiles)
@@ -228,6 +218,10 @@ def tile_data_barrier_prim_mlir_lowering_ipu(
     ctx: LoweringRuleContext, *args: ir.Value, **params: Any
 ) -> Sequence[ir.Value]:
     """`tile_data_barrier_prim` IPU backend MLIR lowering, as a custom primitive."""
+    # FIXME: Local imports to deal with JAX/typing(?) leaked references.
+    from tessellate_ipu.lib.pytessellate_ipu_core import TileDataBarrierParams
+    from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TileDataBarrierPrimitive
+
     from .tile_interpreter_primitives import make_ipu_vertex_name_templated
 
     inputs = list(args)
@@ -303,6 +297,12 @@ def tile_constant_replicated_prim_mlir_lowering_ipu(
     ctx: LoweringRuleContext, dummy: ir.Value, data: NDArray[Any], tiles: Any
 ) -> Sequence[ir.Value]:
     """`tile_constant_replicated_prim` IPU backend MLIR lowering, as a custom primitive."""
+    # FIXME: Local imports to deal with JAX/typing(?) leaked references.
+    from tessellate_ipu.lib.pytessellate_ipu_core import Base64Data, TileConstantParams
+    from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TileConstantReplicatedPrimitive
+
+    from .tile_common_utils import make_ipu_shaped_array
+
     params = TileConstantParams(
         aval=make_ipu_shaped_array(data.shape, data.dtype),
         tiles=tiles,
@@ -353,6 +353,12 @@ def tile_constant_sharded_prim_mlir_lowering_ipu(
     ctx: LoweringRuleContext, dummy: ir.Value, data: NDArray[Any], tiles: Any
 ) -> Sequence[ir.Value]:
     """`tile_constant_sharded_prim` IPU backend MLIR lowering, as a custom primitive."""
+    # FIXME: Local imports to deal with JAX/typing(?) leaked references.
+    from tessellate_ipu.lib.pytessellate_ipu_core import Base64Data, TileConstantParams
+    from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TileConstantShardedPrimitive
+
+    from .tile_common_utils import make_ipu_shaped_array
+
     params = TileConstantParams(
         aval=make_ipu_shaped_array(data.shape, data.dtype),
         tiles=tiles,
