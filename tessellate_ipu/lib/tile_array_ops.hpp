@@ -1,9 +1,9 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #pragma once
 #include <json/json.hpp>
+#include <poplar/Graph.hpp>
 
 #include "base_types.hpp"
-#include "tile_array_utils.hpp"
 
 namespace ipu {
 /**
@@ -55,5 +55,48 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileConstantParams, aval, tiles, data)
  */
 poplar::Tensor tileBarrierReinterpretTensor(const poplar::Tensor& t,
                                             bool is_half_accurate);
+
+/**
+ * @brief Lower `tile_put_sharded` to a Poplar program.
+ */
+poplar::program::Program lowerTilePutShardedToPoplar(
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    std::vector<poplar::Tensor>& outputs, const TileArrayType& tile_array,
+    const poplar::DebugContext& debug_context);
+/**
+ * @brief Lower `tile_put_replicated` to a Poplar program.
+ */
+poplar::program::Program lowerTilePutReplicatedToPoplar(
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    std::vector<poplar::Tensor>& outputs, const TileArrayType& tile_array,
+    const poplar::DebugContext& debug_context);
+/**
+ * @brief Lower `tile_gather` to a Poplar program.
+ */
+poplar::program::Program lowerTileGatherToPoplar(
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    std::vector<poplar::Tensor>& outputs, const TileGatherParams& params,
+    const poplar::DebugContext& debug_context);
+/**
+ * @brief Lower `tile_data_barrier` to a Poplar program.
+ */
+poplar::program::Program lowerTileDataBarrierToPoplar(
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    std::vector<poplar::Tensor>& outputs, const TileDataBarrierParams& params,
+    const poplar::DebugContext& debug_context);
+/**
+ * @brief Lower `tile_constant_sharded` to a Poplar program.
+ */
+poplar::program::Program lowerTileConstantShardedToPoplar(
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    std::vector<poplar::Tensor>& outputs, const TileConstantParams& params,
+    const poplar::DebugContext& debug_context);
+/**
+ * @brief Lower `tile_constant_replicated` to a Poplar program.
+ */
+poplar::program::Program lowerTileConstantReplicatedToPoplar(
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    std::vector<poplar::Tensor>& outputs, const TileConstantParams& params,
+    const poplar::DebugContext& debug_context);
 
 }  // namespace ipu
