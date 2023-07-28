@@ -260,4 +260,18 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
                                    tmp_space_aval, gp_filename, perf_estimate,
                                    sync)
 
+/**
+ * @brief Lower `tile_map` call to Poplar.
+ * @param graph Poplar graph to update.
+ * @param inputs List of inputs.
+ * @param outputs List of outputs, to update.
+ * @param tile_map_eqn TileMapEquation info.
+ * @param debug_context Poplar debug context.
+ * @return Poplar program.
+ */
+poplar::program::Program lowerTileMapCallToPoplar(
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    std::vector<poplar::Tensor>& outputs, const TileMapEquation& tile_map_eqn,
+    const poplar::DebugContext& debug_context);
+
 }  // namespace ipu

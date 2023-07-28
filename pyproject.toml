@@ -50,14 +50,35 @@ filterwarnings = [
 testpaths = ["tests"]
 markers = ["ipu_hardware"]
 
-
 [tool.cibuildwheel]
 test-command = "pytest {project}/tests"
 test-extras = ["test"]
 test-skip = ["*universal2:arm64"]
 build-verbosity = 1
 
-
 [tool.black]
 line-length = 120
 target-version = ['py38', 'py39', 'py310']
+
+[tool.isort]
+line_length = 120
+known_first_party = "tessellate_ipu"
+
+[tool.mypy]
+python_version = "3.8"
+plugins = ["numpy.typing.mypy_plugin"]
+# Config heavily inspired by Pydantic!
+show_error_codes = true
+# strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unused_configs = true
+check_untyped_defs = true
+disallow_any_generics = true
+no_implicit_optional = false
+# disallow_incomplete_defs = true
+# disallow_untyped_decorators = true
+# disallow_untyped_calls = true
+# # disallow_subclassing_any = true
+# # for strict mypy: (this is the tricky one :-))
+# disallow_untyped_defs = true

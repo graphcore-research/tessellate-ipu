@@ -131,4 +131,19 @@ std::vector<poplar::Tensor> TileMapEquation::add(
   this->add(graph, prog, inputs_all, outputs, debug_prefix);
   return outputs;
 }
+
+poplar::program::Program lowerTileMapCallToPoplar(
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    std::vector<poplar::Tensor>& outputs, const TileMapEquation& tile_map_eqn,
+    const poplar::DebugContext& debug_context) {
+  auto prog = poplar::program::Sequence();
+  // IPU tiles synchronization before compute set.
+  if (tile_map_eqn.sync) {
+    const auto sync_type = poplar::SyncType::INTERNAL;
+    prog.add(poplar::program::Sync(sync_type, debug_context));
+  }
+  outputs = tile_map_eqn.add(graph, prog, inputs, debug_context);
+  return prog;
+}
+
 }  // namespace ipu
