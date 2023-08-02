@@ -6,7 +6,7 @@ There are some guidelines for doing development on the TessellateIPU library.
 
 For local development, we recommend using a pip editable install:
 ```bash
-pip install cmake ninja pybind11 scikit-build-core[pyproject]
+pip install cmake ninja nanobind scikit-build-core[pyproject]
 pip install --no-build-isolation -ve .
 ```
 The first line will install the required build dependencies, and the second will create an editable install

@@ -1,5 +1,6 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
-#include "base_types.hpp"
+#include <nanobind/nanobind.h>
+
 #include "ipu_custom_primitive.hpp"
 #include "tile_array_ops.hpp"
 #include "tile_map_ops.hpp"
@@ -221,31 +222,18 @@ class TileMapEquationCall : public jax::ipu::PrimitiveInterface {
 // Export the IPU JAX primitives in the shared library.
 EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCall);
 
-PYBIND11_MODULE(pytessellate_ipu_ops_jax, m) {
+NB_MODULE(pytessellate_ipu_ops_jax, m) {
+  // Avoid leak warning from the library.
+  nanobind::set_leak_warnings(false);
   // Tile array operations.
-  pybind11::class_<TilePutShardedPrimitive>(m, "TilePutShardedPrimitive")
-      .def_static("metadata", &TilePutShardedPrimitive::metadata,
-                  pybind11::arg("num_inputs"));
-  pybind11::class_<TilePutReplicatedPrimitive>(m, "TilePutReplicatedPrimitive")
-      .def_static("metadata", &TilePutReplicatedPrimitive::metadata,
-                  pybind11::arg("num_inputs"));
-  pybind11::class_<TileGatherPrimitive>(m, "TileGatherPrimitive")
-      .def_static("metadata", &TileGatherPrimitive::metadata,
-                  pybind11::arg("num_inputs"));
-  pybind11::class_<TileDataBarrierPrimitive>(m, "TileDataBarrierPrimitive")
-      .def_static("metadata", &TileDataBarrierPrimitive::metadata,
-                  pybind11::arg("num_inputs"));
-  pybind11::class_<TileConstantReplicatedPrimitive>(
-      m, "TileConstantReplicatedPrimitive")
-      .def_static("metadata", &TileConstantReplicatedPrimitive::metadata,
-                  pybind11::arg("num_inputs"));
-  pybind11::class_<TileConstantShardedPrimitive>(m,
-                                                 "TileConstantShardedPrimitive")
-      .def_static("metadata", &TileConstantShardedPrimitive::metadata,
-                  pybind11::arg("num_inputs"));
-
+  nanobind::class_<TilePutShardedPrimitive>(m, "TilePutShardedPrimitive");
+  nanobind::class_<TilePutReplicatedPrimitive>(m, "TilePutReplicatedPrimitive");
+  nanobind::class_<TileGatherPrimitive>(m, "TileGatherPrimitive");
+  nanobind::class_<TileDataBarrierPrimitive>(m, "TileDataBarrierPrimitive");
+  nanobind::class_<TileConstantReplicatedPrimitive>(
+      m, "TileConstantReplicatedPrimitive");
+  nanobind::class_<TileConstantShardedPrimitive>(
+      m, "TileConstantShardedPrimitive");
   // Tile map operations.
-  pybind11::class_<TileMapEquationCall>(m, "TileMapEquationCall")
-      .def_static("metadata", &TileMapEquationCall::metadata,
-                  pybind11::arg("num_inputs"));
+  nanobind::class_<TileMapEquationCall>(m, "TileMapEquationCall");
 }

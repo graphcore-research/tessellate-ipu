@@ -62,6 +62,48 @@ struct VertexIOInfo {
   /** Slices, in the case of 2d tensor input. */
   std::vector<TensorSlice> slices2d;
 
+  /** Default constructors/assignment. */
+  VertexIOInfo() noexcept = default;
+  VertexIOInfo(VertexIOInfo&&) noexcept = default;
+  VertexIOInfo(const VertexIOInfo&) = default;
+  VertexIOInfo& operator=(VertexIOInfo&&) noexcept = default;
+  VertexIOInfo& operator=(const VertexIOInfo&) = default;
+
+  VertexIOInfo(const std::string& _name, VertexIOType _iotype,
+               const ShapeType& _shape, IpuType _dtype,
+               const Base64Data& _constant_data,
+               const std::vector<TensorSlice>& _slices2d)
+      : name{_name},
+        iotype{_iotype},
+        aval{_shape, _dtype},
+        constant_data{_constant_data},
+        slices2d{_slices2d} {}
+
+  VertexIOInfo(const std::string& _name, VertexIOType _iotype,
+               const ShapedArray& _aval, const Base64Data& _constant_data,
+               const std::vector<TensorSlice>& _slices2d)
+      : name{_name},
+        iotype{_iotype},
+        aval{_aval},
+        constant_data{_constant_data},
+        slices2d{_slices2d} {}
+  /**
+   * @brief Build a vertex IO info (with vertex second dim info).
+   */
+  VertexIOInfo(const std::string& _name, VertexIOType _iotype,
+               const ShapeType& _shape, IpuType _dtype,
+               std::size_t _vertex_dim2, const Base64Data& _constant_data)
+      : name{_name},
+        iotype{_iotype},
+        aval{_shape, _dtype},
+        constant_data{_constant_data} {
+    // Generate 2d slices when required.
+    if (_vertex_dim2 > 0) {
+      slices2d = TensorSlice::makeTensor2dSlices(aval.size() / _vertex_dim2,
+                                                 _vertex_dim2);
+    }
+  }
+
   /**
    * @brief Build a vertex IO info (with vertex second dim info).
    */

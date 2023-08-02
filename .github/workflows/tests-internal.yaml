@@ -47,8 +47,7 @@ jobs:
       - name: Update pip
         id: pip-cache
         run: |
-          python3 -m pip install --upgrade pip wheel setuptools
-          python3 -m pip install --upgrade build cmake ninja pybind11 scikit_build_core[pyproject]
+          python3 -m pip install --upgrade build cmake nanobind ninja pip scikit_build_core[pyproject]
       # Install JAX for IPU.
       - name: Install JAX for IPU
         run: |
@@ -97,8 +96,7 @@ jobs:
       - name: Instal Python base dependencies
         id: pip-cache
         run: |
-          python3 -m pip install --upgrade pip wheel setuptools docker
-          python3 -m pip install --upgrade build cmake ninja pybind11 scikit_build_core[pyproject]
+          python3 -m pip install --upgrade build cmake docker nanobind ninja pip scikit_build_core[pyproject]
       # Necessary for attaching IPU hardware.
       - name: Attach RDMA Network
         run: |

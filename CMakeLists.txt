@@ -22,7 +22,7 @@ if(NOT SKBUILD)
   in your environment once and use the following command that avoids
   a costly creation of a new virtual environment at every compilation:
   =====================================================================
-   $ pip install pybind11 scikit-build-core[pyproject] ninja
+   $ pip install nanobind scikit-build-core[pyproject] ninja
    $ pip install --no-build-isolation -ve .
   =====================================================================
   You may optionally add -Ceditable.rebuild=true to auto-rebuild when
@@ -32,8 +32,12 @@ endif()
 
 message(==>PROJECT_NAME="${SKBUILD_PROJECT_NAME}")
 
-find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
-find_package(pybind11 CONFIG REQUIRED)
+# Python components needed by nanobind
+find_package(
+  Python 3.8 REQUIRED
+  COMPONENTS Interpreter Development.Module
+  OPTIONAL_COMPONENTS Development.SABIModule)
+find_package(nanobind CONFIG REQUIRED)
 
 # Common TessellateIPU static library.
 add_library(
@@ -56,16 +60,32 @@ target_compile_definitions(${SKBUILD_PROJECT_NAME}_core
 target_compile_features(${SKBUILD_PROJECT_NAME}_core PUBLIC cxx_std_17)
 
 # Common TessellateIPU library Python bindings.
-python_add_library(py${SKBUILD_PROJECT_NAME}_core MODULE
-                   tessellate_ipu/lib/tessellate_ipu_core.cpp WITH_SOABI)
+nanobind_add_module(
+  py${SKBUILD_PROJECT_NAME}_core
+  # Target the stable ABI for Python 3.12+, which reduces the number of binary
+  # wheels that must be built. This does nothing on older Python versions
+  STABLE_ABI
+  # Build libnanobind statically and merge it into the extension (which itself
+  # remains a shared library)
+  NB_STATIC
+  # Common TessellateIPU library Python bindings.
+  tessellate_ipu/lib/tessellate_ipu_core.cpp)
 target_link_libraries(py${SKBUILD_PROJECT_NAME}_core
-                      PRIVATE pybind11::headers ${SKBUILD_PROJECT_NAME}_core)
+                      PRIVATE ${SKBUILD_PROJECT_NAME}_core)
 
 # TessellateIPU library JAX ops bindings.
-python_add_library(py${SKBUILD_PROJECT_NAME}_ops_jax MODULE
-                   tessellate_ipu/lib/tessellate_ipu_ops_jax.cpp WITH_SOABI)
+nanobind_add_module(
+  py${SKBUILD_PROJECT_NAME}_ops_jax
+  # Target the stable ABI for Python 3.12+, which reduces the number of binary
+  # wheels that must be built. This does nothing on older Python versions
+  STABLE_ABI
+  # Build libnanobind statically and merge it into the extension (which itself
+  # remains a shared library)
+  NB_STATIC
+  # TessellateIPU library JAX ops bindings.
+  tessellate_ipu/lib/tessellate_ipu_ops_jax.cpp)
 target_link_libraries(py${SKBUILD_PROJECT_NAME}_ops_jax
-                      PRIVATE pybind11::headers ${SKBUILD_PROJECT_NAME}_core)
+                      PRIVATE ${SKBUILD_PROJECT_NAME}_core)
 
 # TODO: TessellateIPU library Poptorch ops bindings.
 

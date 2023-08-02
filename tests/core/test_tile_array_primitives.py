@@ -6,11 +6,8 @@ import numpy.testing as npt
 import pytest
 from absl.testing import parameterized
 
-from tessellate_ipu.core.tile_array_primitives import (
-    TileDataBarrierParams,
-    tile_put_replicated_prim,
-    tile_put_sharded_prim,
-)
+from tessellate_ipu.core.tile_array_primitives import tile_put_replicated_prim, tile_put_sharded_prim
+from tessellate_ipu.lib.pytessellate_ipu_core import TileDataBarrierParams
 
 
 class TilePutShardedPrimTests(chex.TestCase, parameterized.TestCase):

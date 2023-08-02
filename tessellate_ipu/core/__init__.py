@@ -1,5 +1,7 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 # Register all additional libraries + paths.
+import atexit
+
 from . import external_libs
 from .tile_array import (
     TileShardedArray,
@@ -40,3 +42,28 @@ from .tile_interpreter_primitives import (
     make_ipu_vertex_out_info,
     make_ipu_vertex_outputs,
 )
+
+
+def tessellate_ipu_cleanup():
+    """Nanobind is quite picky in terms of checking no reference gets leaked at shutdown.
+
+    This method is called at Python exit, trying to deal with existing issue in typing LRU cache:
+        https://github.com/wjakob/nanobind/issues/19
+        https://github.com/python/cpython/issues/98253
+
+    Additionally, it seems that JAX MLIR register is also not properly cleaning references, leading
+    to additional reference leaks.
+    """
+    import typing
+
+    from jax.interpreters.mlir import _lowerings, _platform_specific_lowerings
+
+    # Clear JAX MLIR lowering register.
+    _lowerings.clear()
+    _platform_specific_lowerings.clear()
+    # Typing extension manual cleanup.
+    for cleanup in typing._cleanups:  # type: ignore
+        cleanup()
+
+
+atexit.register(tessellate_ipu_cleanup)

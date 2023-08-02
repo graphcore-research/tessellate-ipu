@@ -165,6 +165,19 @@ struct Base64Data {
   /** Raw data as base64 encoded. */
   std::string encoded_data;
 
+  // Default constructors/operator=
+  Base64Data() = default;
+  Base64Data(Base64Data&&) noexcept = default;
+  Base64Data(const Base64Data&) = default;
+  Base64Data& operator=(Base64Data&&) noexcept = default;
+  Base64Data& operator=(const Base64Data&) = default;
+
+  /** Constructors from base64 encoded data. */
+  Base64Data(std::string _encoded_data) noexcept
+      : encoded_data{std::move(_encoded_data)} {}
+  Base64Data(const char* ptr_encoded_data, size_t n)
+      : encoded_data(ptr_encoded_data, n) {}
+
   /** Is the data empty? */
   bool empty() const noexcept { return encoded_data.empty(); }
   /**

@@ -13,11 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 #pragma once
-#include <pybind11/numpy.h>
-#include <pybind11/operators.h>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
 #include <poplar/Graph.hpp>
 #include <poplar/Program.hpp>
 #include <poputil/exceptions.hpp>
@@ -163,6 +158,6 @@ class PrimitiveInterface {
 // Custom op API level default value.
 // Should not required to be changed for ops, only when upgrading Poplar SDK.
 extern "C" {
-// pybind11 using -fvisibility=hidden. Need to explicit export symbols.
+// pybind11/nanobind using -fvisibility=hidden. Need to explicit export symbols.
 __attribute__((visibility("default"))) int32_t custom_op_api_level = 5;
 }
