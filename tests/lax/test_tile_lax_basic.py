@@ -5,10 +5,12 @@ import chex
 import jax
 import numpy as np
 import numpy.testing as npt
+import pytest
 from absl.testing import parameterized
 from jax import lax
 from jax.core import ShapedArray
 
+import tessellate_ipu.lax
 from tessellate_ipu import TileShardedArray, ipu_cycle_count, tile_map, tile_put_replicated, tile_put_sharded
 from tessellate_ipu.core.tile_interpreter_primitives import IpuTileMapEquation, IpuType
 from tessellate_ipu.lax.tile_lax_binary import scaled_add_p, scaled_sub_p
@@ -22,7 +24,12 @@ class IpuTileUnaryPrimitiveTests(chex.TestCase):
 
     def test__make_unary1d_vertex_fullname__proper_result(self):
         assert (
-            make_unary1d_vertex_fullname("COS", np.float16) == "popops::UnaryOp1D<popops::expr::UnaryOpType::COS,half>"
+            make_unary1d_vertex_fullname("COS", np.float16, False)
+            == "popops::UnaryOp1D<popops::expr::UnaryOpType::COS,half>"
+        )
+        assert (
+            make_unary1d_vertex_fullname("COS", np.float16, True)
+            == "popops::UnaryOp1DInPlace<popops::expr::UnaryOpType::COS,half>"
         )
 
     def test__ipu_unary_primitive_translation__proper_data_structure(self):
@@ -36,6 +43,7 @@ class IpuTileUnaryPrimitiveTests(chex.TestCase):
         assert tile_map_p.outputs_info[0].shape == [10, 12]
         assert tile_map_p.outputs_info[0].dtype == IpuType.HALF
 
+    # TODO: unified test to speed up things?
     @parameterized.parameters(
         [
             (lax.abs_p, np.float32),
@@ -72,8 +80,50 @@ class IpuTileUnaryPrimitiveTests(chex.TestCase):
         compute_fn_cpu = partial(jax.jit, backend="cpu")(compute_fn)
         compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)
 
-        output_cpu = compute_fn_ipu(indata)
-        output_ipu = compute_fn_cpu(indata)
+        output_cpu = compute_fn_cpu(indata)
+        output_ipu = compute_fn_ipu(indata)
+        assert isinstance(output_ipu, TileShardedArray)
+        assert output_ipu.tiles == tiles
+        assert output_ipu.dtype == indata.dtype
+        npt.assert_array_almost_equal(output_ipu, output_cpu, decimal=3)
+
+    # TODO: unified test to speed up things?
+    @parameterized.parameters(
+        [
+            (tessellate_ipu.lax.abs_inplace_p, np.float32),
+            (tessellate_ipu.lax.asin_inplace_p, np.float32),
+            (tessellate_ipu.lax.cbrt_inplace_p, np.float32),
+            (tessellate_ipu.lax.ceil_inplace_p, np.float32),
+            (tessellate_ipu.lax.erf_inplace_p, np.float32),
+            (tessellate_ipu.lax.exp_inplace_p, np.float32),
+            (tessellate_ipu.lax.expm1_inplace_p, np.float32),
+            (tessellate_ipu.lax.floor_inplace_p, np.float32),
+            (tessellate_ipu.lax.log_inplace_p, np.float32),
+            (tessellate_ipu.lax.log1p_inplace_p, np.float32),
+            (tessellate_ipu.lax.neg_inplace_p, np.float32),
+            (tessellate_ipu.lax.population_count_inplace_p, np.int32),
+            (tessellate_ipu.lax.sign_inplace_p, np.float32),
+            (tessellate_ipu.lax.sin_inplace_p, np.float32),
+            (tessellate_ipu.lax.tan_inplace_p, np.float32),
+            # (tessellate_ipu.lax.tanh_inplace_p, np.float32), accuracy issue?
+            (tessellate_ipu.lax.rsqrt_inplace_p, np.float32),
+            (tessellate_ipu.lax.sqrt_inplace_p, np.float32),
+        ]
+    )
+    def test__tile_map__unary_inplace_ops__ipu_jitting__proper_result(self, unary_p, dtype):
+        tiles = (3, 4, 5)
+        inshape = (len(tiles), 7, 9)
+        indata = np.random.randn(*inshape).astype(dtype)
+
+        def compute_fn(input):
+            input = tile_put_sharded(input, tiles)
+            return tile_map(unary_p, input)
+
+        compute_fn_cpu = partial(jax.jit, backend="cpu")(compute_fn)
+        compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)
+
+        output_cpu = compute_fn_cpu(indata)
+        output_ipu = compute_fn_ipu(indata)
         assert isinstance(output_ipu, TileShardedArray)
         assert output_ipu.tiles == tiles
         assert output_ipu.dtype == indata.dtype
@@ -135,6 +185,55 @@ class IpuTileUnaryPrimitiveTests(chex.TestCase):
         npt.assert_array_almost_equal(output_ipu, output_cpu, decimal=2)
 
 
+@pytest.mark.ipu_hardware
+class IpuTileUnaryPrimitiveHwTests(chex.TestCase):
+    def setUp(self):
+        super().setUp()
+        np.random.seed(42)
+
+    def test__tile_map__sqrt_inplace_ops__fori_loop__zero_copy_cycle_count(self):
+        N = 1024
+        Niter = 32
+        # NOTE: skip tile zero where poplar inject loop control vertices.
+        tiles = (2,)
+        inshape = (len(tiles), N)
+        indata = np.random.rand(*inshape).astype(np.float32)
+
+        def inner(_, x):
+            return tile_map(tessellate_ipu.lax.sqrt_inplace_p, x)
+
+        def compute_fn(input, num_iters):
+            input = tile_put_sharded(input, tiles)
+            # Make sure number of iterations is on tile0 to avoid additional sync + comms.
+            num_iters = tile_put_replicated(num_iters, (0,)).array[0]
+            # Benchmark single call.
+            input, start = ipu_cycle_count(input)
+            x = tile_map(tessellate_ipu.lax.sqrt_inplace_p, input)
+            x, mid = ipu_cycle_count(x)  # type:ignore
+            # Benchmark fori_loop.
+            y = jax.lax.fori_loop(0, num_iters, inner, x)
+            y, end = ipu_cycle_count(y)
+            return x, y, (start, mid, end)
+
+        compute_fn_cpu = partial(jax.jit, backend="cpu")(compute_fn)
+        compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)
+
+        xcpu, ycpu, _ = compute_fn_cpu(indata, Niter)
+        xipu, yipu, (start, mid, end) = compute_fn_ipu(indata, Niter)
+
+        # Check IPU vs CPU result (especially `fori_loop`).
+        npt.assert_array_almost_equal(xcpu, xipu, decimal=3)
+        npt.assert_array_almost_equal(ycpu, yipu, decimal=3)
+
+        (start, mid, end) = map(lambda v: np.asarray(v)[0], (start, mid, end))
+        single_call_cycles = mid[0] - start[0]
+        for_loop_cycles = end[0] - mid[0]
+        # Less than 5% overhead `fori_loop` vs unrolling.
+        # In particular: using inplace should not introduce additional copies.
+        threshold = 0.95
+        assert single_call_cycles * Niter >= for_loop_cycles * threshold
+
+
 class IpuTileBinaryPrimitiveTests(chex.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
@@ -160,6 +259,40 @@ class IpuTileBinaryPrimitiveTests(chex.TestCase, parameterized.TestCase):
         ]
     )
     def test__tile_map__binary_ops__ipu_jitting__proper_result(self, binary_p, dtype):
+        tiles = (3, 4, 5)
+        inshape = (len(tiles), 7, 9)
+        input0 = np.random.randn(*inshape).astype(dtype)
+        input1 = np.random.randn(*inshape).astype(dtype)
+
+        def compute_fn(in0, in1):
+            input0 = tile_put_sharded(in0, tiles)
+            input1 = tile_put_sharded(in1, tiles)
+            return tile_map(binary_p, input0, input1)
+
+        compute_fn_cpu = partial(jax.jit, backend="cpu")(compute_fn)
+        compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)
+        output_cpu = compute_fn_cpu(input0, input1)
+        output_ipu = compute_fn_ipu(input0, input1)
+
+        assert isinstance(output_ipu, TileShardedArray)
+        assert output_ipu.tiles == tiles
+        assert output_ipu.dtype in (np.bool_, input0.dtype)
+        npt.assert_array_almost_equal(output_ipu, output_cpu, decimal=2)
+
+    @parameterized.parameters(
+        [
+            (tessellate_ipu.lax.add_inplace_p, np.float32),
+            (tessellate_ipu.lax.atan2_inplace_p, np.float32),
+            (tessellate_ipu.lax.div_inplace_p, np.float32),
+            (tessellate_ipu.lax.max_inplace_p, np.float32),
+            (tessellate_ipu.lax.min_inplace_p, np.float32),
+            (tessellate_ipu.lax.mul_inplace_p, np.float32),
+            (tessellate_ipu.lax.pow_inplace_p, np.float32),
+            (tessellate_ipu.lax.rem_inplace_p, np.float32),
+            (tessellate_ipu.lax.sub_inplace_p, np.float32),
+        ]
+    )
+    def test__tile_map__binary_inplace_ops__ipu_jitting__proper_result(self, binary_p, dtype):
         tiles = (3, 4, 5)
         inshape = (len(tiles), 7, 9)
         input0 = np.random.randn(*inshape).astype(dtype)

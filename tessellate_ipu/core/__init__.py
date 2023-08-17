@@ -18,6 +18,7 @@ from .tile_interpreter import (
     create_ipu_tile_primitive,
     create_ipu_tile_primitive_v2,
     declare_ipu_tile_primitive,
+    get_ipu_tile_primitive_translation,
     register_ipu_tile_primitive,
     tile_map,
 )
@@ -41,6 +42,8 @@ from .tile_interpreter_primitives import (
     make_ipu_vertex_name_templated,
     make_ipu_vertex_out_info,
     make_ipu_vertex_outputs,
+    primitive_clone,
+    primitive_num_inout_alias_args,
 )
 
 

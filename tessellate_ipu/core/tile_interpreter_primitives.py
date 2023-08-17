@@ -13,6 +13,7 @@ from jax.interpreters.batching import primitive_batchers
 from jax.interpreters.mlir import LoweringRuleContext, ir
 from jax.ipu.primitive import ipu_mlir_lowering_custom_primitive
 
+from tessellate_ipu.lib import pytessellate_ipu_ops_jax  # noqa: E402
 from tessellate_ipu.lib.pytessellate_ipu_core import (  # noqa: E402
     Base64Data,
     IpuTileMapEquation,
@@ -22,12 +23,41 @@ from tessellate_ipu.lib.pytessellate_ipu_core import (  # noqa: E402
     IpuVertexIOInfo,
     IpuVertexIOType,
 )
-from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TileMapEquationCall  # noqa: E402
+from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TileMapMaxInOutAliasingArgs  # noqa: E402
 from tessellate_ipu.utils import NDArray
 
 from .tile_common_utils import from_numpy_dtype_to_ipu_type, get_ipu_type_name
 
 Array = Any
+
+tile_map_primitive_cls_list: List[Any] = [
+    getattr(pytessellate_ipu_ops_jax, v) for v in dir(pytessellate_ipu_ops_jax) if v.startswith("TileMapEquationCall")
+]
+tile_map_primitive_cls_map: Dict[int, Any] = {m.NumInOutAliasingArgs: m for m in tile_map_primitive_cls_list}
+"""Dictionary of TileMapEquation custom call primitives, depending on the number of IO aliased args.
+
+This way of doing (i.e. having multiple tile_map instances) is due to the IPU XLA custom op interface, where
+the metadata is a static property of the custom op/primitive.
+"""
+
+
+def primitive_clone(p: core.Primitive, name: str) -> core.Primitive:
+    """Clone a Primitive, with a new name."""
+    from jax.interpreters.ad import primitive_jvps, primitive_transposes
+    from jax.interpreters.batching import primitive_batchers
+
+    assert name != p.name
+    pclone = copy(p)
+    pclone.name = name
+    # TODO: MLIR lowering?
+    # Re-use the same JAX ad and batching rules for inplace primitive.
+    if p in primitive_transposes:
+        primitive_transposes[pclone] = primitive_transposes[p]
+    if p in primitive_jvps:
+        primitive_jvps[pclone] = primitive_jvps[p]
+    if p in primitive_batchers:
+        primitive_batchers[pclone] = primitive_batchers[p]
+    return pclone
 
 
 def primitive_has_impl(p: core.Primitive) -> bool:
@@ -39,6 +69,13 @@ def primitive_has_impl(p: core.Primitive) -> bool:
 def primitive_has_batching(p: core.Primitive) -> bool:
     """Check if a primitive has a batching rule (i.e. supports `vmap`)."""
     return p in primitive_batchers
+
+
+def primitive_num_inout_alias_args(p: core.Primitive) -> int:
+    """Get the number of in/out alias arguments of a TessellateIPU primitive.
+    Returns 0 by default if not set (e.g. most JAX LAX operators).
+    """
+    return getattr(p, "num_inout_alias_args", 0)
 
 
 def make_ipu_vertex_name_templated(basename: str, *args) -> str:
@@ -309,7 +346,20 @@ def tile_map_equation_call_mlir_lowering_ipu(
         args: IR operands
         params: Additional parameters/attributes to pass.
     """
-    _, _, tile_map_eqn_json = get_tile_map_ipu_arguments(**params)
+    from .tile_interpreter import get_ipu_tile_primitive_translation
+
+    pname, _, tile_map_eqn_json = get_tile_map_ipu_arguments(**params)
+    primitive, _ = get_ipu_tile_primitive_translation(pname)
+    # Get the number of IPU in/out alias arguments for this primitive.
+    num_inout_alias_args = primitive_num_inout_alias_args(primitive)
+    assert num_inout_alias_args >= 0, f"Number of in/out alias arguments, {num_inout_alias_args}, needs to be positive."
+    assert (
+        num_inout_alias_args <= TileMapMaxInOutAliasingArgs
+    ), f"Number of in/out alias arguments, {num_inout_alias_args}, needs to be smaller than {TileMapMaxInOutAliasingArgs}."
+    assert num_inout_alias_args <= len(args)
+    # Use the proper tile map class...
+    tile_map_primitive_cls = tile_map_primitive_cls_map[num_inout_alias_args]
+
     # Tile map equation (serialized as json).
     tile_map_eqn = IpuTileMapEquation.from_json_str(tile_map_eqn_json)
     # Load optional vertex compiled file (or cpp)
@@ -317,7 +367,7 @@ def tile_map_equation_call_mlir_lowering_ipu(
     if len(tile_map_eqn.gp_filename) > 0:
         ipu_gp_filename = os.path.abspath(tile_map_eqn.gp_filename)
     outputs = ipu_mlir_lowering_custom_primitive(
-        TileMapEquationCall,
+        tile_map_primitive_cls,
         ctx,
         args,
         opaque_attributes=tile_map_eqn_json,
