@@ -41,3 +41,8 @@ Run a terminal with an IPU model (useful for local debugging):
 JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=8 ipython
 TF_CPP_MIN_LOG_LEVEL=0 TF_CPP_VMODULE='poplar_compiler=1,poplar_executor=1' JAX_IPU_USE_MODEL=true JAX_IPU_MODEL_NUM_TILES=8 ipython
 ```
+
+## Useful dev. flags/env variables
+
+* `XLA_FLAGS='--xla_dump_to=./xla_dumps --xla_dump_hlo_pass_re=.'`: XLA passes dump;
+* `"debug.branchRecordFlush":"false"`: Deactivate Poplar loop profiling flush => smaller overhead;
