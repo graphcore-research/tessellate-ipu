@@ -10,11 +10,15 @@ from tessellate_ipu.core import (
     IpuTileMapEquation,
     TileShardedArray,
     from_numpy_dtype_to_ipu_type,
+    get_ipu_tile_primitive_translation,
     get_ipu_type_name,
     make_ipu_vertex_attributes,
     make_ipu_vertex_in_info,
+    make_ipu_vertex_inout_info,
     make_ipu_vertex_name_templated,
     make_ipu_vertex_out_info,
+    primitive_clone,
+    primitive_num_inout_alias_args,
     register_ipu_tile_primitive,
     tile_map,
 )
@@ -84,10 +88,22 @@ _unary_primitive_to_vertex_basename: Dict[Primitive, str] = {
 """
 
 
-def make_unary1d_vertex_fullname(basename: str, dtype: DTypeLike) -> str:
-    """Create the full vertex name from the basename and dtype."""
+def make_unary1d_vertex_fullname(basename: str, dtype: DTypeLike, inplace: bool) -> str:
+    """Create the full vertex name from the basename, dtype and inplace."""
     ipu_dtype = get_ipu_type_name(dtype)
-    return f"popops::UnaryOp1D<popops::expr::UnaryOpType::{basename},{ipu_dtype}>"
+    unary_basename = "UnaryOp1DInPlace" if inplace else "UnaryOp1D"
+    return f"popops::{unary_basename}<popops::expr::UnaryOpType::{basename},{ipu_dtype}>"
+
+
+def make_unary1d_vertex_io_infos(inaval: ShapedArray, inplace: bool) -> Tuple[List[Any], List[Any]]:
+    """Build Poplibs unary1d vertex IO infos.
+
+    Naming of the vertex interface depends on whether it is inplace or not.
+    """
+    if inplace:
+        return [make_ipu_vertex_inout_info("inOut", inaval)], [make_ipu_vertex_inout_info("inOut", inaval)]
+    else:
+        return [make_ipu_vertex_in_info("in", inaval)], [make_ipu_vertex_out_info("out", inaval)]
 
 
 def ipu_unary_primitive_translation(
@@ -108,13 +124,16 @@ def ipu_unary_primitive_translation(
     """
     assert len(inavals) == 1
     vertex_basename = _unary_primitive_to_vertex_basename[p]
-    vname = make_unary1d_vertex_fullname(vertex_basename, inavals[0].dtype)
+    # Is it an inplace primitive?
+    inplace_prim = primitive_num_inout_alias_args(p) > 0
+    vname = make_unary1d_vertex_fullname(vertex_basename, inavals[0].dtype, inplace_prim)
+    inputs_info, outputs_info = make_unary1d_vertex_io_infos(inavals[0], inplace_prim)
     ipu_prim_info = IpuTileMapEquation(
         vname=vname,
         pname=p.name,
         tiles=tiles,
-        inputs_info=[make_ipu_vertex_in_info("in", inavals[0])],
-        outputs_info=[make_ipu_vertex_out_info("out", inavals[0])],
+        inputs_info=inputs_info,
+        outputs_info=outputs_info,
         attributes_i32=[],
         attributes_f32=[],
     )
@@ -189,7 +208,7 @@ def ipu_integer_pow_translation(
         raise ValueError("Only supporting integer power of 2 on IPU tile primitives.")
 
     # IPU cast arguments.
-    vname = make_unary1d_vertex_fullname("SQUARE", inaval.dtype)
+    vname = make_unary1d_vertex_fullname("SQUARE", inaval.dtype, inplace=False)
     ipu_prim_info = IpuTileMapEquation(
         vname=vname,
         pname=p.name,
@@ -267,3 +286,42 @@ def tile_copy(input: TileShardedArray) -> TileShardedArray:
     """
     r: TileShardedArray = tile_map(copy_p, input)  # type:ignore
     return r
+
+
+def register_ipu_unary_inplace_tile_primitive(orig_prim):
+    """Create and register IPU unary inplace tile primitive.
+
+    Args:
+        orig_prim: Original non-inplace unary primitive.
+    Returns:
+        Inplace unary primitive, registered.
+    """
+    inplace_prim = primitive_clone(orig_prim, f"{orig_prim.name}_inplace")
+    _, tl_translation = get_ipu_tile_primitive_translation(orig_prim.name)
+    register_ipu_tile_primitive(inplace_prim, tl_translation)
+    _unary_primitive_to_vertex_basename[inplace_prim] = _unary_primitive_to_vertex_basename[orig_prim]
+    inplace_prim.num_inout_alias_args = 1
+    return inplace_prim
+
+
+# Inplace variants of support JAX LAX unary ops.
+abs_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.abs_p)
+asin_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.asin_p)
+cbrt_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.cbrt_p)
+ceil_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.ceil_p)
+erf_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.erf_p)
+exp_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.exp_p)
+expm1_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.expm1_p)
+floor_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.floor_p)
+is_finite_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.is_finite_p)
+log_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.log_p)
+log1p_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.log1p_p)
+neg_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.neg_p)
+population_count_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.population_count_p)
+sin_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.sin_p)
+sign_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.sign_p)
+tan_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.tan_p)
+# tanh_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.tanh_p) # Weird inaccuray issue. TODO: investigate the problem?
+round_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.round_p)
+rsqrt_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.rsqrt_p)
+sqrt_inplace_p = register_ipu_unary_inplace_tile_primitive(lax.sqrt_p)

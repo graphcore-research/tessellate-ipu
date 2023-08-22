@@ -195,16 +195,30 @@ EXPORT_IPU_JAX_PRIMITIVE(TileConstantShardedPrimitive);
  * @brief IPU tile put sharded primitive: sharding an array over tiles on
  * the first axis.
  */
+template <int64_t TNumInOutAliasingArgs>
 class TileMapEquationCall : public jax::ipu::PrimitiveInterface {
  public:
+  // Static number of inout arguments.
+  static constexpr int64_t NumInOutAliasingArgs = TNumInOutAliasingArgs;
+
   static jax::ipu::PrimitiveMetadata metadata(std::uint32_t num_inputs) {
-    // TODO. check InOut tensors for aliasing.
-    return jax::ipu::PrimitiveMetadata{.num_inputs = num_inputs,
-                                       .is_elementwise = false,
-                                       .is_stateless = true,
-                                       .is_hashable = true,
-                                       .input_to_output_tensor_aliasing = {},
-                                       .allocating_indices = {}};
+    if (num_inputs < NumInOutAliasingArgs) {
+      throw std::runtime_error(
+          "Inconsistent number of inputs and in/out aliased arguments.");
+    }
+    // Input/output aliasing map.
+    // Note: only support 1-to-1 mapping of same index, on first arguments.
+    std::map<std::int64_t, std::int64_t> inout_aliasing;
+    for (int64_t idx = 0; idx < NumInOutAliasingArgs; ++idx) {
+      inout_aliasing[idx] = idx;
+    }
+    return jax::ipu::PrimitiveMetadata{
+        .num_inputs = num_inputs,
+        .is_elementwise = false,
+        .is_stateless = true,
+        .is_hashable = true,
+        .input_to_output_tensor_aliasing = inout_aliasing,
+        .allocating_indices = {}};
   }
 
   static poplar::program::Program program(
@@ -219,8 +233,23 @@ class TileMapEquationCall : public jax::ipu::PrimitiveInterface {
   }
 };
 
+// Manually un-rolling for up to 2 InOut arguments (for now...)
+// No other way due to metadata being a static class function.
+using TileMapEquationCallInOut0 = TileMapEquationCall<0>;
+using TileMapEquationCallInOut1 = TileMapEquationCall<1>;
+using TileMapEquationCallInOut2 = TileMapEquationCall<2>;
+
 // Export the IPU JAX primitives in the shared library.
-EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCall);
+EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCallInOut0);
+EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCallInOut1);
+EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCallInOut2);
+
+template <typename T>
+decltype(auto) makeTileMapEquationCallBindings(nanobind::module_& m,
+                                               const char* name) {
+  nanobind::class_<T>(m, name).def_ro_static("NumInOutAliasingArgs",
+                                             &T::NumInOutAliasingArgs);
+}
 
 NB_MODULE(pytessellate_ipu_ops_jax, m) {
   // Avoid leak warning from the library.
@@ -234,6 +263,15 @@ NB_MODULE(pytessellate_ipu_ops_jax, m) {
       m, "TileConstantReplicatedPrimitive");
   nanobind::class_<TileConstantShardedPrimitive>(
       m, "TileConstantShardedPrimitive");
+
   // Tile map operations.
-  nanobind::class_<TileMapEquationCall>(m, "TileMapEquationCall");
+  // Manually un-rolling for up to 2 InOut arguments (for now...).
+  makeTileMapEquationCallBindings<TileMapEquationCallInOut0>(
+      m, "TileMapEquationCallInOut0");
+  makeTileMapEquationCallBindings<TileMapEquationCallInOut1>(
+      m, "TileMapEquationCallInOut1");
+  makeTileMapEquationCallBindings<TileMapEquationCallInOut2>(
+      m, "TileMapEquationCallInOut2");
+  // Export max in/out aliasing args constant.
+  m.attr("TileMapMaxInOutAliasingArgs") = nanobind::int_(2);
 }
