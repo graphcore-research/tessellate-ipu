@@ -132,6 +132,22 @@ std::vector<poplar::Tensor> TileMapEquation::add(
   return outputs;
 }
 
+std::size_t TileMapEquation::numInOuts() const {
+  std::size_t num_inouts0{0}, num_inouts1{0};
+  // Check consistency between the in/out collections.
+  for (const auto& ininfo : inputs_info) {
+    num_inouts0 += (ininfo.iotype == VertexIOType::InOut);
+  }
+  for (const auto& outinfo : outputs_info) {
+    num_inouts1 += (outinfo.iotype == VertexIOType::InOut);
+  }
+  if (num_inouts0 != num_inouts1) {
+    throw std::logic_error(
+        "Inconsistent number of in/outs in the IPU tile map equation.");
+  }
+  return num_inouts0;
+}
+
 poplar::program::Program lowerTileMapCallToPoplar(
     poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
     std::vector<poplar::Tensor>& outputs, const TileMapEquation& tile_map_eqn,

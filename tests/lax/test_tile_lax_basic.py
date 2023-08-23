@@ -11,7 +11,14 @@ from jax import lax
 from jax.core import ShapedArray
 
 import tessellate_ipu.lax
-from tessellate_ipu import TileShardedArray, ipu_cycle_count, tile_map, tile_put_replicated, tile_put_sharded
+from tessellate_ipu import (
+    TileShardedArray,
+    ipu_cycle_count,
+    tile_data_barrier,
+    tile_map,
+    tile_put_replicated,
+    tile_put_sharded,
+)
 from tessellate_ipu.core.tile_interpreter_primitives import IpuTileMapEquation, IpuType
 from tessellate_ipu.lax.tile_lax_binary import scaled_add_p, scaled_sub_p
 from tessellate_ipu.lax.tile_lax_unary import ipu_unary_primitive_translation, make_unary1d_vertex_fullname, tile_copy
@@ -203,16 +210,22 @@ class IpuTileUnaryPrimitiveHwTests(chex.TestCase):
             return tile_map(tessellate_ipu.lax.sqrt_inplace_p, x)
 
         def compute_fn(input, num_iters):
+            # Hacky way of forcing to wait until all inputs are transferred from HOST.
+            # Otherwise: work on tile 2 start before tile 0 (still transferring).
+            input = input * num_iters
             input = tile_put_sharded(input, tiles)
             # Make sure number of iterations is on tile0 to avoid additional sync + comms.
-            num_iters = tile_put_replicated(num_iters, (0,)).array[0]
-            # Benchmark single call.
-            input, start = ipu_cycle_count(input)
+            num_iters = tile_put_replicated(num_iters, (0,))
+
+            # Benchmark single call (once all data properly sharded).
+            input, num_iters, start = ipu_cycle_count(input, num_iters)
             x = tile_map(tessellate_ipu.lax.sqrt_inplace_p, input)
             x, mid = ipu_cycle_count(x)  # type:ignore
             # Benchmark fori_loop.
+            num_iters = num_iters.array[0]
             y = jax.lax.fori_loop(0, num_iters, inner, x)
             y, end = ipu_cycle_count(y)
+            start, mid, end = tile_data_barrier(start, mid, end)
             return x, y, (start, mid, end)
 
         compute_fn_cpu = partial(jax.jit, backend="cpu")(compute_fn)

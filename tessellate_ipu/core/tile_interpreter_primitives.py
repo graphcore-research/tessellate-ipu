@@ -74,6 +74,9 @@ def primitive_has_batching(p: core.Primitive) -> bool:
 def primitive_num_inout_alias_args(p: core.Primitive) -> int:
     """Get the number of in/out alias arguments of a TessellateIPU primitive.
     Returns 0 by default if not set (e.g. most JAX LAX operators).
+
+    TODO: depreciate this way of handling in/out => should just be part of TileMapEquation
+    serialization info.
     """
     return getattr(p, "num_inout_alias_args", 0)
 
@@ -346,22 +349,20 @@ def tile_map_equation_call_mlir_lowering_ipu(
         args: IR operands
         params: Additional parameters/attributes to pass.
     """
-    from .tile_interpreter import get_ipu_tile_primitive_translation
 
     pname, _, tile_map_eqn_json = get_tile_map_ipu_arguments(**params)
-    primitive, _ = get_ipu_tile_primitive_translation(pname)
-    # Get the number of IPU in/out alias arguments for this primitive.
-    num_inout_alias_args = primitive_num_inout_alias_args(primitive)
+    # Tile map equation (serialized as json).
+    tile_map_eqn = IpuTileMapEquation.from_json_str(tile_map_eqn_json)
+    # Get the number of IPU in/out alias arguments for this equation.
+    num_inout_alias_args = tile_map_eqn.num_inouts
     assert num_inout_alias_args >= 0, f"Number of in/out alias arguments, {num_inout_alias_args}, needs to be positive."
     assert (
         num_inout_alias_args <= TileMapMaxInOutAliasingArgs
     ), f"Number of in/out alias arguments, {num_inout_alias_args}, needs to be smaller than {TileMapMaxInOutAliasingArgs}."
     assert num_inout_alias_args <= len(args)
-    # Use the proper tile map class...
+    # Use the proper tile map class for in/out aliasing.
     tile_map_primitive_cls = tile_map_primitive_cls_map[num_inout_alias_args]
 
-    # Tile map equation (serialized as json).
-    tile_map_eqn = IpuTileMapEquation.from_json_str(tile_map_eqn_json)
     # Load optional vertex compiled file (or cpp)
     ipu_gp_filename: Optional[str] = None
     if len(tile_map_eqn.gp_filename) > 0:

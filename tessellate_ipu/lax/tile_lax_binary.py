@@ -263,6 +263,7 @@ def register_ipu_binary_inplace_tile_primitive(orig_prim):
     _, tl_translation = get_ipu_tile_primitive_translation(orig_prim.name)
     register_ipu_tile_primitive(inplace_prim, tl_translation)
     _binary_primitive_to_vertex_basename[inplace_prim] = _binary_primitive_to_vertex_basename[orig_prim]
+    # TODO: depreciate this field!
     inplace_prim.num_inout_alias_args = 1
     return inplace_prim
 
