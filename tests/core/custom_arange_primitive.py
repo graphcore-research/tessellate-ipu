@@ -125,3 +125,19 @@ def custom_multi_out_impl(x, scale_value):
 
 
 custom_multi_out_p.def_impl(custom_multi_out_impl)
+
+
+# Declare inplace vertex using same in/out naming.
+@declare_ipu_tile_primitive("CustomInplaceVertex", gp_filename=custom_vertex_filename)
+def custom_inplace_op_p(inout):
+    outputs = {"inout": inout}
+    perf_estimate = inout.size
+    return outputs, {}, {}, perf_estimate
+
+
+# Provide a JAX NumPy implementation for other backends (CPU/GPU/TPU)
+def custom_inplace_op_impl(x):
+    return x * 2.0
+
+
+custom_inplace_op_p.def_impl(custom_inplace_op_impl)

@@ -166,5 +166,9 @@ NB_MODULE(pytessellate_ipu_core, m) {
       .def_rw("gp_filename", &TileMapEquation::gp_filename)
       .def_rw("perf_estimate", &TileMapEquation::perf_estimate)
       .def_rw("sync", &TileMapEquation::sync)
-      .def_prop_ro("use_tmp_space", &TileMapEquation::useTmpSpace);
+      // Useful properties.
+      .def_prop_ro("use_tmp_space", &TileMapEquation::useTmpSpace)
+      .def_prop_ro("num_inputs", &TileMapEquation::numInputs)
+      .def_prop_ro("num_outputs", &TileMapEquation::numOutputs)
+      .def_prop_ro("num_inouts", &TileMapEquation::numInOuts);
 }

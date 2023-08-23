@@ -9,7 +9,7 @@ from custom_arange_primitive import custom_multi_out_p
 from jax import lax
 from jax.core import Primitive, ShapedArray
 
-from tessellate_ipu.core.tile_common_utils import Base64Data, IpuType, from_ipu_type_to_numpy_dtype
+from tessellate_ipu.core.tile_common_utils import IpuType, from_ipu_type_to_numpy_dtype
 from tessellate_ipu.core.tile_interpreter_primitives import (
     from_numpy_dtype_to_ipu_type,
     make_ipu_vertex_attributes,
@@ -22,8 +22,6 @@ from tessellate_ipu.core.tile_interpreter_primitives import (
     primitive_has_impl,
 )
 from tessellate_ipu.lib.pytessellate_ipu_core import (
-    IpuTensorSlice,
-    IpuTileMapEquation,
     IpuVertexAttributeF32,
     IpuVertexAttributeI32,
     IpuVertexIOInfo,
@@ -31,84 +29,7 @@ from tessellate_ipu.lib.pytessellate_ipu_core import (
 )
 
 
-class IpuTensorSliceTests(chex.TestCase, parameterized.TestCase):
-    def test__tensor_slice__init__proper_data(self):
-        slice = IpuTensorSlice(begin=10, end=15)
-        assert slice.begin == 10
-        assert slice.end == 15
-
-    def test__tensor_slice__to_json_str(self):
-        slice = IpuTensorSlice(begin=10, end=15)
-        assert slice.to_json_str() == '{"begin":10,"end":15}'
-
-    def test__tensor_slice__from_json_str(self):
-        slice = IpuTensorSlice.from_json_str('{"begin":10,"end":15}')
-        assert slice.begin == 10
-        assert slice.end == 15
-
-
-class IpuTileEquationBaseTests(chex.TestCase, parameterized.TestCase):
-    def test__ipu_vertex_io_info__init__proper_fields(self):
-        ioinfo = IpuVertexIOInfo(name="in0", iotype=IpuVertexIOType.In, shape=[1, 2, 3], dtype=IpuType.FLOAT)
-        assert ioinfo.name == "in0"
-        assert ioinfo.iotype == IpuVertexIOType.In
-        assert ioinfo.shape == [1, 2, 3]
-        assert ioinfo.dtype == IpuType.FLOAT
-        assert not ioinfo.is_constant_input
-        assert ioinfo.constant_data.encoded_data == ""
-
-    def test__ipu_vertex_io_info__constant__proper_fields(self):
-        ioinfo = IpuVertexIOInfo(
-            name="in0",
-            iotype=IpuVertexIOType.In,
-            shape=[1, 2, 3],
-            dtype=IpuType.FLOAT,
-            constant_data=Base64Data("12345"),
-        )
-        assert ioinfo.name == "in0"
-        assert ioinfo.iotype == IpuVertexIOType.In
-        assert ioinfo.shape == [1, 2, 3]
-        assert ioinfo.dtype == IpuType.FLOAT
-        assert ioinfo.is_constant_input
-        assert ioinfo.constant_data.encoded_data == "12345"
-
-    def test__ipu_vertex_io_info__eq__proper_results(self):
-        ioinfo0 = IpuVertexIOInfo(name="in0", iotype=IpuVertexIOType.Out, shape=[1, 2, 3], dtype=IpuType.FLOAT)
-        ioinfo1 = IpuVertexIOInfo(name="in0", iotype=IpuVertexIOType.Out, shape=[1, 2, 3], dtype=IpuType.FLOAT)
-        ioinfo2 = IpuVertexIOInfo(name="in1", iotype=IpuVertexIOType.Out, shape=[1, 2, 3], dtype=IpuType.FLOAT)
-        assert ioinfo0 == ioinfo1
-        assert ioinfo2 != ioinfo0
-        assert not ioinfo0.is_constant_input
-        assert not ioinfo2.is_constant_input
-
-    def test__ipu_vertex_io_info__to_json_str__proper_representation(self):
-        ioinfo = IpuVertexIOInfo(name="in0", iotype=IpuVertexIOType.InOut, shape=[1, 2, 3], dtype=IpuType.FLOAT)
-        assert (
-            ioinfo.to_json_str()
-            == '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"name":"in0","slices2d":[]}'
-        )
-
-    def test__ipu_vertex_io_info__from_json_str__proper_representation(self):
-        ioinfo = IpuVertexIOInfo.from_json_str(
-            '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"name":"in0","slices2d":[{"begin":10,"end":15}]}'
-        )
-        assert ioinfo.name == "in0"
-        assert ioinfo.iotype == IpuVertexIOType.InOut
-        assert ioinfo.shape == [1, 2, 3]
-        assert ioinfo.dtype == IpuType.FLOAT
-        assert len(ioinfo.slices2d) == 1
-
-    def test__ipu_tile_map_equation__init__proper_fields(self):
-        eqn = IpuTileMapEquation(
-            tiles=[10], vname="vertex", pname="prim", attributes_f32=[IpuVertexAttributeF32("test", 2.5)]
-        )
-        assert eqn.tiles == [10]
-        assert eqn.vname == "vertex"
-        assert eqn.pname == "prim"
-        assert eqn.attributes_f32 == [IpuVertexAttributeF32("test", 2.5)]
-        assert not eqn.use_tmp_space
-        assert eqn.tmp_space_aval.shape == [0]
-
+class IpuTessellateCoreFactoryTests(chex.TestCase, parameterized.TestCase):
     def test__make_ipu_vertex_io_info__proper_result(self):
         aval = ShapedArray([1, 2, 3], np.float16)
         info = make_ipu_vertex_io_info("input0", IpuVertexIOType.InOut, aval)

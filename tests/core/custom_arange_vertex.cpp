@@ -44,6 +44,20 @@ class CustomSingleOutVertex : public Vertex {
 };
 
 
+class CustomInplaceVertex : public Vertex {
+ public:
+  InOut<Vector<float, poplar::VectorLayout::SPAN>> inout;   // (size, )
+
+  bool compute() {
+    for (std::size_t idx = 0; idx < inout.size(); ++idx) {
+      // Most basic inplace compute!
+      inout[idx] *= 2.0f;
+    }
+    return true;
+  }
+};
+
+
 template<typename T>
 class CustomMultiOutVertex : public Vertex {
  public:

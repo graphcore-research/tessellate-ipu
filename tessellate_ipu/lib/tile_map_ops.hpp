@@ -295,6 +295,13 @@ struct TileMapEquation {
       poplar::Graph& graph, poplar::program::Sequence& prog,
       const std::vector<poplar::Tensor>& inputs,
       const poplar::DebugContext& debug_prefix) const;
+
+  /** Number of inputs in the equation. */
+  std::size_t numInputs() const noexcept { return inputs_info.size(); }
+  /** Number of outputs in the equation. */
+  std::size_t numOutputs() const noexcept { return outputs_info.size(); }
+  /** Number of inputs/outputs (i.e. aliased) in the equation. */
+  std::size_t numInOuts() const;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
                                    inputs_info, outputs_info, attributes_i32,

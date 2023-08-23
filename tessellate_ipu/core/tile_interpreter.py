@@ -51,6 +51,27 @@ def check_tile_mapping_consistency(args: Sequence[TileShardedArray]):
             raise ValueError(f"Inconsistent tile mapping between input arrays: {t0.tiles} vs {t1.tiles}.")
 
 
+def check_in_out_arguments(inputs: Sequence[str], outputs: Sequence[str]):
+    """Check in/out arguments validity, i.e. these should be first in the inputs and outputs list and
+    1-to-1 equivalents.
+
+    Args:
+        inputs: Sequence of input names.
+        outputs: Sequence of output names.
+    """
+    inout_names = {v for v in inputs if v in outputs}
+    inout_map0 = {v: inputs.index(v) for v in inout_names}
+    inout_map1 = {v: outputs.index(v) for v in inout_names}
+    # Check 1-to-1 mapping of in/out arguments.
+    for v in inout_names:
+        if inout_map0[v] != inout_map1[v]:
+            raise IndexError(f"Inconsistent TessellateIPU inplace in/out indices: {inout_map0[v]} vs {inout_map1[v]}.")
+    # Check it corresponds to the first arguments.
+    inout_idxes = tuple(sorted(inout_map0.values()))
+    if inout_idxes != tuple(range(len(inout_idxes))):
+        raise ValueError(f"In/out arguments should be at the first vertex arguments (here: {inout_idxes}).")
+
+
 # This is moved up here temporarily to get a clearer diff between old and new below.
 # TODO: move near create_ipu_tile_primitive_v2
 def create_ipu_tile_primitive(
@@ -307,7 +328,8 @@ def create_ipu_tile_primitive_v2(
         # Always set primitive `multiple_results`, just in case!
         p.multiple_results = len(outputs) > 1
 
-        # InOut entries.
+        # InOut entries (checking as well the validity).
+        check_in_out_arguments(tuple(inputs), tuple(outputs.keys()))
         inout_names = {v for v in inputs if v in outputs}
 
         def get_iotype(name: str, default: IpuVertexIOType) -> IpuVertexIOType:
