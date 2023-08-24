@@ -358,7 +358,7 @@ def tile_map_equation_call_mlir_lowering_ipu(
     assert num_inout_alias_args >= 0, f"Number of in/out alias arguments, {num_inout_alias_args}, needs to be positive."
     assert (
         num_inout_alias_args <= TileMapMaxInOutAliasingArgs
-    ), f"Number of in/out alias arguments, {num_inout_alias_args}, needs to be smaller than {TileMapMaxInOutAliasingArgs}."
+    ), f"Number of in/out alias arguments, {num_inout_alias_args}, needs to be smaller than {TileMapMaxInOutAliasingArgs} in IPU primitive '{pname}'."
     assert num_inout_alias_args <= len(args)
     # Use the proper tile map class for in/out aliasing.
     tile_map_primitive_cls = tile_map_primitive_cls_map[num_inout_alias_args]

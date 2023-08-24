@@ -251,11 +251,15 @@ class TileMapEquationCall : public jax::ipu::PrimitiveInterface {
 using TileMapEquationCallInOut0 = TileMapEquationCall<0>;
 using TileMapEquationCallInOut1 = TileMapEquationCall<1>;
 using TileMapEquationCallInOut2 = TileMapEquationCall<2>;
+using TileMapEquationCallInOut3 = TileMapEquationCall<3>;
+using TileMapEquationCallInOut4 = TileMapEquationCall<4>;
 
 // Export the IPU JAX primitives in the shared library.
 EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCallInOut0);
 EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCallInOut1);
 EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCallInOut2);
+EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCallInOut3);
+EXPORT_IPU_JAX_PRIMITIVE(TileMapEquationCallInOut4);
 
 template <typename T>
 decltype(auto) makeTileMapEquationCallBindings(nanobind::module_& m,
@@ -285,6 +289,10 @@ NB_MODULE(pytessellate_ipu_ops_jax, m) {
       m, "TileMapEquationCallInOut1");
   makeTileMapEquationCallBindings<TileMapEquationCallInOut2>(
       m, "TileMapEquationCallInOut2");
+  makeTileMapEquationCallBindings<TileMapEquationCallInOut3>(
+      m, "TileMapEquationCallInOut3");
+  makeTileMapEquationCallBindings<TileMapEquationCallInOut4>(
+      m, "TileMapEquationCallInOut4");
   // Export max in/out aliasing args constant.
-  m.attr("TileMapMaxInOutAliasingArgs") = nanobind::int_(2);
+  m.attr("TileMapMaxInOutAliasingArgs") = nanobind::int_(4);
 }

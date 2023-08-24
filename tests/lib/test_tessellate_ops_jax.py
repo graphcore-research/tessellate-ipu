@@ -3,4 +3,4 @@ from tessellate_ipu.lib.pytessellate_ipu_ops_jax import TileMapMaxInOutAliasingA
 
 
 def test__tesselate_jax__max_inout_aliasing_args():
-    assert TileMapMaxInOutAliasingArgs == 2
+    assert TileMapMaxInOutAliasingArgs == 4
