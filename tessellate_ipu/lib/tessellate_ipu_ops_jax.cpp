@@ -33,7 +33,7 @@ class TilePutShardedPrimitive : public TilePutBase {
                                        .is_stateless = true,
                                        .is_hashable = true,
                                        .input_to_output_tensor_aliasing = {{}},
-                                       .allocating_indices = {}};
+                                       .allocating_indices = {0}};
   }
 
   static poplar::program::Program program(
@@ -45,6 +45,19 @@ class TilePutShardedPrimitive : public TilePutBase {
     const auto tile_array = extractTileArray(attributes);
     return lowerTilePutShardedToPoplar(graph, inputs, outputs, tile_array,
                                        debug_context);
+  }
+
+  static poplar::Tensor allocator(poplar::Graph& graph, std::uint32_t operand,
+                                  const std::vector<size_t>& shape,
+                                  poplar::Type type,
+                                  const std::string& attributes,
+                                  const std::string& debug_prefix) {
+    const auto tile_array = extractTileArray(attributes);
+    const auto item_shape =
+        poplar::ArrayRef<std::size_t>(shape.data() + 1, shape.size() - 1);
+    // If not allocated => already pre-allocate input with proper tile mapping.
+    // TODO: fix (unnecessary) on-tile-copy when doing that?
+    return createShardedVariable(graph, type, item_shape, tile_array);
   }
 };
 
