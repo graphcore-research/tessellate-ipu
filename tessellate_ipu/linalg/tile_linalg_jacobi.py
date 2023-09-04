@@ -139,7 +139,6 @@ def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtile
     rotset = jacobi_initial_rotation_set(N)
 
     # All different size 2 partitions on columns.
-    from tqdm import tqdm 
     def iteration(i, vals): 
         rotset, Apcols, Aqcols, Aqcols, Vpcols, Vqcols = vals 
 
@@ -190,6 +189,7 @@ def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtile
     # TODO: decide if we want to support unrolled version. 
     unroll = False 
     if unroll: 
+        from tqdm import tqdm 
         for i in tqdm(range(1, N)): # is this done all in parallel? 
             rotset, Apcols, Aqcols, Aqcols, Vpcols, Vqcols = iteration(i, [rotset, Apcols, Aqcols, Aqcols, Vpcols, Vqcols] )
     else: 
