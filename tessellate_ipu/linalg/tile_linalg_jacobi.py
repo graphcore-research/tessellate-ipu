@@ -88,28 +88,28 @@ def jacobi_initial_rotation_set(N: int) -> NDArray[np.uint32]:
     return rot
 
 
-def jacobi_next_rotation_set(rot: NDArray[np.uint32]) -> NDArray[np.uint32]:
+def jacobi_next_rotation_set(rot):
     """Jacobi next rotation set (N/2, 2).
 
     In short: moving p columns to the right, q columns to the left, with
         p[0] not moving.
     """
-    next_rot = np.copy(rot)
+    next_rot = jnp.copy(rot)
     # Translate columns.
-    next_rot[2:, 0] = rot[1:-1, 0]
-    next_rot[0:-1, 1] = rot[1:, 1]
+    next_rot = next_rot.at[2:, 0].set(rot[1:-1, 0])
+    next_rot = next_rot.at[0:-1, 1].set(rot[1:, 1])
     # Manage corners!
-    next_rot[0, 1] = rot[1, 1]
-    next_rot[1, 0] = rot[0, 1]
-    next_rot[-1, 1] = rot[-1, 0]
+    next_rot = next_rot.at[0, 1].set(rot[1, 1])
+    next_rot = next_rot.at[1, 0].set(rot[0, 1])
+    next_rot = next_rot.at[-1, 1].set(rot[-1, 0])
     return next_rot
 
 
 def jacobi_sort_rotation_set(rotset: NDArray[np.uint32]) -> NDArray[np.uint32]:
     """Sort the p, q indices in the Jacobi rotation set, such p < q."""
     pindices, qindices = rotset[:, 0], rotset[:, 1]
-    pindices, qindices = np.minimum(pindices, qindices), np.maximum(pindices, qindices)
-    return np.stack([pindices, qindices], axis=-1)
+    pindices, qindices = jnp.minimum(pindices, qindices), jnp.maximum(pindices, qindices)
+    return jnp.stack([pindices, qindices], axis=-1)
 
 
 def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtiles: Any) -> Tuple[Array, ...]:
@@ -139,12 +139,15 @@ def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtile
     rotset = jacobi_initial_rotation_set(N)
 
     # All different size 2 partitions on columns.
-    for _ in range(1, N):
+    from tqdm import tqdm 
+    def iteration(i, vals): 
+        rotset, Apcols, Aqcols, Aqcols, Vpcols, Vqcols = vals 
+
         # Sorted rotation set: p < q indices.
         rotset_sorted = jacobi_sort_rotation_set(rotset)
         # On tile constant rotation set tensor building.
-        rotset_replicated = tile_constant_replicated(rotset_sorted, tiles=Atiles)
-        rotset_sharded = tile_constant_sharded(rotset_sorted, tiles=Atiles)
+        rotset_replicated = tile_put_replicated(rotset_sorted, tiles=Atiles)
+        rotset_sharded = tile_put_sharded(rotset_sorted, tiles=Atiles)
 
         # Compute Schur decomposition + on-tile update of columns.
         cs_per_tile, Apcols, Aqcols = tile_map(  # type:ignore
@@ -180,7 +183,17 @@ def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtile
         Apcols, Aqcols = tile_rotate_columns(Apcols, Aqcols, rotset)
         Vpcols, Vqcols = tile_rotate_columns(Vpcols, Vqcols, rotset)
         # Next rotation set.
-        rotset = jacobi_next_rotation_set(rotset)
+        rotset = jacobi_next_rotation_set(rotset) 
+        return [rotset, Apcols, Aqcols, Aqcols, Vpcols, Vqcols]
+
+
+    # TODO: decide if we want to support unrolled version. 
+    unroll = False 
+    if unroll: 
+        for i in tqdm(range(1, N)): # is this done all in parallel? 
+            rotset, Apcols, Aqcols, Aqcols, Vpcols, Vqcols = iteration(i, [rotset, Apcols, Aqcols, Aqcols, Vpcols, Vqcols] )
+    else: 
+        rotset, Apcols, Aqcols, Aqcols, Vpcols, Vqcols = jax.lax.fori_loop(1, N, iteration, [rotset, Apcols, Aqcols, Aqcols, Vpcols, Vqcols] )
 
     return (Apcols.array, Aqcols.array, Vpcols.array, Vqcols.array)
 
@@ -233,19 +246,16 @@ def ipu_jacobi_eigh(x: Array, num_iters: int = 1) -> Tuple[Array, Array]:
     return A, VT
 
 
-def permute_pq_indices(
-    pindices: NDArray[np.int32], qindices: NDArray[np.int32], rotset_permute_mask: NDArray[np.bool_]
-) -> Tuple[NDArray[np.int32], NDArray[np.int32]]:
+def permute_pq_indices(pindices, qindices, rotset_permute_mask):
     """Permute p,q indices based on a mask.
 
     Args, Returns: (N//2,) shaped arrays.
     """
-    return (np.where(rotset_permute_mask, pindices, qindices), np.where(rotset_permute_mask, qindices, pindices))
+    return (jnp.where(rotset_permute_mask, pindices, qindices), jnp.where(rotset_permute_mask, qindices, pindices))
 
 
 def tile_rotate_columns(
-    pcols: TileShardedArray, qcols: TileShardedArray, rotset: NDArray[np.uint32]
-) -> Tuple[TileShardedArray, TileShardedArray]:
+    pcols: TileShardedArray, qcols: TileShardedArray, rotset: NDArray[jnp.uint32]) -> Tuple[TileShardedArray, TileShardedArray]:
     """Rotate columns between tiles using a static `tile_gather`.
 
     The tricky part of this function is to rotate the columns between tiles, but
@@ -257,21 +267,19 @@ def tile_rotate_columns(
     halfN = pcols.shape[0]
     N = halfN * 2
     # Concat all columns, in order to perform a single gather.
-    all_cols = TileShardedArray(
-        jax.lax.concatenate([pcols.array, qcols.array], dimension=0), (*pcols.tiles, *qcols.tiles)
-    )
+    all_cols = jax.lax.concatenate([pcols.array, qcols.array], dimension=0)
 
     # Start with current indices, in the concat representation of columns
-    pcols_indices = np.arange(0, halfN, dtype=np.int32)
-    qcols_indices = np.arange(halfN, N, dtype=np.int32)
+    pcols_indices = jnp.arange(0, halfN, dtype=np.int32)
+    qcols_indices = jnp.arange(halfN, N, dtype=np.int32)
     # First sorting permutation correction.
     rotset_permute_mask = rotset[:, 0] < rotset[:, 1]
     pcols_indices, qcols_indices = permute_pq_indices(pcols_indices, qcols_indices, rotset_permute_mask)
 
     # Rotation of columns between tiles (see Jacobi alg.)
     # Roughtly: pcols move to the right, qcols to the left.
-    pcols_indices_new = np.concatenate([pcols_indices[0:1], qcols_indices[0:1], pcols_indices[1:-1]])
-    qcols_indices_new = np.concatenate([qcols_indices[1:], pcols_indices[-1:]])
+    pcols_indices_new = jnp.concatenate([pcols_indices[0:1], qcols_indices[0:1], pcols_indices[1:-1]])
+    qcols_indices_new = jnp.concatenate([qcols_indices[1:], pcols_indices[-1:]])
     pcols_indices, qcols_indices = pcols_indices_new, qcols_indices_new
     assert len(pcols_indices_new) == halfN
     assert len(qcols_indices_new) == halfN
@@ -282,8 +290,13 @@ def tile_rotate_columns(
     pcols_indices, qcols_indices = permute_pq_indices(pcols_indices, qcols_indices, rotset_permute_mask)
 
     # Move columns around + re-split between pcols and qcols.
-    all_indices = np.concatenate([pcols_indices, qcols_indices])
-    all_cols_updated = tile_gather(all_cols, all_indices.tolist(), all_cols.tiles)
+    all_indices = jnp.concatenate([pcols_indices, qcols_indices])
+    all_cols_updated = all_cols[all_indices, :]
+    
+    all_cols_updated = TileShardedArray(
+        all_cols_updated, (*pcols.tiles, *qcols.tiles)
+    )
+
     return all_cols_updated[:halfN], all_cols_updated[halfN:]
 
 
