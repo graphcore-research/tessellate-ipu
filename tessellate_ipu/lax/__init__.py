@@ -38,6 +38,7 @@ from .tile_lax_binary import (
     sub_inplace_p,
 )
 from .tile_lax_dot import IpuConvVertexType
+from .tile_lax_gather import gather_p
 from .tile_lax_unary import (  # tanh_inplace_p,
     abs_inplace_p,
     asin_inplace_p,
