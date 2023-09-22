@@ -61,6 +61,8 @@ struct VertexIOInfo {
   Base64Data constant_data = Base64Data();
   /** Slices, in the case of 2d tensor input. */
   std::vector<TensorSlice> slices2d;
+  /** Is the vertex IO tensor just a scalar? */
+  bool is_scalar = false;
 
   /** Default constructors/assignment. */
   VertexIOInfo() noexcept = default;
@@ -91,8 +93,8 @@ struct VertexIOInfo {
    * @brief Build a vertex IO info (with vertex second dim info).
    */
   VertexIOInfo(const std::string& _name, VertexIOType _iotype,
-               const ShapeType& _shape, IpuType _dtype,
-               std::size_t _vertex_dim2, const Base64Data& _constant_data)
+               const ShapeType& _shape, IpuType _dtype, int64_t _vertex_dim2,
+               const Base64Data& _constant_data)
       : name{_name},
         iotype{_iotype},
         aval{_shape, _dtype},
@@ -102,6 +104,11 @@ struct VertexIOInfo {
       slices2d = TensorSlice::makeTensor2dSlices(aval.size() / _vertex_dim2,
                                                  _vertex_dim2);
     }
+    // Negative => code for scalar.
+    if (_vertex_dim2 < 0) {
+      is_scalar = true;
+    }
+    // Zero => normal flattened case.
   }
 
   /**
@@ -138,8 +145,20 @@ struct VertexIOInfo {
 
   /**
    * @brief Reshape a tensor to the proper rank for vertex connection.
+   *
+   * This bit of logic is necessary as Poplar vertices only support:
+   *    rank 0: i.e. scalar entry;
+   *    rank 1: flattened array;
+   *    rank 2: collection of tensor slices;
    */
   poplar::Tensor connectReshape(const poplar::Tensor& t) const {
+    if (is_scalar) {
+      if (t.numElements() != 1) {
+        throw std::logic_error(
+            "Expecting a single scalar element to connect to the vertex.");
+      }
+      return t.flatten()[0];
+    }
     if (slices2d.empty()) {
       // Rank 1 (no 2d slices): flatten the IO tensor.
       return t.flatten();
@@ -159,12 +178,12 @@ struct VertexIOInfo {
   }
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(VertexIOInfo, name, iotype, aval,
-                                   constant_data, slices2d)
+                                   constant_data, slices2d, is_scalar)
 
 inline bool operator==(const VertexIOInfo& lhs, const VertexIOInfo& rhs) {
   return lhs.name == rhs.name && lhs.iotype == rhs.iotype &&
          lhs.aval.shape == rhs.aval.shape && lhs.aval.dtype == rhs.aval.dtype;
-  // TODO: compare 2d slices.
+  // TODO: compare 2d slices and is_scalar?
 }
 
 /**

@@ -67,12 +67,12 @@ class IpuVertexIOTests(chex.TestCase, parameterized.TestCase):
         ioinfo = IpuVertexIOInfo(name="in0", iotype=IpuVertexIOType.InOut, shape=[1, 2, 3], dtype=IpuType.FLOAT)
         assert (
             ioinfo.to_json_str()
-            == '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"name":"in0","slices2d":[]}'
+            == '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"is_scalar":false,"name":"in0","slices2d":[]}'
         )
 
     def test__ipu_vertex_io_info__from_json_str__proper_representation(self):
         ioinfo = IpuVertexIOInfo.from_json_str(
-            '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"name":"in0","slices2d":[{"begin":10,"end":15}]}'
+            '{"aval":{"dtype":12,"shape":[1,2,3]},"constant_data":null,"iotype":2,"name":"in0","slices2d":[{"begin":10,"end":15}],"is_scalar":false}'
         )
         assert ioinfo.name == "in0"
         assert ioinfo.iotype == IpuVertexIOType.InOut

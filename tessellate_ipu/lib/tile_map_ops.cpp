@@ -1,6 +1,7 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #include "tile_map_ops.hpp"
 
+#include <iostream>
 namespace ipu {
 
 std::vector<poplar::Tensor> TileMapEquation::allocateInputTensors(
@@ -91,7 +92,8 @@ void TileMapEquation::add(poplar::Graph& graph, poplar::program::Sequence& prog,
     // Map/connect vertex input tensors.
     for (size_t k = 0; k < inputs.size(); ++k) {
       const auto& info = inputs_info[k];
-      graph.connect(v[info.name], info.connectReshape(inputs[k][tidx]));
+      const auto tensor = info.connectReshape(inputs[k][tidx]);
+      graph.connect(v[info.name], tensor);
     }
     // Map/connect vertex output tensors.
     for (size_t k = 0; k < outputs.size(); ++k) {

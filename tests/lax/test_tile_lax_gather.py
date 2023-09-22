@@ -22,6 +22,7 @@ class IpuTilePrimitivesLaxGather(chex.TestCase, parameterized.TestCase):
     @parameterized.parameters(
         {"num_elements": 8, "num_indices": 3},
         {"num_elements": 8, "num_indices": 12},
+        {"num_elements": 256, "num_indices": 512},
     )
     def test__tile_map__gather__jitting__proper_result(self, num_elements, num_indices):
         tiles = (0,)
