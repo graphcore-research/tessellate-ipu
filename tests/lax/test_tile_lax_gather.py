@@ -5,12 +5,14 @@ import chex
 import jax
 import numpy as np
 import numpy.testing as npt
+import pytest
 from absl.testing import parameterized
 
 from tessellate_ipu import tile_map, tile_put_replicated
 from tessellate_ipu.lax import gather_p
 
 
+@pytest.mark.ipu_hardware
 class IpuTilePrimitivesLaxGather(chex.TestCase, parameterized.TestCase):
     def setUp(self):
         super().setUp()
