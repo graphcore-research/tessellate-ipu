@@ -274,6 +274,8 @@ def register_ipu_tile_primitive(primitive: Primitive, translation: IpuVertexTran
         translation: IPU vertex translation rule.
     """
     global _ipu_tile_primitive_registry
+    if primitive.name in _ipu_tile_primitive_registry:
+        raise KeyError(f"The primitive '{primitive.name}' is already registered in TessellateIPU.")
     _ipu_tile_primitive_registry[primitive.name] = (primitive, translation)
 
 

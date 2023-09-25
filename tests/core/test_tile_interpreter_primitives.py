@@ -39,8 +39,9 @@ class IpuTessellateCoreFactoryTests(chex.TestCase, parameterized.TestCase):
         assert info.shape == [1, 2, 3]
         assert info.dtype == IpuType.HALF
         assert not info.is_constant_input
+        assert not info.is_scalar
 
-    def test__make_ipu_vertex_constant_info__proper_result(self):
+    def test__make_ipu_vertex_constant_info__array__proper_result(self):
         datain = np.array([1, 2, 3, 4], dtype=np.float32)
         info = make_ipu_vertex_constant_info("constant", datain, vertex_dim2=2)
         assert isinstance(info, IpuVertexIOInfo)
@@ -50,6 +51,22 @@ class IpuTessellateCoreFactoryTests(chex.TestCase, parameterized.TestCase):
         assert info.dtype == IpuType.FLOAT
         assert info.is_constant_input
         assert len(info.slices2d) == 2
+        assert not info.is_scalar
+
+        dataout = np.frombuffer(base64.decodebytes(str.encode(info.constant_data.encoded_data)), dtype=datain.dtype)
+        npt.assert_array_equal(dataout, datain)
+
+    def test__make_ipu_vertex_constant_info__scalar__proper_result(self):
+        datain = np.array(3, dtype=np.float32)
+        # vertex_dim2 < -1 indicating scalar entry.
+        info = make_ipu_vertex_constant_info("constant", datain, vertex_dim2=-1)
+        assert isinstance(info, IpuVertexIOInfo)
+        assert info.name == "constant"
+        assert info.iotype == IpuVertexIOType.In
+        assert tuple(info.shape) == datain.shape
+        assert info.dtype == IpuType.FLOAT
+        assert info.is_constant_input
+        assert info.is_scalar
 
         dataout = np.frombuffer(base64.decodebytes(str.encode(info.constant_data.encoded_data)), dtype=datain.dtype)
         npt.assert_array_equal(dataout, datain)

@@ -58,7 +58,7 @@ def custom_arange_tile_translation_ipu(
     outaval = core.ShapedArray(outshape, outdtype)
     gp_filename = custom_vertex_filename
 
-    global_scale_data = np.array([7], dtype=outdtype)
+    global_scale_data = np.array(7, dtype=outdtype)
     ipu_dtype = from_numpy_dtype_to_ipu_type(outdtype)
     vertex_name = f"CustomArangeVertex<{ipu_dtype.name.lower()}>"
     # Translation rule to IPU vertex
@@ -69,7 +69,7 @@ def custom_arange_tile_translation_ipu(
         # IO vertex infos.
         inputs_info=[
             make_ipu_vertex_in_info("scales", inavals[0], vertex_dim2=inavals[0].shape[1]),
-            make_ipu_vertex_constant_info("global_scale", global_scale_data),
+            make_ipu_vertex_constant_info("global_scale", global_scale_data, vertex_dim2=-1),
         ],
         outputs_info=[make_ipu_vertex_out_info("out", outaval)],
         # Additional attributes to pass to the vertex

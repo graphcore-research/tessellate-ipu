@@ -102,7 +102,7 @@ NB_MODULE(pytessellate_ipu_core, m) {
            nanobind::arg("shape"), nanobind::arg("dtype"),
            nanobind::arg("constant_data"), nanobind::arg("slices2d"))
       .def(nanobind::init<const std::string&, VertexIOType, const ShapeType&,
-                          IpuType, std::size_t, const Base64Data&>(),
+                          IpuType, int64_t, const Base64Data&>(),
            nanobind::arg("name"), nanobind::arg("iotype"),
            nanobind::arg("shape"), nanobind::arg("dtype"),
            nanobind::arg("vertex_dim2") = 0,
@@ -118,6 +118,7 @@ NB_MODULE(pytessellate_ipu_core, m) {
       .def_rw("aval", &VertexIOInfo::aval)
       .def_rw("constant_data", &VertexIOInfo::constant_data)
       .def_rw("slices2d", &VertexIOInfo::slices2d)
+      .def_rw("is_scalar", &VertexIOInfo::is_scalar)
       .def_prop_ro("shape", [](const VertexIOInfo& v) { return v.aval.shape; })
       .def_prop_ro("dtype", [](const VertexIOInfo& v) { return v.aval.dtype; })
       .def_prop_ro("is_constant_input", &VertexIOInfo::isConstantInput);
