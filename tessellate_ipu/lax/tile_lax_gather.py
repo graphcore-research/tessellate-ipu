@@ -93,7 +93,7 @@ def ipu_gather_primitive_translation(
         numBaseElements=operand.size,  # Number of elements in input.
         maxElementsPerWorker=int(np.ceil(start_indices.size / num_context_workers)),
         regionSize=1,  # TODO: understand?
-        splitSingleRegion=True,  # Split regions between threads?
+        splitSingleRegion=False,  # Split regions between threads? TODO: understand!
     )
     # TODO: should we use `split offsets` between threads?
     # For now: need to do it manually at the Python `tile_map` level.

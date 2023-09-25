@@ -192,7 +192,7 @@ def ipu_scatter_primitive_translation(
         maxElementsPerWorker=int(np.ceil(operand.size / num_context_workers)),
         regionSize=1,  # TODO: understand?
         indicesAreSorted=False,
-        splitSingleRegion=True,
+        splitSingleRegion=False,  # Split regions between threads? TODO: understand!
     )
     # For now: need to do it manually at the Python `tile_map` level.
     ipu_prim_info = IpuTileMapEquation(
