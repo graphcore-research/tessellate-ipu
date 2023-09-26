@@ -12,6 +12,7 @@ from tessellate_ipu.core import (
     make_ipu_vertex_attributes,
     make_ipu_vertex_in_info,
     make_ipu_vertex_inout_info,
+    make_ipu_vertex_name_templated,
     make_ipu_vertex_out_info,
     primitive_clone,
     register_ipu_tile_primitive,
@@ -278,3 +279,51 @@ mul_inplace_p = register_ipu_binary_inplace_tile_primitive(lax.mul_p)
 pow_inplace_p = register_ipu_binary_inplace_tile_primitive(lax.pow_p)
 rem_inplace_p = register_ipu_binary_inplace_tile_primitive(lax.rem_p)
 sub_inplace_p = register_ipu_binary_inplace_tile_primitive(lax.sub_p)
+
+
+def ipu_select_primitive_translation(
+    p: Primitive,
+    tiles: Tuple[int, ...],
+    inavals: List[ShapedArray],
+    attributes: Dict[str, Any] = None,
+) -> IpuTileMapEquation:
+    """IPU select_n LAX primitive translation rule to IPU vertex.
+
+    Args:
+        p: JAX primitive.
+        tiles: Collection of tiles.
+        inavals: Input shaped arrays.
+        attributes: (unused) attributes.
+    Returns:
+        IPU tile map primitive structure.
+    """
+    assert len(inavals) == 3
+    cond, x, y = inavals
+    # A couple of initial checks!
+    assert cond.shape == x.shape
+    assert cond.shape == y.shape
+    assert cond.dtype == np.bool_
+    assert x.dtype == y.dtype
+
+    vname = make_ipu_vertex_name_templated("popops::Select", x.dtype)
+    # Note: using `vertex_dim2=1` as Select vertex expecting vector of vector.
+    inputs_info = [
+        make_ipu_vertex_in_info("in3", cond, vertex_dim2=1),
+        make_ipu_vertex_in_info("in1", x, vertex_dim2=1),
+        make_ipu_vertex_in_info("in2", y, vertex_dim2=1),
+    ]
+    outputs_info = [make_ipu_vertex_out_info("out", x, vertex_dim2=1)]
+    ipu_prim_info = IpuTileMapEquation(
+        vname=vname,
+        pname=p.name,
+        tiles=tiles,
+        inputs_info=inputs_info,
+        outputs_info=outputs_info,
+        attributes_i32=[],
+        attributes_f32=[],
+    )
+    return ipu_prim_info
+
+
+# Register JAX LAX select primitive.
+register_ipu_tile_primitive(lax.select_n_p, ipu_select_primitive_translation)

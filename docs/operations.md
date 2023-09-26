@@ -25,7 +25,7 @@
 | `bitwise_and`          | :white_check_mark: | :x:                |         |
 | `bitwise_or`           | :white_check_mark: | :x:                |         |
 | `bitwise_xor`          | :white_check_mark: | :x:                |         |
-| `population_count`     | :x:                | :x:                |         |
+| `population_count`     | :white_check_mark: | :x:                |         |
 | `broadcast`            | :x:                | :x:                |         |
 | `broadcast_in_dim`     | :x:                | :x:                |         |
 | `cbrt`                 | :white_check_mark: | :white_check_mark: |         |
@@ -100,7 +100,7 @@
 | `scatter_max`          | :white_check_mark: | :x:                | Limited set of configurations. See below. |
 | `scatter_min`          | :white_check_mark: | :x:                | Limited set of configurations. See below. |
 | `scatter_mul`          | :white_check_mark: | :x:                | Limited set of configurations. See below. |
-| `select`               | :x:                | :x:                |         |
+| `select`               | :white_check_mark: | :x:                |         |
 | `shift_left`           | :white_check_mark: | :x:                |         |
 | `shift_right_arithmetic`| :white_check_mark: | :x:                |         |
 | `shift_right_logical`  | :white_check_mark: | :x:                |         |
