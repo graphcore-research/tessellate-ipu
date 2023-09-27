@@ -166,7 +166,8 @@ class IpuTileUnaryPrimitiveTests(chex.TestCase):
 
     @parameterized.parameters(
         [
-            (np.float32, 2),
+            (np.float32, -1),  # reciprocal/inverse vertex
+            (np.float32, 2),  # square vertex
             (np.float16, 2),
             (np.int32, 2),
         ]

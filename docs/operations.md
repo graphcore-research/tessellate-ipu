@@ -75,26 +75,26 @@
 | `le`                   | :white_check_mark: | :x:                |         |
 | `lt`                   | :white_check_mark: | :x:                |         |
 | `lgamma`               | :x:                | :x:                |         |
-| `log`                  | :white_check_mark: | :x:                |         |
-| `log1p`                | :white_check_mark: | :x:                |         |
+| `log`                  | :white_check_mark: | :white_check_mark: |         |
+| `log1p`                | :white_check_mark: | :white_check_mark: |         |
 | `logistic`             | :x:                | :x:                |         |
-| `max`                  | :white_check_mark: | :x:                |         |
-| `min`                  | :white_check_mark: | :x:                |         |
-| `mul`                  | :white_check_mark: | :x:                |         |
+| `max`                  | :white_check_mark: | :white_check_mark: |         |
+| `min`                  | :white_check_mark: | :white_check_mark: |         |
+| `mul`                  | :white_check_mark: | :white_check_mark: |         |
 | `ne`                   | :white_check_mark: | :x:                |         |
-| `neg`                  | :white_check_mark: | :x:                |         |
+| `neg`                  | :white_check_mark: | :white_check_mark: |         |
 | `nextafter`            | :x:                | :x:                |         |
 | `pad`                  | :x:                | :x:                |         |
 | `polygamma`            | :x:                | :x:                |         |
-| `pow`                  | :white_check_mark: | :x:                |         |
+| `pow`                  | :white_check_mark: | :white_check_mark: |         |
 | `real`                 | :x:                | :x:                |         |
-| `reciprocal`           | :x:                | :x:                |         |
+| `reciprocal`           | :white_check_mark: | :x:                |         |
 | `reduce`               | :white_check_mark: | :x:                |         |
-| `reshape`              | :white_check_mark: | :x:                |         |
-| `rem`                  | :white_check_mark: | :x:                |         |
-| `rev`                  | :white_check_mark: | :x:                |         |
-| `round`                | :white_check_mark: | :x:                |         |
-| `rsqrt`                | :white_check_mark: | :x:                |         |
+| `reshape`              | :x:                | :x:                |         |
+| `rem`                  | :white_check_mark: | :white_check_mark: |         |
+| `rev`                  | :x:                | :x:                |         |
+| `round`                | :white_check_mark: | :white_check_mark: |         |
+| `rsqrt`                | :white_check_mark: | :white_check_mark: |         |
 | `scatter`              | :white_check_mark: | :x:                | Limited set of configurations. See below. |
 | `scatter_add`          | :white_check_mark: | :x:                | Limited set of configurations. See below. |
 | `scatter_max`          | :white_check_mark: | :x:                | Limited set of configurations. See below. |
@@ -107,15 +107,15 @@
 | `slice`                | :white_check_mark: | :x:                |         |
 | `slice_in_dim`         | :white_check_mark: | :x:                |         |
 | `sign`                 | :white_check_mark: | :x:                |         |
-| `sin`                  | :white_check_mark: | :x:                |         |
-| `sinh`                 | :white_check_mark: | :x:                |         |
+| `sin`                  | :white_check_mark: | :white_check_mark: |         |
+| `sinh`                 | :x:                | :x:                |         |
 | `sort`                 | :x:                | :x:                |         |
 | `sort_key_val`         | :x:                | :x:                |         |
-| `sqrt`                 | :white_check_mark: | :x:                |         |
+| `sqrt`                 | :white_check_mark: | :white_check_mark: |         |
 | `square`               | :white_check_mark: | :x:                |         |
 | `squeeze`              | :white_check_mark: | :x:                |         |
-| `sub`                  | :white_check_mark: | :x:                |         |
-| `tan`                  | :white_check_mark: | :x:                |         |
+| `sub`                  | :white_check_mark: | :white_check_mark: |         |
+| `tan`                  | :white_check_mark: | :white_check_mark: |         |
 | `tie_in`               | :x:                | :x:                | Deprecated in JAX        |
 | `top_k`                | :x:                | :x:                |         |
 | `transpose`            | :white_check_mark: | :x:                | Copies the input tensor    |

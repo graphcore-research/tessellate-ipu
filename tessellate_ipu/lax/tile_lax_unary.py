@@ -191,6 +191,8 @@ def ipu_integer_pow_translation(
 ) -> IpuTileMapEquation:
     """IPU `integer_pow` primitive translation rule to IPU vertex.
 
+    Only supporting -1 and 2 exponents at the moment.
+
     Args:
         p: JAX primitive.
         tiles: Collection of tiles.
@@ -203,12 +205,13 @@ def ipu_integer_pow_translation(
     assert attributes is not None
     inaval = inavals[0]
     pow = attributes["y"]
-    if pow != 2:
+    supported_powers = {-1: "INVERSE", 2: "SQUARE"}
+    if pow not in supported_powers:
         # TODO: general vertex?
-        raise ValueError("Only supporting integer power of 2 on IPU tile primitives.")
+        raise ValueError(f"Only supporting integer powers '{tuple(supported_powers.keys())}' in TessellateIPU library.")
 
-    # IPU cast arguments.
-    vname = make_unary1d_vertex_fullname("SQUARE", inaval.dtype, inplace=False)
+    # Used proper vertex depending on the power!
+    vname = make_unary1d_vertex_fullname(supported_powers[pow], inaval.dtype, inplace=False)
     ipu_prim_info = IpuTileMapEquation(
         vname=vname,
         pname=p.name,
