@@ -2,6 +2,7 @@
 import os
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
 from jax import lax
 from jax._src.lax.lax import copy_p
 from jax.core import Primitive, ShapedArray
@@ -13,6 +14,7 @@ from tessellate_ipu.core import (
     get_ipu_tile_primitive_translation,
     get_ipu_type_name,
     make_ipu_vertex_attributes,
+    make_ipu_vertex_constant_info,
     make_ipu_vertex_in_info,
     make_ipu_vertex_inout_info,
     make_ipu_vertex_name_templated,
@@ -230,6 +232,51 @@ for p in _unary_primitive_to_vertex_basename.keys():
 
 register_ipu_tile_primitive(lax.convert_element_type_p, ipu_cast_primitive_translation)
 register_ipu_tile_primitive(lax.integer_pow_p, ipu_integer_pow_translation)
+
+
+def ipu_iota_translation(
+    p: Primitive,
+    tiles: Tuple[int, ...],
+    inavals: List[ShapedArray],
+    attributes: Dict[str, Any] = None,
+) -> IpuTileMapEquation:
+    """IPU `iota` primitive translation rule to IPU vertex.
+
+    Args:
+        p: JAX primitive.
+        tiles: Collection of tiles.
+        inavals: Input shaped arrays.
+        attributes: (unused) attributes.
+    Returns:
+        IPU tile map primitive structure.
+    """
+    assert len(inavals) == 0
+    assert attributes is not None
+    print(attributes)
+    dtype = attributes["dtype"]
+    dimension = int(attributes["dimension"])
+    shape = attributes["shape"]
+
+    assert dimension == 0
+    assert len(shape) == 1
+    # Iota vertex in/outs
+    vname = make_ipu_vertex_name_templated("popops::Iota", dtype)
+    outaval = p.abstract_eval(dtype=dtype, dimension=dimension, shape=shape)[0]
+    inputs_info = [make_ipu_vertex_constant_info("offsets", np.array([0], dtype=dtype))]
+    outputs_info = [make_ipu_vertex_out_info("out", outaval, vertex_dim2=shape[0])]
+    ipu_prim_info = IpuTileMapEquation(
+        vname=vname,
+        pname=p.name,
+        tiles=tiles,
+        inputs_info=inputs_info,
+        outputs_info=outputs_info,
+        attributes_i32=[],
+        attributes_f32=[],
+    )
+    return ipu_prim_info
+
+
+register_ipu_tile_primitive(lax.iota_p, ipu_iota_translation)
 
 
 # On tile (mem)copy primitive.

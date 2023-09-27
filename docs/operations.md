@@ -70,7 +70,7 @@
 | `imag`                 | :x:                | :x:                |         |
 | `index_in_dim`         | :x:                | :x:                |         |
 | `index_take`           | :x:                | :x:                |         |
-| `iota`                 | :x:                | :x:                |         |
+| `iota`                 | :white_check_mark: | n/a                |         |
 | `is_finite`            | :white_check_mark: | :x:                |         |
 | `le`                   | :white_check_mark: | :x:                |         |
 | `lt`                   | :white_check_mark: | :x:                |         |
