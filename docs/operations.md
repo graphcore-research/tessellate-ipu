@@ -30,7 +30,7 @@
 | `broadcast_in_dim`     | :x:                | :x:                |         |
 | `cbrt`                 | :white_check_mark: | :white_check_mark: |         |
 | `ceil`                 | :white_check_mark: | :white_check_mark: |         |
-| `clamp`                | :x:                | :x:                |         |
+| `clamp`                | :white_check_mark: | :x:                |         |
 | `collapse`             | :x:                | :x:                |         |
 | `complex`              | :x:                | :x:                |         |
 | `concatenate`          | :white_check_mark: | :x:                |         |
