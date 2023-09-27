@@ -192,6 +192,29 @@ class IpuTileUnaryPrimitiveTests(chex.TestCase):
         assert output_ipu.shape == inshape
         npt.assert_array_almost_equal(output_ipu, output_cpu, decimal=2)
 
+    @parameterized.parameters(
+        [
+            (np.int32,),
+        ]
+    )
+    def test__tile_map__iota__ipu_jitting__proper_result(self, dtype):
+        tiles = (3, 4, 5)
+        N = 64
+
+        def compute_fn():
+            return tile_map(lax.iota_p, dtype=dtype, dimension=0, shape=(N,), tiles=tiles)
+
+        # compute_fn_cpu = partial(jax.jit, backend="cpu")(compute_fn)
+        compute_fn_ipu = partial(jax.jit, backend="ipu")(compute_fn)
+
+        output_ipu = compute_fn_ipu()
+        expected_output = np.stack([np.arange(0, N, dtype=dtype)] * len(tiles))
+        assert isinstance(output_ipu, TileShardedArray)
+        assert output_ipu.tiles == tiles
+        assert output_ipu.dtype == dtype
+        assert output_ipu.shape == (len(tiles), N)
+        npt.assert_array_equal(output_ipu, expected_output)
+
 
 @pytest.mark.ipu_hardware
 class IpuTileUnaryPrimitiveHwTests(chex.TestCase):
