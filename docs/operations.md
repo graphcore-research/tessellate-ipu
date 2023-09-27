@@ -8,7 +8,7 @@
 | ---------------------- | ------------------ | ------------------ |-------- |
 | `abs`                  | :white_check_mark: | :white_check_mark: |         |
 | `add`                  | :white_check_mark: | :white_check_mark: |         |
-| `acos`                 | :white_check_mark: | :white_check_mark: |         |
+| `acos`                 | :x:                | :x:                | Not directly available in Graphcore Poplibs        |
 | `approx_max_k`         | :x:                | :x:                |         |
 | `approx_min_k`         | :x:                | :x:                |         |
 | `argmax`               | :x:                | :x:                |         |
@@ -36,7 +36,7 @@
 | `concatenate`          | :white_check_mark: | :x:                |         |
 | `conj`                 | :x:                | :x:                |         |
 | `conv`                 | :x:                | :x:                |         |
-| `convert_element_type` | :x:                | :x:                |         |
+| `convert_element_type` | :white_check_mark: | :x:                |         |
 | `conv_general_dilated` | :x:                | :x:                |         |
 | `conv_transpose`       | :x:                | :x:                |         |
 | `cos`                  | :white_check_mark: | :white_check_mark: |         |
@@ -52,9 +52,9 @@
 | `dynamic_slice`        | :x:                | :x:                |         |
 | `dynamic_update_slice` | :x:                | :x:                |         |
 | `eq`                   | :white_check_mark: | :x:                |         |
-| `erf`                  | :x:                | :x:                |         |
-| `erfc`                 | :x:                | :x:                |         |
-| `erf_inv`              | :x:                | :x:                |         |
+| `erf`                  | :white_check_mark: | :white_check_mark: |         |
+| `erfc`                 | :x:                | :x:                | Not directly available in Graphcore Poplibs        |
+| `erf_inv`              | :x:                | :x:                | Not directly available in Graphcore Poplibs        |
 | `exp`                  | :white_check_mark: | :x:                |         |
 | `expand_dims`          | :white_check_mark: | :x:                |         |
 | `expm1`                | :white_check_mark: | :x:                |         |
