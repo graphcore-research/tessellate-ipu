@@ -327,3 +327,49 @@ def ipu_select_primitive_translation(
 
 # Register JAX LAX select primitive.
 register_ipu_tile_primitive(lax.select_n_p, ipu_select_primitive_translation)
+
+
+def ipu_clamp_primitive_translation(
+    p: Primitive,
+    tiles: Tuple[int, ...],
+    inavals: List[ShapedArray],
+    attributes: Dict[str, Any] = None,
+) -> IpuTileMapEquation:
+    """IPU `clamp` LAX primitive translation rule to IPU vertex.
+
+    Args:
+        p: JAX primitive.
+        tiles: Collection of tiles.
+        inavals: Input shaped arrays.
+        attributes: (unused) attributes.
+    Returns:
+        IPU tile map primitive structure.
+    """
+    assert len(inavals) == 3
+    min, x, max = inavals
+    # A couple of initial checks!
+    assert max.shape == x.shape
+    assert min.shape == x.shape
+
+    vname = make_ipu_vertex_name_templated("popops::Clamp", x.dtype)
+    # Note: using `vertex_dim2=1` as Select vertex expecting vector of vector.
+    inputs_info = [
+        make_ipu_vertex_in_info("in2", min, vertex_dim2=1),
+        make_ipu_vertex_in_info("in1", x, vertex_dim2=1),
+        make_ipu_vertex_in_info("in3", max, vertex_dim2=1),
+    ]
+    outputs_info = [make_ipu_vertex_out_info("out", x, vertex_dim2=1)]
+    ipu_prim_info = IpuTileMapEquation(
+        vname=vname,
+        pname=p.name,
+        tiles=tiles,
+        inputs_info=inputs_info,
+        outputs_info=outputs_info,
+        attributes_i32=[],
+        attributes_f32=[],
+    )
+    return ipu_prim_info
+
+
+# Register JAX LAX clamp primitive.
+register_ipu_tile_primitive(lax.clamp_p, ipu_clamp_primitive_translation)
