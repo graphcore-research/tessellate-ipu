@@ -125,10 +125,29 @@ std::vector<poplar::Tensor> TileMapEquation::add(
     const poplar::DebugContext& debug_prefix) const {
   // All input tensors: i.e. add constant tensors.
   const auto inputs_all = this->allocateInputTensors(graph, inputs);
-  // No vertex => assume identity function, i.e. forward inputs.
+
+  // No vertex => assume identity function.
+  // Forwarding inputs, with just potential change of shape and dtype.
   if (this->vname.empty()) {
-    return inputs_all;
+    // Check inputs/outputs consistent.
+    if (this->numInputs() != this->numOutputs()) {
+      throw std::logic_error(
+          "Inconsistent number of inputs/outputs for an identity function.");
+    }
+    // Generate output tensors (potential reshaping + change of dtype).
+    std::vector<poplar::Tensor> outputs_all;
+    outputs_all.reserve(inputs_all.size());
+    for (size_t idx = 0; idx < inputs_all.size(); ++idx) {
+      const auto& in = inputs_all[idx];
+      const auto& outinfo = outputs_info[idx];
+      const auto outshape = shapePrependAxis(tiles.size(), outinfo.aval.shape);
+      const auto outdtype = toPoplar(outinfo.aval.dtype);
+      auto out = in.reshape(outshape).reinterpret(outdtype);
+      outputs_all.push_back(out);
+    }
+    return outputs_all;
   }
+  // Usual path => map a vertex.
   const auto outputs = this->allocateOutputTensors(graph, inputs);
   this->add(graph, prog, inputs_all, outputs, debug_prefix);
   return outputs;
@@ -147,6 +166,7 @@ std::size_t TileMapEquation::numInOuts() const {
     throw std::logic_error(
         "Inconsistent number of in/outs in the IPU tile map equation.");
   }
+  // TODO: add checking on tensor size (not necessarily shape).
   return num_inouts0;
 }
 

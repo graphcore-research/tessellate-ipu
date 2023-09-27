@@ -25,6 +25,7 @@ from jax.lax import (
 )
 
 from . import tile_lax_binary, tile_lax_dot, tile_lax_reduce, tile_lax_unary, tile_random
+from .tile_lax_array import bitcast_convert_type_p, reshape_p
 from .tile_lax_binary import (
     add_inplace_p,
     atan2_inplace_p,

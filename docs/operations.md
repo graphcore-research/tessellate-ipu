@@ -20,7 +20,7 @@
 | `bessel_i0e`           | :x:                | :x:                |         |
 | `bessel_i1e`           | :x:                | :x:                |         |
 | `betainc`              | :x:                | :x:                |         |
-| `bitcase_convert_type` | :white_check_mark: | :question:         |         |
+| `bitcast_convert_type` | :white_check_mark: | :white_check_mark: | Only same size dtype supported. |
 | `bitwise_not`          | :white_check_mark: | :x:                |         |
 | `bitwise_and`          | :white_check_mark: | :x:                |         |
 | `bitwise_or`           | :white_check_mark: | :x:                |         |
@@ -90,7 +90,7 @@
 | `real`                 | :x:                | :x:                |         |
 | `reciprocal`           | :white_check_mark: | :x:                |         |
 | `reduce`               | :white_check_mark: | :x:                |         |
-| `reshape`              | :x:                | :x:                |         |
+| `reshape`              | :white_check_mark: | :white_check_mark: | `dimensions` argument not supported.        |
 | `rem`                  | :white_check_mark: | :white_check_mark: |         |
 | `rev`                  | :x:                | :x:                |         |
 | `round`                | :white_check_mark: | :white_check_mark: |         |
@@ -113,7 +113,7 @@
 | `sort_key_val`         | :x:                | :x:                |         |
 | `sqrt`                 | :white_check_mark: | :white_check_mark: |         |
 | `square`               | :white_check_mark: | :x:                |         |
-| `squeeze`              | :white_check_mark: | :x:                |         |
+| `squeeze`              | :white_check_mark: | :white_check_mark: |         |
 | `sub`                  | :white_check_mark: | :white_check_mark: |         |
 | `tan`                  | :white_check_mark: | :white_check_mark: |         |
 | `tie_in`               | :x:                | :x:                | Deprecated in JAX        |
