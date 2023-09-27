@@ -16,6 +16,7 @@ from jax.lax import (
     population_count_p,
     round_p,
     rsqrt_p,
+    select_n_p,
     sign_p,
     sin_p,
     sqrt_p,

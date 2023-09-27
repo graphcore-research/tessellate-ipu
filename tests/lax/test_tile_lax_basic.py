@@ -394,6 +394,28 @@ class IpuTileBinaryPrimitiveTests(chex.TestCase, parameterized.TestCase):
         assert output.dtype == A.dtype
         npt.assert_array_almost_equal(output.array, scale_op_p.impl(A, B, sB), decimal=2)
 
+    @parameterized.parameters([np.float32])
+    def test__tile_map__select__ipu_jitting__proper_result(self, dtype):
+        tiles = (3, 4, 5)
+        inshape = (len(tiles), 7, 9)
+        mask = np.random.rand(*inshape) >= 0.5
+        input0 = np.random.randn(*inshape).astype(dtype)
+        input1 = np.random.randn(*inshape).astype(dtype)
+
+        @partial(jax.jit, backend="ipu")
+        def compute_fn(mask, in0, in1):
+            mask = tile_put_sharded(mask, tiles)
+            input0 = tile_put_sharded(in0, tiles)
+            input1 = tile_put_sharded(in1, tiles)
+            output = tile_map(lax.select_n_p, mask, input0, input1)
+            return output
+
+        output = compute_fn(mask, input0, input1)
+        assert isinstance(output, TileShardedArray)
+        assert output.tiles == tiles
+        assert output.dtype == input0.dtype
+        npt.assert_array_almost_equal(output.array, np.where(mask, input0, input1))
+
 
 class IpuTileShiftPrimitivesTests(chex.TestCase):
     def setUp(self):
