@@ -39,6 +39,7 @@ from .tile_lax_binary import (
     scaled_sub_p,
     sub_inplace_p,
 )
+from .tile_lax_cumulative_ops import cummax_p, cummin_p, cumprod_p, cumsum_p
 from .tile_lax_dot import IpuConvVertexType
 from .tile_lax_gather import gather_p
 from .tile_lax_scatter import scatter_add_p, scatter_max_p, scatter_min_p, scatter_mul_p, scatter_p

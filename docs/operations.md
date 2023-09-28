@@ -32,19 +32,19 @@
 | `ceil`                 | :white_check_mark: | :white_check_mark: |         |
 | `clamp`                | :white_check_mark: | :x:                |         |
 | `collapse`             | :white_check_mark: | :white_check_mark: |         |
-| `complex`              | :x:                | n/a                | Complex not supported in IPU XLA backend        |
+| `complex`              | :x:                | n/a                | `complex` dtype not supported in IPU XLA backend        |
 | `concatenate`          | :white_check_mark: | n/a                |         |
-| `conj`                 | :x:                | n/a                | Complex not supported in IPU XLA backend        |
+| `conj`                 | :x:                | n/a                | `complex` dtype not supported in IPU XLA backend        |
 | `conv`                 | :x:                | n/a                |         |
 | `convert_element_type` | :white_check_mark: | :x:                |         |
 | `conv_general_dilated` | :x:                | n/a                |         |
 | `conv_transpose`       | :x:                | n/a                |         |
 | `cos`                  | :white_check_mark: | :white_check_mark: |         |
 | `cosh`                 | :white_check_mark: | :white_check_mark: |         |
-| `cummax`               | :x:                | :x:                |         |
-| `cummin`               | :x:                | :x:                |         |
-| `cumprod`              | :x:                | :x:                |         |
-| `cumsum`               | :x:                | :x:                |         |
+| `cummax`               | :white_check_mark: | :x:                | Only supporting 1D input tensor      |
+| `cummin`               | :white_check_mark: | :x:                | Only supporting 1D input tensor      |
+| `cumprod`              | :white_check_mark: | :x:                | Only supporting 1D input tensor      |
+| `cumsum`               | :white_check_mark: | :x:                | Only supporting 1D input tensor      |
 | `digamma`              | :x:                | :x:                |         |
 | `div`                  | :white_check_mark: | :white_check_mark: |         |
 | `dot`                  | :white_check_mark: | n/a                |         |
@@ -67,7 +67,7 @@
 | `gt`                   | :white_check_mark: | n/a                |         |
 | `igamma`               | :x:                | :x:                |         |
 | `igammac`              | :x:                | :x:                |         |
-| `imag`                 | :x:                | :x:                |         |
+| `imag`                 | :x:                | :x:                | `complex` dtype not supported in IPU XLA backend        |
 | `index_in_dim`         | :x:                | n/a                |         |
 | `index_take`           | :x:                | n/a                |         |
 | `iota`                 | :white_check_mark: | n/a                |         |
