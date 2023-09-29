@@ -216,8 +216,10 @@ def tile_sharded_identity(dtype: DTypeLike, tiles: Tuple[int, ...]) -> TileShard
         # Build zero matrix + update diagonal entries.
         arr = tile_fill((N,), 0, dtype=dtype, tiles=tiles)
         # Requiring constants for indices + updates. Something more efficient?s
-        indices = tile_constant_sharded(np.arange(0, N, dtype=np.uint32).reshape(N, 1, 1), tiles=tiles)
-        updates = tile_constant_replicated(np.array([1], dtype=dtype), tiles=tiles)
+        with jax.named_scope("indices"):
+            indices = tile_constant_sharded(np.arange(0, N, dtype=np.uint32).reshape(N, 1, 1), tiles=tiles)
+        with jax.named_scope("updates"):
+            updates = tile_constant_replicated(np.array([1], dtype=dtype), tiles=tiles)
         # Not the simplest way ever of updating diagonal terms!
         scatter_dnums = jax.lax.ScatterDimensionNumbers(
             update_window_dims=(), inserted_window_dims=(0,), scatter_dims_to_operand_dims=(0,)

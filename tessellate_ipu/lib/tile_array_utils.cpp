@@ -55,18 +55,23 @@ poplar::Tensor createReplicatedConstantTensor(
     poplar::ArrayRef<TileIndexType> tiles,
     const poplar::DebugContext& debug_context) {
   // TODO: check raw_values, dtype and shape are consistent.
-  // TODO: get it working with FP16!
-  // Expanded shape (used in concat).
-  const auto expand_shape = shapePrependAxis(1, shape);
-  // Create Poplar constant per tile. Should I create a single one?
-  std::vector<poplar::Tensor> tensor_list;
+  // Replicating raw values on the host. Should never be >1GB (worse case!).
+  // Allows creating a single constant tensor, which is better for Popvision
+  // profile.
+  std::vector<char> replicated_raw_values(raw_values.size() * tiles.size());
+  auto it = replicated_raw_values.begin();
   for (size_t idx = 0; idx < tiles.size(); ++idx) {
-    auto t = createConstantTensor(graph, ipu_type, expand_shape, raw_values,
-                                  debug_context);
-    graph.setTileMapping(t, tiles[idx]);
-    tensor_list.push_back(t);
+    it = std::copy(raw_values.begin(), raw_values.end(), it);
   }
-  return poplar::concat(tensor_list, 0);
+  // Build the full constant tensor at once.
+  // TODO: make sure it works with FP16?
+  const auto replicated_shape = shapePrependAxis(tiles.size(), shape);
+  auto t = createConstantTensor(graph, ipu_type, replicated_shape,
+                                replicated_raw_values, debug_context);
+  for (size_t idx = 0; idx < tiles.size(); ++idx) {
+    graph.setTileMapping(t[idx], tiles[idx]);
+  }
+  return t;
 }
 
 poplar::Tensor createShardedConstantTensor(
@@ -74,25 +79,14 @@ poplar::Tensor createShardedConstantTensor(
     poplar::ArrayRef<std::size_t> shape, poplar::ArrayRef<char> raw_values,
     poplar::ArrayRef<TileIndexType> tiles,
     const poplar::DebugContext& debug_context) {
-  // TODO: check consistent raw values size.
-  // Expanded shape on every tile.
-  const auto expand_shape =
-      shapePrependAxis(1, arraySlice(shape, 1, shape.size()));
-  const auto dtype_size = ipuTypeSize(ipu_type);
-  const std::size_t bytes_size = sizeFromShape(expand_shape) * dtype_size;
-  auto poplar_type = toPoplar(ipu_type);
-  // Create Poplar constant per tile. Should I create a single one?
-  std::vector<poplar::Tensor> tensor_list;
+  // TODO: check raw_values, dtype and shape are consistent.
+  // Creating a single tensor, to avoid Popvision profile bloating.
+  auto t =
+      createConstantTensor(graph, ipu_type, shape, raw_values, debug_context);
   for (size_t idx = 0; idx < tiles.size(); ++idx) {
-    // Slicing the raw data corresponding to the tile.
-    auto raw_values_tile =
-        arraySlice(raw_values, idx * bytes_size, (idx + 1) * bytes_size);
-    auto t = createConstantTensor(graph, ipu_type, expand_shape,
-                                  raw_values_tile, debug_context);
-    graph.setTileMapping(t, tiles[idx]);
-    tensor_list.push_back(t);
+    graph.setTileMapping(t[idx], tiles[idx]);
   }
-  return poplar::concat(tensor_list, 0);
+  return t;
 }
 
 }  // namespace ipu

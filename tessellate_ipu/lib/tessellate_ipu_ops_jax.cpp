@@ -42,7 +42,8 @@ class TilePutShardedPrimitive : public TilePutBase {
       poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
       std::vector<poplar::Tensor>& outputs, const std::string& attributes,
       const std::string& debug_prefix) {
-    const auto debug_context = poplar::DebugContext(debug_prefix);
+    const auto debug_context = poplar::DebugContext(
+        makeTileOpDebugPrefix(debug_prefix, "tile_put_sharded"));
     // Passing the tile array as attributes.
     const auto tile_array = extractTileArray(attributes);
     return lowerTilePutShardedToPoplar(graph, inputs, outputs, tile_array,
@@ -54,12 +55,15 @@ class TilePutShardedPrimitive : public TilePutBase {
                                   poplar::Type type,
                                   const std::string& attributes,
                                   const std::string& debug_prefix) {
+    const auto debug_context = poplar::DebugContext(
+        makeTileOpDebugPrefix(debug_prefix, "tile_put_sharded"));
     const auto tile_array = extractTileArray(attributes);
     const auto item_shape =
         poplar::ArrayRef<std::size_t>(shape.data() + 1, shape.size() - 1);
     // If not allocated => already pre-allocate input with proper tile mapping.
     // TODO: fix (unnecessary) on-tile-copy when doing that?
-    return createShardedVariable(graph, type, item_shape, tile_array);
+    return createShardedVariable(graph, type, item_shape, tile_array,
+                                 debug_context);
   }
 };
 
@@ -83,7 +87,8 @@ class TilePutReplicatedPrimitive : public TilePutBase {
       poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
       std::vector<poplar::Tensor>& outputs, const std::string& attributes,
       const std::string& debug_prefix) {
-    const auto debug_context = poplar::DebugContext(debug_prefix);
+    const auto debug_context = poplar::DebugContext(
+        makeTileOpDebugPrefix(debug_prefix, "tile_put_replicated"));
     const auto tile_array = extractTileArray(attributes);
     return lowerTilePutReplicatedToPoplar(graph, inputs, outputs, tile_array,
                                           debug_context);
@@ -109,7 +114,8 @@ class TileGatherPrimitive : public jax::ipu::PrimitiveInterface {
       poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
       std::vector<poplar::Tensor>& outputs, const std::string& attributes,
       const std::string& debug_prefix) {
-    const auto debug_context = poplar::DebugContext(debug_prefix);
+    const auto debug_context = poplar::DebugContext(
+        makeTileOpDebugPrefix(debug_prefix, "tile_gather"));
     // Tile gather parameters.
     const auto params = ipu::from_json_str<TileGatherParams>(attributes);
     return lowerTileGatherToPoplar(graph, inputs, outputs, params,
@@ -138,7 +144,8 @@ class TileDataBarrierPrimitive : public jax::ipu::PrimitiveInterface {
       poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
       std::vector<poplar::Tensor>& outputs, const std::string& attributes,
       const std::string& debug_prefix) {
-    const auto debug_context = poplar::DebugContext(debug_prefix);
+    const auto debug_context = poplar::DebugContext(
+        makeTileOpDebugPrefix(debug_prefix, "tile_data_barrier"));
     // Tile barrier parameters (with tile sharding).
     const auto params = ipu::from_json_str<TileDataBarrierParams>(attributes);
     return lowerTileDataBarrierToPoplar(graph, inputs, outputs, params,
@@ -165,7 +172,8 @@ class TileConstantReplicatedPrimitive : public jax::ipu::PrimitiveInterface {
       poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
       std::vector<poplar::Tensor>& outputs, const std::string& attributes,
       const std::string& debug_prefix) {
-    const auto debug_context = poplar::DebugContext(debug_prefix);
+    const auto debug_context = poplar::DebugContext(
+        makeTileOpDebugPrefix(debug_prefix, "tile_constant_replicated"));
     const auto params = ipu::from_json_str<TileConstantParams>(attributes);
     return lowerTileConstantReplicatedToPoplar(graph, inputs, outputs, params,
                                                debug_context);
@@ -191,7 +199,8 @@ class TileConstantShardedPrimitive : public jax::ipu::PrimitiveInterface {
       poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
       std::vector<poplar::Tensor>& outputs, const std::string& attributes,
       const std::string& debug_prefix) {
-    const auto debug_context = poplar::DebugContext(debug_prefix);
+    const auto debug_context = poplar::DebugContext(
+        makeTileOpDebugPrefix(debug_prefix, "tile_constant_sharded"));
     const auto params = ipu::from_json_str<TileConstantParams>(attributes);
     return lowerTileConstantShardedToPoplar(graph, inputs, outputs, params,
                                             debug_context);
