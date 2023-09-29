@@ -12,6 +12,25 @@
 
 namespace ipu {
 
+std::string makeTileOpDebugPrefix(const std::string& raw_debug_prefix,
+                                  const std::string& basename) {
+  const auto format_debug_prefix = [&raw_debug_prefix,
+                                    &basename](std::size_t idx) {
+    const std::string debug_prefix =
+        fmt::format("{}{}", raw_debug_prefix.substr(0, idx), basename);
+    return debug_prefix;
+  };
+  std::string::size_type idx;
+  // A bit of ugly string pattern matching to remove the metadata, but keep
+  // the existing namespace.
+  idx = raw_debug_prefix.rfind(basename + "[");
+  if (idx != std::string::npos) {
+    return format_debug_prefix(idx);
+  }
+  // Not found => keep the same debug prefix.
+  return raw_debug_prefix;
+}
+
 poplar::Tensor tileBarrierReinterpretTensor(const poplar::Tensor& t,
                                             bool is_half_accurate) {
   // 8 bits data types.
@@ -69,8 +88,8 @@ poplar::program::Program lowerTilePutShardedToPoplar(
 
   // Create output tensor, with proper tile mapping.
   // TODO: link to Slack discussion on VarRegion contiguity.
-  auto output = createShardedVariable(graph, input.elementType(),
-                                      input[0].shape(), tile_array);
+  auto output = createShardedVariable(
+      graph, input.elementType(), input[0].shape(), tile_array, debug_context);
   // Copy data tensor into the output.
   auto prog = poplar::program::Copy(input, output);
   outputs.push_back(output);
@@ -91,7 +110,7 @@ poplar::program::Program lowerTilePutReplicatedToPoplar(
   // Create output tensor, with proper tile mapping.
   auto input_broadcasted = input.expand({0}).broadcast(tile_array.size(), 0);
   auto output = createShardedVariable(graph, input.elementType(), input.shape(),
-                                      tile_array);
+                                      tile_array, debug_context);
   // Copy data tensor into the output.
   auto prog = poplar::program::Copy(input_broadcasted, output, false);
   outputs.push_back(output);

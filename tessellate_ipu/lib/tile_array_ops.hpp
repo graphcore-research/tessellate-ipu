@@ -6,6 +6,14 @@
 #include "base_types.hpp"
 
 namespace ipu {
+
+/**
+ * @brief Make a (readable/clean) tile op debug prefix.
+ * Help having a more readable naming in PopVision profile.
+ */
+std::string makeTileOpDebugPrefix(const std::string& raw_debug_prefix,
+                                  const std::string& basename);
+
 /**
  * @brief IPU tile gather op parameters.
  */

@@ -14,8 +14,6 @@ std::string makeTileMapCallDebugPrefix(const std::string& raw_debug_prefix,
                                        const std::string& primitive_name) {
   const auto format_debug_prefix = [&raw_debug_prefix,
                                     &primitive_name](std::size_t idx) {
-    // const std::string debug_prefix = raw_debug_prefix.substr(0, idx) +
-    // "tile_map";
     const std::string debug_prefix =
         fmt::format("{}{}[{}]", raw_debug_prefix.substr(0, idx), "tile_map",
                     primitive_name);
