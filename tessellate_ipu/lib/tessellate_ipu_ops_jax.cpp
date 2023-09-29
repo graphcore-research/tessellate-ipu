@@ -1,6 +1,8 @@
 // Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 #include <nanobind/nanobind.h>
 
+#include <iostream>
+
 #include "ipu_custom_primitive.hpp"
 #include "tile_array_ops.hpp"
 #include "tile_map_ops.hpp"
@@ -238,11 +240,10 @@ class TileMapEquationCall : public jax::ipu::PrimitiveInterface {
       poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
       std::vector<poplar::Tensor>& outputs, const std::string& attributes,
       const std::string& debug_prefix) {
-    const auto debug_context = poplar::DebugContext(debug_prefix);
     const auto tile_equation =
         ipu::from_json_str<ipu::TileMapEquation>(attributes);
     return lowerTileMapCallToPoplar(graph, inputs, outputs, tile_equation,
-                                    debug_context);
+                                    debug_prefix);
   }
 };
 
