@@ -3,7 +3,7 @@ from typing import Any, Tuple
 
 import jax.lax
 
-from tessellate_ipu import TileShardedArray, tile_map, tile_put_replicated, tile_put_sharded
+from tessellate_ipu import TileShardedArray, tile_data_barrier, tile_map, tile_put_replicated, tile_put_sharded
 
 from .tile_linalg_qr import dot_product1d_p
 from .tile_linalg_qr import ipu_qr_shard_inputs as ipu_hessenberg_shard_inputs
@@ -64,6 +64,15 @@ def ipu_hessenberg_iterations(
             qr_householder_row_update_p, RT, vR[:, start_idx:], w, vrescaleR, start_idx=start_idx  # type:ignore
         )
 
+        # w = Q @ v
+        w = tile_map(dot_product1d_p, vQ[:, start_idx:], Q[:, start_idx:])
+        w = tile_map(jax.lax.reduce_sum_p, w, axes=(0,))  # type:ignore
+        # Inplace update of Q.
+        Q = tile_map(
+            qr_householder_row_update_p, Q, vQ[:, start_idx:], w, vrescaleQ, start_idx=start_idx  # type:ignore
+        )
+        RT, Q = tile_data_barrier(RT, Q)
+
         R = tile_put_sharded(RT.array.T, RT.tiles)
         # Using "smart" slicing to reduce compute to do.
         # w = R^T @ v
@@ -74,14 +83,6 @@ def ipu_hessenberg_iterations(
         # Inplace update of R.
         R = tile_map(  # type:ignore
             qr_householder_row_update_p, R, vR[:, start_idx:], w, vrescaleR, start_idx=start_idx  # type:ignore
-        )
-
-        # w = Q @ v
-        w = tile_map(dot_product1d_p, vQ[:, start_idx:], Q[:, start_idx:])
-        w = tile_map(jax.lax.reduce_sum_p, w, axes=(0,))  # type:ignore
-        # Inplace update of Q.
-        Q = tile_map(
-            qr_householder_row_update_p, Q, vQ[:, start_idx:], w, vrescaleQ, start_idx=start_idx  # type:ignore
         )
 
         RT = tile_put_sharded(R.array.T, R.tiles)
