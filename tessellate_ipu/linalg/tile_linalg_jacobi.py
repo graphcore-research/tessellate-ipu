@@ -143,17 +143,20 @@ def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtile
         # Sorted rotation set: p < q indices.
         rotset_sorted = jacobi_sort_rotation_set(rotset)
         # On tile constant rotation set tensor building.
-        rotset_replicated = tile_constant_replicated(rotset_sorted, tiles=Atiles)
-        rotset_sharded = tile_constant_sharded(rotset_sorted, tiles=Atiles)
+        with jax.named_scope("rotset"):
+            rotset_replicated = tile_constant_replicated(rotset_sorted, tiles=Atiles)
+            rotset_sharded = tile_constant_sharded(rotset_sorted, tiles=Atiles)
 
         # Compute Schur decomposition + on-tile update of columns.
         cs_per_tile, Apcols, Aqcols = tile_map(  # type:ignore
             jacobi_update_first_step_p, rotset_sharded, Apcols, Aqcols, N=N
         )
         # Replicate Schur decomposition across all A tiles: (2*N//2) comms.
-        cs_replicated = tile_put_replicated(cs_per_tile.array, tiles=Atiles)
-        # Just copy Schur decomposition to associated V tiles.
-        cs_Vtiles = tile_put_sharded(cs_per_tile.array, tiles=Vtiles)
+        with jax.named_scope("cs_replicated_sharded"):
+            cs_replicated = tile_put_replicated(cs_per_tile.array, tiles=Atiles)
+            # Just copy Schur decomposition to associated V tiles.
+            cs_Vtiles = tile_put_sharded(cs_per_tile.array, tiles=Vtiles)
+            cs_replicated, cs_Vtiles = tile_data_barrier(cs_replicated, cs_Vtiles)
 
         # Second Jacobi update step.
         cs_replicated, Apcols, Aqcols = tile_map(  # type:ignore
@@ -177,8 +180,10 @@ def ipu_jacobi_eigh_iteration(all_AV_cols: Tuple[Array, ...], Atiles: Any, Vtile
         Apcols, Aqcols, Vpcols, Vqcols = tile_data_barrier(Apcols, Aqcols, Vpcols, Vqcols)
         # Move columns between tiles. 2*N commns per tile.
         # NOTE: this inter-tile comm is keeping the p < q property on A and V columns.
-        Apcols, Aqcols = tile_rotate_columns(Apcols, Aqcols, rotset)
-        Vpcols, Vqcols = tile_rotate_columns(Vpcols, Vqcols, rotset)
+        with jax.named_scope("Apqcols_rotation"):
+            Apcols, Aqcols = tile_rotate_columns(Apcols, Aqcols, rotset)
+        with jax.named_scope("Vpqcols_rotation"):
+            Vpcols, Vqcols = tile_rotate_columns(Vpcols, Vqcols, rotset)
         # Next rotation set.
         rotset = jacobi_next_rotation_set(rotset)
 
