@@ -268,7 +268,8 @@ struct TileMapEquation {
    * @return Collection of input tensors.
    */
   std::vector<poplar::Tensor> allocateInputTensors(
-      poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs) const;
+      poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+      const poplar::DebugContext& debug_context) const;
 
   /**
    * @brief Allocate output (or use existing input) tensors.
@@ -277,13 +278,14 @@ struct TileMapEquation {
    * @return Collection of output tensors.
    */
   std::vector<poplar::Tensor> allocateOutputTensors(
-      poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs) const;
+      poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+      const poplar::DebugContext& debug_context) const;
 
   /**
    * @brief Allocate the temporary-scratch space tensor (if used).
    */
   std::optional<poplar::Tensor> allocateTmpSpaceTensor(
-      poplar::Graph& graph) const;
+      poplar::Graph& graph, const poplar::DebugContext& debug_context) const;
 
   /**
    * @brief Add vertex/equation to Poplar graph & compute set.
@@ -334,12 +336,12 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(TileMapEquation, pname, vname, tiles,
  * @param inputs List of inputs.
  * @param outputs List of outputs, to update.
  * @param tile_map_eqn TileMapEquation info.
- * @param debug_context Poplar debug context.
+ * @param debug_prefix Poplar (raw) debug prefix.
  * @return Poplar program.
  */
 poplar::program::Program lowerTileMapCallToPoplar(
     poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
     std::vector<poplar::Tensor>& outputs, const TileMapEquation& tile_map_eqn,
-    const poplar::DebugContext& debug_context);
+    const std::string& debug_prefix);
 
 }  // namespace ipu

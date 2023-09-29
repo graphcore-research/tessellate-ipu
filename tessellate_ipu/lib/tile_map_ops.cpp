@@ -4,8 +4,43 @@
 #include <iostream>
 namespace ipu {
 
+namespace {
+
+/**
+ * @brief Make a (readable) tile_map call debug prefix.
+ * Improves PopVision user experience when using TessellateIPU!
+ */
+std::string makeTileMapCallDebugPrefix(const std::string& raw_debug_prefix,
+                                       const std::string& primitive_name) {
+  const auto format_debug_prefix = [&raw_debug_prefix,
+                                    &primitive_name](std::size_t idx) {
+    // const std::string debug_prefix = raw_debug_prefix.substr(0, idx) +
+    // "tile_map";
+    const std::string debug_prefix =
+        fmt::format("{}{}[{}]", raw_debug_prefix.substr(0, idx), "tile_map",
+                    primitive_name);
+    return debug_prefix;
+  };
+  std::string::size_type idx;
+  // A bit of ugly string pattern matching to remove the metadata, but keep
+  // namespace.
+  idx = raw_debug_prefix.rfind("tile_map_equation_call_single_out[");
+  if (idx != std::string::npos) {
+    return format_debug_prefix(idx);
+  }
+  idx = raw_debug_prefix.rfind("tile_map_equation_call_multi_out[");
+  if (idx != std::string::npos) {
+    return format_debug_prefix(idx);
+  }
+  // Failing => just keep the same prefix.
+  return raw_debug_prefix;
+}
+
+}  // namespace
+
 std::vector<poplar::Tensor> TileMapEquation::allocateInputTensors(
-    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs) const {
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    const poplar::DebugContext& debug_context) const {
   FMT_ASSERT(inputs.size() <= inputs_info.size(),
              "Inconsistent input vector size.");
 
@@ -18,9 +53,9 @@ std::vector<poplar::Tensor> TileMapEquation::allocateInputTensors(
       const std::string raw_values = input_info.constant_data.decode();
       const auto raw_values_ref =
           poplar::ArrayRef<char>(raw_values.data(), raw_values.size());
-      auto t = createReplicatedConstantTensor(graph, input_info.aval.dtype,
-                                              input_info.aval.shape,
-                                              raw_values_ref, this->tiles);
+      auto t = createReplicatedConstantTensor(
+          graph, input_info.aval.dtype, input_info.aval.shape, raw_values_ref,
+          this->tiles, {debug_context, input_info.name});
       inputs_all.push_back(t);
     } else {
       // Keep existing input tensor.
@@ -32,7 +67,8 @@ std::vector<poplar::Tensor> TileMapEquation::allocateInputTensors(
 }
 
 std::vector<poplar::Tensor> TileMapEquation::allocateOutputTensors(
-    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs) const {
+    poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
+    const poplar::DebugContext& debug_context) const {
   FMT_ASSERT(inputs.size() == inputs_info.size(),
              "Inconsistent input vector size.");
 
@@ -48,9 +84,9 @@ std::vector<poplar::Tensor> TileMapEquation::allocateOutputTensors(
       outputs.push_back(inputs.at(idx));
     } else if (outinfo.iotype == VertexIOType::Out) {
       // Allocate an output tensor with proper shape.
-      outputs.push_back(createShardedVariable(graph,
-                                              toPoplar(outinfo.aval.dtype),
-                                              outinfo.aval.shape, this->tiles));
+      outputs.push_back(createShardedVariable(
+          graph, toPoplar(outinfo.aval.dtype), outinfo.aval.shape, this->tiles,
+          {debug_context, outinfo.name}));
     } else {
       throw std::runtime_error("Unknown IO type for vertex output tensor.");
     }
@@ -59,26 +95,26 @@ std::vector<poplar::Tensor> TileMapEquation::allocateOutputTensors(
 }
 
 std::optional<poplar::Tensor> TileMapEquation::allocateTmpSpaceTensor(
-    poplar::Graph& graph) const {
+    poplar::Graph& graph, const poplar::DebugContext& debug_context) const {
   if (!useTmpSpace()) {
     return std::nullopt;
   }
   return createShardedVariable(graph, toPoplar(tmp_space_aval.dtype),
-                               {tmp_space_aval.size()}, this->tiles);
+                               {tmp_space_aval.size()}, this->tiles,
+                               {debug_context, "tmp_space"});
 }
 
 void TileMapEquation::add(poplar::Graph& graph, poplar::program::Sequence& prog,
                           const std::vector<poplar::Tensor>& inputs,
                           const std::vector<poplar::Tensor>& outputs,
-                          const poplar::DebugContext& debug_prefix) const {
+                          const poplar::DebugContext& debug_context) const {
   FMT_ASSERT(inputs.size() == inputs_info.size(),
              "Inconsistent inputs vector size.");
   FMT_ASSERT(outputs.size() == outputs_info.size(),
              "Inconsistent outputs vector size.");
-  poplar::DebugContext debug_context(debug_prefix, this->pname);
 
   // Tensor used for vertex temp. scratch space.
-  auto tmp_space_tensor_opt = allocateTmpSpaceTensor(graph);
+  auto tmp_space_tensor_opt = allocateTmpSpaceTensor(graph, debug_context);
 
   poplar::ComputeSet cs = graph.addComputeSet(debug_context);
   for (size_t tidx = 0; tidx < tiles.size(); ++tidx) {
@@ -122,9 +158,10 @@ void TileMapEquation::add(poplar::Graph& graph, poplar::program::Sequence& prog,
 std::vector<poplar::Tensor> TileMapEquation::add(
     poplar::Graph& graph, poplar::program::Sequence& prog,
     const std::vector<poplar::Tensor>& inputs,
-    const poplar::DebugContext& debug_prefix) const {
+    const poplar::DebugContext& debug_context) const {
   // All input tensors: i.e. add constant tensors.
-  const auto inputs_all = this->allocateInputTensors(graph, inputs);
+  const auto inputs_all =
+      this->allocateInputTensors(graph, inputs, debug_context);
 
   // No vertex => assume identity function.
   // Forwarding inputs, with just potential change of shape and dtype.
@@ -148,8 +185,9 @@ std::vector<poplar::Tensor> TileMapEquation::add(
     return outputs_all;
   }
   // Usual path => map a vertex.
-  const auto outputs = this->allocateOutputTensors(graph, inputs);
-  this->add(graph, prog, inputs_all, outputs, debug_prefix);
+  const auto outputs =
+      this->allocateOutputTensors(graph, inputs, debug_context);
+  this->add(graph, prog, inputs_all, outputs, debug_context);
   return outputs;
 }
 
@@ -173,8 +211,12 @@ std::size_t TileMapEquation::numInOuts() const {
 poplar::program::Program lowerTileMapCallToPoplar(
     poplar::Graph& graph, const std::vector<poplar::Tensor>& inputs,
     std::vector<poplar::Tensor>& outputs, const TileMapEquation& tile_map_eqn,
-    const poplar::DebugContext& debug_context) {
+    const std::string& raw_debug_prefix) {
   auto prog = poplar::program::Sequence();
+  // Base debug context used in the `tile_map` operation.
+  const auto debug_prefix =
+      makeTileMapCallDebugPrefix(raw_debug_prefix, tile_map_eqn.pname);
+  const auto debug_context = poplar::DebugContext(debug_prefix);
   // IPU tiles synchronization before compute set.
   if (tile_map_eqn.sync) {
     const auto sync_type = poplar::SyncType::INTERNAL;
