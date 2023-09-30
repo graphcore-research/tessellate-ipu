@@ -91,7 +91,7 @@ poplar::program::Program lowerTilePutShardedToPoplar(
   auto output = createShardedVariable(
       graph, input.elementType(), input[0].shape(), tile_array, debug_context);
   // Copy data tensor into the output.
-  auto prog = poplar::program::Copy(input, output);
+  auto prog = poplar::program::Copy(input, output, false, debug_context);
   outputs.push_back(output);
   return prog;
 }
@@ -112,7 +112,8 @@ poplar::program::Program lowerTilePutReplicatedToPoplar(
   auto output = createShardedVariable(graph, input.elementType(), input.shape(),
                                       tile_array, debug_context);
   // Copy data tensor into the output.
-  auto prog = poplar::program::Copy(input_broadcasted, output, false);
+  auto prog =
+      poplar::program::Copy(input_broadcasted, output, false, debug_context);
   outputs.push_back(output);
   return prog;
 }
@@ -128,10 +129,15 @@ poplar::program::Program lowerTileGatherToPoplar(
   const auto& input = inputs[0];
   const auto item_shape = input[0].shape();
   const auto item_type = input.elementType();
+  const size_t num_tiles = params.tiles.size();
 
   // Create the output tensor per gather index, then concat.
   auto seq = poplar::program::Sequence();
+  // All output slices
   std::vector<poplar::Tensor> output_slices;
+  // Slices requiring copying.
+  std::vector<poplar::Tensor> input_copy_slices;
+  std::vector<poplar::Tensor> output_copy_slices;
   for (std::size_t idx = 0; idx < params.tiles.size(); ++idx) {
     const auto gather_idx = params.indices[idx];
     // Get the proper item at the gather index.
@@ -146,10 +152,16 @@ poplar::program::Program lowerTileGatherToPoplar(
       auto output_item =
           graph.addVariable(item_type, item_shape, debug_context);
       graph.setTileMapping(output_item, output_tile);
-      seq.add(poplar::program::Copy(input_item, output_item));
+      input_copy_slices.push_back(input_item.expand({0}));
+      output_copy_slices.push_back(output_item.expand({0}));
       output_slices.push_back(output_item.expand({0}));
     }
   }
+  // Copy input to output.
+  auto input_copy = poplar::concat(input_copy_slices);
+  auto output_copy = poplar::concat(output_copy_slices);
+  seq.add(poplar::program::Copy(input_copy, output_copy, false, debug_context));
+  // Full gather output tensor.
   auto output = poplar::concat(output_slices);
   outputs.push_back(output);
   return seq;
