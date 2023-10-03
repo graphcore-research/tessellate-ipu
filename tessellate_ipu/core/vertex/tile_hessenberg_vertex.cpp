@@ -10,6 +10,7 @@ using namespace poplar;
      tessellate/tile/vertex/tile_qr_vertex.cpp \
      -o tessellate/tile/vertex/tile_qr_vertex.gp
 */
+static constexpr size_t MIN_ALIGN = 8;
 
 class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dIndexedVertex
     : public MultiVertex {
@@ -19,18 +20,17 @@ class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dIndexedVertex
   // Using `uint16` seems to be generating more efficient loops?
   using IndexType = unsigned short;
 
-  static constexpr size_t MIN_ALIGN = 8;
 
   Input<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       x;  // (N,) x vector
   Input<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       y;  // (N,) y vector
-  Input<Vector<int, poplar::VectorLayout::ONE_PTR>>
+  Input<Vector<int, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       start_idx;
 
-  Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
+  Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       worker_offsets;  // (7,) number threads + 1.
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>> partials;  // float result.
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>> partials;  // float result.
 
   bool compute(unsigned wid) {
     // Always assuming size % 2 == 0
@@ -70,14 +70,14 @@ class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dIndexedVertex
 class HessenbergCorrectionVectorVertex : public MultiVertex {
  public:
   using T = float;
-  Input<Vector<T, poplar::VectorLayout::SPAN>> Rcol;      // (N,) R column.
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR>> sdiag;  // (N,) R diag. sign.
-  Input<Vector<int, poplar::VectorLayout::ONE_PTR>>
+  Input<Vector<T, poplar::VectorLayout::SPAN, MIN_ALIGN>> Rcol;      // (N,) R column.
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>> sdiag;  // (N,) R diag. sign.
+  Input<Vector<int, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
     cidx;
 
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>>
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       v;  // (N,) QR correction vector (not normalized)
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR>>
+  Output<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       vrescale;  // (1,) QR correction vector rescaling (2 / norm)
 
 
@@ -186,14 +186,14 @@ class [[poplar::constraint(
 
   // Passing 2 scaling factors is more efficient for the QR implementation.
   // Avoids another full pass on the v vector in the vertex it is constructed.
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR>>
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       scale1;  // (1,) first scaling factor.
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR>>
+  Input<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       scale2;  // (1,) 2nd scaling factor.
-  Input<Vector<int, poplar::VectorLayout::ONE_PTR>>
+  Input<Vector<int, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       start_idx_;
 
-  Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
+  Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
       worker_offsets;  // (7,) threads work size + 1.
 
 
