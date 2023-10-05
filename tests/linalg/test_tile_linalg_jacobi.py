@@ -19,6 +19,7 @@ from tessellate_ipu.linalg.tile_linalg_jacobi import (
     jacobi_sym_schur2_p,
     jacobi_update_eigenvectors_p,
     jacobi_update_first_step_p,
+    tile_sharded_pq_columns,
 )
 from tessellate_ipu.utils import IpuTargetType
 
@@ -102,18 +103,17 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         N = 128
         tiles = (0,)
         pq = np.array([3, N // 2], dtype=np.uint32)
-        pcol = np.random.randn(N).astype(np.float32)
-        qcol = np.random.randn(N).astype(np.float32)
+        pcol = np.random.randn(1, N).astype(np.float32)
+        qcol = np.random.randn(1, N).astype(np.float32)
 
         def jacobi_update_first_step_fn(pq, pcol, qcol):
             pq = tile_put_replicated(pq, tiles)
-            pcol = tile_put_replicated(pcol, tiles)
-            qcol = tile_put_replicated(qcol, tiles)
+            pcol, qcol = tile_sharded_pq_columns(pcol, qcol, tiles)
             # Force synchronization at this point, before cycle count.
             pq, pcol, qcol = tile_data_barrier(pq, pcol, qcol)
             pcol, start = ipu_cycle_count(pcol)
-            cs, _, _ = tile_map(  # type:ignore
-                jacobi_update_first_step_p, pq, pcol, qcol, N=N
+            _, cs, _, _ = tile_map(  # type:ignore
+                jacobi_update_first_step_p, pcol, qcol
             )
             cs, end = ipu_cycle_count(cs)
             return cs, start, end
@@ -123,7 +123,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
 
         start, end = np.asarray(start)[0], np.asarray(end)[0]
         qr_correction_cycle_count = end[0] - start[0]
-        assert qr_correction_cycle_count <= 1600
+        assert qr_correction_cycle_count <= 1700
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 
@@ -131,13 +131,12 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         N = 256
         tiles = (0,)
         cs = np.array([0.2, 0.5], dtype=np.float32)
-        pcol = np.random.randn(N).astype(np.float32)
-        qcol = np.random.randn(N).astype(np.float32)
+        pcol = np.random.randn(1, N).astype(np.float32)
+        qcol = np.random.randn(1, N).astype(np.float32)
 
         def jacobi_update_eigenvectors_fn(cs, pcol, qcol):
             cs = tile_put_replicated(cs, tiles)
-            pcol = tile_put_replicated(pcol, tiles)
-            qcol = tile_put_replicated(qcol, tiles)
+            pcol, qcol = tile_sharded_pq_columns(pcol, qcol, tiles)
             # Force synchronization at this point, before cycle count.
             cs, pcol, qcol = tile_data_barrier(cs, pcol, qcol)
             pcol, start = ipu_cycle_count(pcol)
@@ -152,14 +151,14 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         pcol_updated = np.asarray(pcol_updated)
         qcol_updated = np.asarray(qcol_updated)
 
-        # Make sure we have the right result!
-        npt.assert_array_almost_equal(pcol_updated[0], pcol * cs[0] - qcol * cs[1])
-        npt.assert_array_almost_equal(qcol_updated[0], pcol * cs[1] + qcol * cs[0])
+        # Make sure we have the right result! NOTE: discarding indexing prefix!
+        npt.assert_array_almost_equal(pcol_updated[:, 2:], pcol * cs[0] - qcol * cs[1])
+        npt.assert_array_almost_equal(qcol_updated[:, 2:], pcol * cs[1] + qcol * cs[0])
 
         # Cycle count reference for scale_add: 64(375), 128(467), 256(665), 512(1043)
         start, end = np.asarray(start)[0], np.asarray(end)[0]
         qr_correction_cycle_count = end[0] - start[0]
-        assert qr_correction_cycle_count <= 2000
+        assert qr_correction_cycle_count <= 2200
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 
