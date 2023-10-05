@@ -3,7 +3,6 @@ import os
 from typing import Any, Tuple
 
 import jax.lax
-import jax.numpy as jnp
 import numpy as np  # used for np.float32, shouldn't we use jax types?
 from jax.core import ShapedArray
 
@@ -18,7 +17,6 @@ from tessellate_ipu import (
 from tessellate_ipu.core.tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
 
 from .tile_linalg_qr import dot_product1d_p
-from .tile_linalg_qr import ipu_qr_shard_inputs as ipu_hessenberg_shard_inputs
 
 Array = Any
 
@@ -70,6 +68,30 @@ hessenberg_householder_row_update_p = create_ipu_tile_primitive(
 )
 
 
+def ipu_hessenberg_shard_inputs(x: Array, xsdiag: Array) -> Tuple[TileShardedArray, TileShardedArray, TileShardedArray]:
+    """IPU QR initial sharding of input arrays across IPU tiles.
+
+    Args:
+        x: X array.
+        sdiag: X diagonal sign.
+    Returns:
+        Tile sharded Q, RT, sdiag.
+    """
+    assert x.shape[0] == x.shape[1]
+    N = x.shape[0]
+    # Sharding R and Q
+    Q_tiles = tuple(range(0, N))
+    # R_tiles = tuple(range(N, 2 * N))
+    R_tiles = tuple(range(0, N))
+
+    # TODO: on-device construction of identity
+    Q = tile_put_sharded(np.identity(N, dtype=x.dtype), Q_tiles)
+    RT = tile_put_sharded(x.T, R_tiles)
+    # Replicate once on all tiles. Faster then for the looping.
+    sdiag_full = tile_put_replicated(xsdiag, R_tiles)
+    return Q, RT, sdiag_full
+
+
 # Heavily based on ipu_qr_iterations in tile_linalg_qr.py
 # The body of the for-loop computes
 # v = Householder(R[i])         # v is chosen to annihilate the elements below the first lower diagonal
@@ -78,42 +100,26 @@ hessenberg_householder_row_update_p = create_ipu_tile_primitive(
 # Q = Q - 2 * (Q @ v.reshape(-1, 1)) @ v.reshape(1, -1)
 
 
-def roll_matrices(
-    Q: TileShardedArray, RT: TileShardedArray, sdiag_full: TileShardedArray
-) -> Tuple[TileShardedArray, TileShardedArray, TileShardedArray]:
-
-    # nextRT = jnp.roll(RT.array, shift=(-1,0), axis=(0,1))
-    nextRT = jnp.concatenate([RT.array[1:], RT.array[:1]])
-    RT = tile_put_sharded(nextRT, RT.tiles)
-
-    # nextQ = jnp.roll(Q.array, shift=(-1,0), axis=(0,1))
-    nextQ = jnp.concatenate([Q.array[1:], Q.array[:1]])
-    Q = tile_put_sharded(nextQ, Q.tiles)
-
-    nextsdiag_full = jnp.roll(sdiag_full.array, shift=-1, axis=0)
-    sdiag_full = tile_put_sharded(nextsdiag_full, sdiag_full.tiles)
-
-    return Q, RT, sdiag_full
-
-
 def ipu_hessenberg_body(
     i: int, carry: Tuple[TileShardedArray, TileShardedArray, TileShardedArray]
 ) -> Tuple[TileShardedArray, TileShardedArray, TileShardedArray]:
 
     Q, RT, sdiag_full = carry
 
-    Rcol_array = RT.array[i].reshape(1, -1)
-    sdiag_array = sdiag_full.array[i].reshape(1, -1)
+    # Rcol_array = RT.array[i].reshape(1, -1)
+    # sdiag_array = sdiag_full.array[i].reshape(1, -1)
 
-    # These too are very expensive
-    # Rcol_array = jnp.take_along_axis(RT.array, jnp.array([[i]],dtype=np.int32), axis=0)
-    # sdiag_array = jnp.take_along_axis(sdiag_full.array, jnp.array([[i]],dtype=np.int32), axis=0)
+    # # These too are very expensive
+    # # Rcol_array = jnp.take_along_axis(RT.array, jnp.array([[i]],dtype=np.int32), axis=0)
+    # # sdiag_array = jnp.take_along_axis(sdiag_full.array, jnp.array([[i]],dtype=np.int32), axis=0)
 
-    # Rcol_array = jnp.take(RT.array, i, axis=0).reshape(1,-1)
-    # sdiag_array = jnp.take(sdiag_full.array, i, axis=0).reshape(1,-1)
+    # # Rcol_array = jnp.take(RT.array, i, axis=0).reshape(1,-1)
+    # # sdiag_array = jnp.take(sdiag_full.array, i, axis=0).reshape(1,-1)
 
-    Rcol = tile_put_sharded(Rcol_array, [736])
-    sdiag = tile_put_sharded(sdiag_array, [736])
+    # # Rcol and sdiag are put on an arbitrarily picked tile
+    # correction_vector_tile = 736
+    # Rcol = tile_put_sharded(Rcol_array, [correction_vector_tile])
+    # sdiag = tile_put_sharded(sdiag_array, [correction_vector_tile])
 
     # start_idx = (i // 2) * 2
     start_idx = 0
@@ -121,19 +127,33 @@ def ipu_hessenberg_body(
     start_idxQ = tile_put_replicated(start_idx, Q.tiles)
     start_idxR = tile_put_replicated(start_idx, RT.tiles)
 
-    # Correction vector. NOTE: computed on a single tile, changing at every loop.
+    # Alternative: we pass the whole RT and sdiag; then we extract the result from the i-th tile
+
+    # Correction vector. Computed
+    # v, vrescale = tile_map(
+    #     hessenberg_correction_vector_p, Rcol, sdiag, tile_put_replicated(i + 1, Rcol.tiles)
+    # )  # type:ignore
     v, vrescale = tile_map(
-        hessenberg_correction_vector_p, Rcol, sdiag, tile_put_replicated(i + 1, Rcol.tiles)
+        hessenberg_correction_vector_p, RT, sdiag_full, tile_put_replicated(i + 1, RT.tiles)
     )  # type:ignore
 
-    # Replicate to all Q and R tiles.
-    vQ = tile_put_replicated(v.array[0], Q.tiles)
-    vR = tile_put_replicated(v.array[0], RT.tiles)
-    # v normalization factor to pass to householder update.
-    vrescaleQ = tile_put_replicated(vrescale.array[0], Q.tiles)
-    vrescaleR = tile_put_replicated(vrescale.array[0], RT.tiles)
+    # This compiles
+    # vi = tile_gather(v.array[i], [0], [0])
 
-    # Using "smart" slicing to reduce compute to do.
+    # Replicate to all Q and R tiles.
+    vQ = tile_put_replicated(v.array[i], Q.tiles)  # 0
+    vR = tile_put_replicated(v.array[i], RT.tiles)  # 0
+    # v normalization factor to pass to householder update.
+    vrescaleQ = tile_put_replicated(vrescale.array[i], Q.tiles)  # 0
+    vrescaleR = tile_put_replicated(vrescale.array[i], RT.tiles)  # 0
+
+    # Alternative using tile_gather
+    # vQ = tile_gather(v, [i]*len(Q.tiles), list(Q.tiles), copy=False)    # 0
+    # vR = tile_gather(v, [i]*len(RT.tiles), RT.tiles)    # 0
+    # # v normalization factor to pass to householder update.
+    # vrescaleQ = tile_gather(vrescale, [i]*len(Q.tiles), Q.tiles)    # 0
+    # vrescaleR = tile_gather(vrescale, [i]*len(RT.tiles), RT.tiles)    #
+
     # w = R^T @ v
     w = tile_map(
         # dot_product1d_indexed_p, vR, RT, start_idxR
@@ -158,12 +178,8 @@ def ipu_hessenberg_body(
     RT, Q = tile_data_barrier(RT, Q)
 
     # Transpose the RT matrix so that we can do the right product
-    # RT_rolled = jnp.roll(RT.array, shift=i, axis=0)
-    # RT_rolled_back = jnp.roll(RT_rolled.T, shift=-i, axis=0)
-    # R = tile_put_sharded(RT_rolled_back, RT.tiles)
     R = tile_put_sharded(RT.array.T, RT.tiles)
 
-    # Using "smart" slicing to reduce compute to do.
     # w = R^T @ v
     w = tile_map(
         # dot_product1d_indexed_p, vR, R, start_idxR
@@ -177,16 +193,7 @@ def ipu_hessenberg_body(
         hessenberg_householder_row_update_p, R, vR, w, vrescaleR, start_idxR  # type:ignore
     )
 
-    # RT = tile_put_sharded(R.array.T, R.tiles)
-
-    # R_rolled = jnp.roll(R.array, shift=i, axis=0)
-    # R_rolled_back = jnp.roll(R_rolled.T, shift=-i, axis=0)
-    # RT = tile_put_sharded(R_rolled_back, R.tiles)
-
     RT = tile_put_sharded(R.array.T, R.tiles)
-
-    # rotate everything !!!!!
-    # Q, RT, sdiag_full = roll_matrices(Q, RT, sdiag_full)
 
     return (Q, RT, sdiag_full)
 
