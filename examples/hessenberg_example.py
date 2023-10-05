@@ -19,12 +19,12 @@ A = (A + A.T) / 2
 
 Q, R = jax.jit(ipu_hessenberg, backend="ipu")(A)
 
-Q_ = Q.array.copy()
-R_ = R.array.copy()
-print("R matrix")
+Q_ = np.array(Q.array)
+R_ = np.array(R.array)
+print("\nR matrix")
 print(R_)
-print("Q matrix (top left 6-by-6 corner)")
+print("\nQ matrix")
 print(Q_)
-print(f"\nDelta: {np.max(np.abs(Q_ @ R_ @ Q_.T - A))}")
-
+print(f"\nReconstruction Delta: {np.max(np.abs(Q_ @ R_ @ Q_.T - A))}")
+print("\nQ.T @ Q")
 print(Q_.T @ Q_)
