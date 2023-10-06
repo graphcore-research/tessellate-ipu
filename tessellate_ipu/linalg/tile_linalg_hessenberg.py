@@ -1,4 +1,5 @@
 # Copyright (c) 2023 Graphcore Ltd. All rights reserved.
+import math
 import os
 from typing import Any, Tuple
 
@@ -79,10 +80,18 @@ def ipu_hessenberg_shard_inputs(x: Array, xsdiag: Array) -> Tuple[TileShardedArr
     """
     assert x.shape[0] == x.shape[1]
     N = x.shape[0]
+    n_tiles = 1472
     # Sharding R and Q
-    Q_tiles = tuple(range(0, N))
-    # R_tiles = tuple(range(N, 2 * N))
-    R_tiles = tuple(range(0, N))
+
+    n_per_tile = math.ceil(N / float(n_tiles))
+    full_tiles = N % n_tiles
+    if full_tiles == 0:
+        full_tiles = n_tiles
+
+    Q_tiles = [i for i in range(full_tiles) for _ in range(n_per_tile)] + [
+        i for i in range(full_tiles, n_tiles) for _ in range(n_per_tile - 1)
+    ]
+    R_tiles = Q_tiles
 
     # TODO: on-device construction of identity
     Q = tile_put_sharded(np.identity(N, dtype=x.dtype), Q_tiles)
