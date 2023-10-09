@@ -12,57 +12,9 @@ using namespace poplar;
 */
 static constexpr size_t MIN_ALIGN = 8;
 
-class [[poplar::constraint("elem(*x) != elem(*y)")]] DotProduct1dIndexedVertex
-    : public MultiVertex {
- public:
-  using T = float;
-  using T2 = float2;
-  // Using `uint16` seems to be generating more efficient loops?
-  using IndexType = unsigned short;
-
-
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
-      x;  // (N,) x vector
-  Input<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
-      y;  // (N,) y vector
-  Input<Vector<int, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
-      start_idx;
-
-  Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>>
-      worker_offsets;  // (7,) number threads + 1.
-  Output<Vector<T, poplar::VectorLayout::ONE_PTR, MIN_ALIGN>> partials;  // float result.
-
-  bool compute(unsigned wid) {
-    // Always assuming size % 2 == 0
-    const IndexType wstart = worker_offsets[wid];
-    const IndexType wend = worker_offsets[wid + 1];
-    const IndexType wsize = wend - wstart;
-
-    const IndexType index = start_idx[0];
-
-    T2* ptr_tmp_partials_f2 = reinterpret_cast<T2*>(partials.data()) + wid;
-    // Nothing to do in this worker thread.
-    if (wstart == wend) {
-      ipu::store_postinc(&ptr_tmp_partials_f2, T2{0, 0}, 1);
-      return true;
-    }
-    // X and Y input pointers.
-    const T2* ptr_inxdata_f2 = reinterpret_cast<const T2*>(x.data()) + wstart;
-    const T2* ptr_inydata_f2 = reinterpret_cast<const T2*>(y.data()) + wstart;
-    T2 partial = T2{0, 0};
-
-    for (IndexType idx = 0; idx != wsize; ++idx) {
-      // TODO: use ld2x64pace + tapack instructions?
-      const T2 xin = ipu::load_postinc(&ptr_inxdata_f2, 1);
-      const T2 yin = ipu::load_postinc(&ptr_inydata_f2, 1);
-      // popc seems to recognize this pattern and optimize it.
-      // Using directly ipu::fma intrinsics leads to poor performance!?
-      partial += xin * yin;
-    }
-    ipu::store_postinc(&ptr_tmp_partials_f2, partial, 1);
-    return true;
-  }
-};
+/*
+  The code here is just a minor modification of tile_qr_vertex.cpp
+*/
 
 /**
  * @brief Vertex computing the correction vector in the Hessenberg algorithm.

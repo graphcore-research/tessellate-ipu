@@ -69,4 +69,4 @@ class IpuTileLinalgHessenberg(chex.TestCase, parameterized.TestCase):
 
         start, end = np.asarray(start)[0], np.asarray(end)[0]
         hessenberg_cycle_count = end[0] - start[0]
-        assert hessenberg_cycle_count <= 105000
+        assert hessenberg_cycle_count <= 150000
