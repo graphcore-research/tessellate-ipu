@@ -92,14 +92,16 @@ def ipu_hessenberg_shard_inputs(x: Array, xsdiag: Array) -> Tuple[TileShardedArr
     return Q, R, sdiag_full
 
 
-# The body of the for-loop computes
-# v = Householder(R[i])         # v is chosen to annihilate the elements below the first lower diagonal
-# R = R - 2 *  v.reshape(-1, 1) @ (v.reshape(1, -1)  @ R)
-# R = R - 2 * (R @ v.reshape(-1, 1)) @ v.reshape(1, -1)  # Not present in QR algorithm
-# Q = Q - 2 * (Q @ v.reshape(-1, 1)) @ v.reshape(1, -1)
 def ipu_hessenberg_body(
     i: int, carry: Tuple[TileShardedArray, TileShardedArray, TileShardedArray]
 ) -> Tuple[TileShardedArray, TileShardedArray, TileShardedArray]:
+    """
+    The body of the for-loop that operates on rows of R. It computes
+    v = Householder(R[i])         # v is chosen to annihilate the elements below the first lower diagonal
+    R = R - 2 *  v.reshape(-1, 1) @ (v.reshape(1, -1)  @ R)
+    R = R - 2 * (R @ v.reshape(-1, 1)) @ v.reshape(1, -1)  # Not present in QR algorithm
+    Q = Q - 2 * (Q @ v.reshape(-1, 1)) @ v.reshape(1, -1)
+    """
 
     Q, R, sdiag_full = carry
 
