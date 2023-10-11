@@ -19,25 +19,25 @@ public:
   Input<Vector<float, poplar::VectorLayout::ONE_PTR, 8>> tls;   // a
   Input<Vector<float, poplar::VectorLayout::ONE_PTR, 8>> b;     // d
 
+  Output<Vector<float, poplar::VectorLayout::ONE_PTR, 8>> tmp;   // temporary
+
   TridiagonalSolverVertex();
 
   bool compute() {
-    Vector<float, poplar::VectorLayout::ONE_PTR, 8> b_;
-    for (int i=0; i<ts.size(); i++)
-        b_[i] = b[i];
 
     int n = ts.size();
 
+    tmp[0] = b[0];
     for (int i=1; i<n; i++){
         float w;
         w = tls[i] / ts[i-1];    // CHECK div-by-0 or OVFL
         ts[i] -= w * tus[i-1];
-        b_[i] -= w * b_[i-1];
+        tmp[i] = b[i] - w * tmp[i-1];
     }
 
-    ts[n-1] = b_[n-1] / ts[n-1];
-    for (int i=n-2; i>0; i--) {
-        ts[i] = (b_[i] - tus[i] * ts[i+1]) / ts[i];    // We put x into ts?
+    ts[n-1] = tmp[n-1] / ts[n-1];
+    for (int i=n-2; i>=0; i--) {
+        ts[i] = (tmp[i] - tus[i] * ts[i+1]) / ts[i];    // We put x into ts?
     }
 
     // Maybe we should compute the norm of the delta between x and ts?

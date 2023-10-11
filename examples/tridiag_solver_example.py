@@ -11,21 +11,32 @@ jax.config.FLAGS.jax_platform_name = "cpu"
 jax.config.update("jax_enable_x64", False)
 
 
-N = int(sys.argv[1])
+N = int(sys.argv[2])
+M = int(sys.argv[1])
 np.random.seed(42)
 
 np.set_printoptions(precision=3, linewidth=120, suppress=True)
 
 
-diag = np.arange(N).reshape(1, -1).astype(jnp.float32)
-ldiag = np.random.rand(N - 1).reshape(1, -1).astype(jnp.float32)
-rhs = np.random.rand(N).reshape(1, -1).astype(jnp.float32)
+diag = np.random.rand(M, N).astype(jnp.float32)
+udiag = np.random.rand(M, N).astype(jnp.float32)
+rhs = np.random.rand(M, N).astype(jnp.float32)
 
-x_ = jax.jit(ipu_tridiag_solve, backend="ipu")(diag, ldiag, rhs)
+x_ = jax.jit(ipu_tridiag_solve, backend="ipu")(diag, udiag, np.roll(udiag, 1, axis=1), rhs)
 
 x = np.array(x_.array)
 
-T = spdiags([np.concatenate([np.array([0]), ldiag]), diag, np.concatenate([ldiag, [0]])], (1, 0, -1), N, N)
+print(x.shape)
 
-delta = T @ x - rhs
-print(np.max(np.abs(delta)))
+deltas = []
+for i in range(M):
+    data = np.vstack(
+        [np.roll(udiag[i].flat, 1, axis=0), diag[i].flat, udiag[i].flat],
+    )
+    T = spdiags(data, (1, 0, -1), N, N).toarray()
+
+    delta = T @ x[i].reshape(N, 1) - rhs[i].reshape(N, 1)
+
+    deltas.append(delta)
+
+print("Max abs delta:", np.max(np.abs(np.array(delta))))

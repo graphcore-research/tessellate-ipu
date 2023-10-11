@@ -3,7 +3,7 @@ from typing import Any
 
 import jax
 
-from tessellate_ipu import create_ipu_tile_primitive, tile_map, tile_put_replicated
+from tessellate_ipu import create_ipu_tile_primitive, tile_map, tile_put_sharded
 
 jax.config.FLAGS.jax_platform_name = "cpu"
 
@@ -17,22 +17,30 @@ tridiagonal_solver_p = create_ipu_tile_primitive(
     "TridiagonalSolverVertex",
     inputs=["ts", "tus", "tls", "b"],
     outputs={"ts": 0},
+    tmp_space=3,
     gp_filename=vertex_filename,
     perf_estimate=100,
 )
 
 
-def ipu_tridiag_solve(diag: Array, ldiag: Array, rhs: Array):
+def ipu_tridiag_solve(diag: Array, udiag: Array, ldiag: Array, rhs: Array):
+    """
+    diag: main diagonal, (1,N)
+    udiag: upper diagonal, (1,N), the last element is not used
+    ldiag: lower diagonal, (1,N), the first element is not used, i.e. A[1,0] == ldiag[1]
+    rhs: right hand side, (1,N)
+    Note the logic is different from that of scipy.sparse.spdiags()
+    """
 
-    tiles = [100]
+    tiles = list(range(diag.shape[0]))
 
-    ts = tile_put_replicated(diag, tiles=tiles)
+    ts = tile_put_sharded(diag, tiles=tiles)
 
-    tls = tile_put_replicated(ldiag, tiles=tiles)
+    tls = tile_put_sharded(ldiag, tiles=tiles)
 
-    tus = tls
+    tus = tile_put_sharded(udiag, tiles=tiles)
 
-    b = tile_put_replicated(rhs, tiles=tiles)
+    b = tile_put_sharded(rhs, tiles=tiles)
 
     x_ = tile_map(tridiagonal_solver_p, ts, tus, tls, b)
     return x_
