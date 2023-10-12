@@ -32,15 +32,21 @@
  */
 namespace ipu {
 /** IPU hardware tag. */
-struct HardwareTag {};
+struct HardwareTag {
+  static constexpr bool hardware = true;
+};
 /** IPU model tag. */
-struct ModelTag {};
+struct ModelTag {
+    static constexpr bool model = true;
+};
 }  // namespace ipu
 
 // IPU dispatch tag preprocessor.
 #ifdef __IPU__
+#define IPU_TAG_TYPE ipu::HardwareTag
 #define IPU_DISPATCH_TAG (ipu::HardwareTag{})
 #else
+#define IPU_TAG_TYPE ipu::ModelTag
 #define IPU_DISPATCH_TAG (ipu::ModelTag{})
 #endif
 

@@ -9,7 +9,9 @@ using namespace poplar;
 /**
  * @brief 2d rotation vertex.
  */
-class Rotation2dVertex : public MultiVertex {
+class [[poplar::constraint("elem(*inrow0) != elem(*outrow0)",
+                           "elem(*inrow1) != elem(*outrow1)")]] Rotation2dVertex
+    : public MultiVertex {
  public:
   using T = float;
   using T2 = float2;
@@ -46,8 +48,8 @@ class Rotation2dVertex : public MultiVertex {
     T2* outrow0_ptr = reinterpret_cast<T2*>(outrow0.data()) + wstart;
     T2* outrow1_ptr = reinterpret_cast<T2*>(outrow1.data()) + wstart;
 
-    rotation2d_f32(cs_ptr[0], inrow0_ptr, inrow1_ptr, outrow0_ptr, outrow1_ptr,
-                   wsize, IPU_DISPATCH_TAG);
+    rotation2d_f32<IPU_TAG_TYPE>(cs_ptr[0], inrow0_ptr, inrow1_ptr, outrow0_ptr,
+                                 outrow1_ptr, wsize);
     return true;
   }
 };
