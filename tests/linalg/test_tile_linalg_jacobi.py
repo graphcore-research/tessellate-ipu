@@ -100,7 +100,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # assert False
 
     def test__jacobi_update_first_step_vertex__benchmark_performance(self):
-        N = 128
+        N = 256
         tiles = (0,)
         pq = np.array([3, N // 2], dtype=np.uint32)
         pcol = np.random.randn(1, N).astype(np.float32)
@@ -123,7 +123,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
 
         start, end = np.asarray(start)[0], np.asarray(end)[0]
         qr_correction_cycle_count = end[0] - start[0]
-        assert qr_correction_cycle_count <= 1700
+        assert qr_correction_cycle_count <= 1550
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 

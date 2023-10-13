@@ -48,6 +48,7 @@ class [[poplar::constraint("elem(*inrow0) != elem(*outrow0)",
     T2* outrow0_ptr = reinterpret_cast<T2*>(outrow0.data()) + wstart;
     T2* outrow1_ptr = reinterpret_cast<T2*>(outrow1.data()) + wstart;
 
+    // Passing IPU model/hardware tag type.
     rotation2d_f32<IPU_TAG_TYPE>(cs_ptr[0], inrow0_ptr, inrow1_ptr, outrow0_ptr,
                                  outrow1_ptr, wsize);
     return true;
