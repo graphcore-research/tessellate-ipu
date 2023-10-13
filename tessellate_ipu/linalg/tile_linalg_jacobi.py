@@ -19,6 +19,7 @@ from tessellate_ipu import (
     tile_put_sharded,
 )
 from tessellate_ipu.core.tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
+from tessellate_ipu.lax import tile_fill
 from tessellate_ipu.utils import NDArray
 
 Array = Any
@@ -69,8 +70,10 @@ jacobi_update_second_step_p = create_ipu_tile_primitive(
     inputs=["cs_arr", "rotset_sorted_arr", "rotset_idx_ignored", "pcol", "qcol"],
     outputs={"cs_arr": 0, "pcol_updated": 3, "qcol_updated": 4},
     constants={
+        # NOTE: using grain_size=4 because of partial loop unrolling
+        # TODO: support overlap properly.
         "worker_offsets": lambda inavals, *_: make_ipu_vector1d_worker_offsets(
-            inavals[3].size - INDEX_PREFIX, vector_size=2, wdtype=np.uint16
+            inavals[3].size - INDEX_PREFIX, vector_size=2, wdtype=np.uint16, allow_overlap=False, grain_size=4
         )
     },
     gp_filename=get_jacobi_vertex_gp_filename(),
@@ -232,6 +235,14 @@ def ipu_jacobi_eigh_body(idx: Array, inputs: Tuple[TileShardedArray, ...]) -> Tu
         rotset_sorted_sharded, cs_per_tile, Apcols, Aqcols = tile_map(  # type:ignore
             jacobi_update_first_step_p, Apcols, Aqcols
         )
+        # Append zero indices to the rotset, for loop unrolling in `jacobi_update_second_step`
+        rotset_zeros = tile_fill((2,), 0, dtype=rotset_sorted_sharded.dtype, tiles=(0,))
+        # Barrier to make sure communication gets fused into a single block.
+        rotset_zeros, rotset_sorted_sharded, cs_per_tile = tile_data_barrier(
+            rotset_zeros, rotset_sorted_sharded, cs_per_tile
+        )
+        rotset_sorted_sharded = TileShardedArray.concatenate([rotset_sorted_sharded, rotset_zeros])
+
         # Replicate Schur decomposition + rotset across all A tiles: (2*N//2) comms.
         with jax.named_scope("rotset_sorted_replicated"):
             rotset_sorted_replicated = tile_put_replicated(rotset_sorted_sharded.array, tiles=Atiles)

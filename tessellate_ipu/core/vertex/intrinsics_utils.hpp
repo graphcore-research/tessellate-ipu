@@ -64,6 +64,7 @@ ALWAYS_INLINE T ipu_div_by_6(T n) noexcept {
  */
 ALWAYS_INLINE void __builtin_ipu_put_tas(float v) noexcept {
   // TAS register, used for __builtin_ipu_f32v2axpy.
+  // TODO: use `__builtin_ipu_uput`?
   asm volatile(
       R"l( uput $TAS, %[sv]
         )l"
@@ -71,6 +72,20 @@ ALWAYS_INLINE void __builtin_ipu_put_tas(float v) noexcept {
       : [ sv ] "r"(v)
       :);
 }
+
+/**
+ * @brief Zero AACC registers.
+ */
+ALWAYS_INLINE void __builtin_ipu_aacc_zero() {
+  asm (R"(
+    setzi $a0, 0x8
+    uput $FP_CLR, $a0
+  )"
+      :
+      :
+      : "$a0");
+}
+
 
 /**
  * @brief IPU cmac f32 instruction.

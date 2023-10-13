@@ -1,6 +1,6 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
 import math
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 from numpy.typing import DTypeLike, NDArray
@@ -26,9 +26,14 @@ def make_num_elements_per_worker(N: int, num_workers: int) -> NDArray[np.int32]:
 
 
 def make_ipu_vector1d_worker_offsets(
-    size: int, vector_size: int = 2, num_workers: int = 6, wdtype: DTypeLike = np.uint16
+    size: int,
+    vector_size: int = 2,
+    num_workers: int = 6,
+    wdtype: DTypeLike = np.uint16,
+    allow_overlap: bool = False,
+    grain_size: Optional[int] = None,
 ) -> NDArray[np.int_]:
-    """Make the QR householder row update worker sizes, i.e. how many
+    """Make worker sizes/offsets for a 1D array workload, i.e. how many
     data vectors per worker thread?
 
     Args:
@@ -36,26 +41,38 @@ def make_ipu_vector1d_worker_offsets(
         vector_size: Vector size (2: float, 4: half).
         num_workers: Number of workers.
         wdtype: Worklists dtype.
+        allow_overlap: Allowing overlap between workers. Make it easier to deal with remainer term.
+        grain_size: Optional grain size. vector_size by default.
     Returns:
         (6,) number of data vectors per thread.
     """
+    grain_size = grain_size or vector_size
+    grain_scale = grain_size // vector_size
 
     def make_offsets_fn(sizes):
         sizes = [0] + sizes
-        offsets = np.cumsum(np.array(sizes, wdtype), dtype=wdtype)
+        offsets = np.cumsum(np.array(sizes, wdtype) * grain_scale, dtype=wdtype)
         return offsets
 
-    assert size % vector_size == 0
+    # TODO: support properly odd size.
+    assert size % 2 == 0, "Not supporting odd sizing at the moment."
+    # Base checks!
+    assert grain_size % vector_size == 0
+    assert size >= grain_size, f"Requires at least a size of {grain_size}."
+    assert (
+        size % grain_size == 0 or allow_overlap
+    ), f"Requires the size, {size}, divisible by the grain size {grain_size}, (or allowing overlap)."
+
     # Base worksize on the first few workers.
-    base_worksize: int = math.ceil(size / (vector_size * num_workers))
-    num_base_workers = size // (vector_size * base_worksize)
+    base_worksize: int = math.ceil(size / (grain_size * num_workers))
+    num_base_workers = size // (grain_size * base_worksize)
     worker_sizes: List[int] = [base_worksize] * num_base_workers
     if num_base_workers == num_workers:
         return make_offsets_fn(worker_sizes)
 
     # Remainer term, for the next thread.
-    rem_worksize = size - base_worksize * vector_size * num_base_workers
-    rem_worksize = rem_worksize // vector_size
+    rem_worksize = size - base_worksize * grain_size * num_base_workers
+    rem_worksize = rem_worksize // grain_size
     worker_sizes += [rem_worksize]
     # Fill the rest with zeros.
     unused_workers = num_workers - num_base_workers - 1

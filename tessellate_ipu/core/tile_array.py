@@ -1,8 +1,10 @@
 # Copyright (c) 2022 Graphcore Ltd. All rights reserved.
+import itertools
 from dataclasses import dataclass
 from typing import Any, Sequence, Tuple, Union
 
 import chex
+import jax.lax
 import numpy as np
 from jax.core import ShapedArray
 from jax.interpreters.xla import DeviceArray
@@ -184,6 +186,14 @@ class TileShardedArray:
         # Check we have a valid slice (keep memory contiguity).
         check_tile_array_multi_slice(key, self.array.shape)
         return TileShardedArray(array=self.array[key], tiles=self.tiles[key[0]])  # type:ignore
+
+    @classmethod
+    def concatenate(cls, arrays: Sequence["TileShardedArray"]) -> "TileShardedArray":
+        """Concatenate tile sharded arrays along the first axis."""
+        assert all([isinstance(v, TileShardedArray) for v in arrays])
+        outarray = jax.lax.concatenate([v.array for v in arrays], dimension=0)
+        outtiles = tuple(itertools.chain(*[v.tiles for v in arrays]))
+        return TileShardedArray(array=outarray, tiles=outtiles)
 
 
 def tile_put_sharded(array: DeviceArray, tiles: Sequence[int]) -> TileShardedArray:
