@@ -24,8 +24,33 @@
 // #define ALWAYS_INLINE __attribute__((always_inline))
 #define ALWAYS_INLINE inline
 
-#ifdef __IPU__
+/**
+ * Tag dispatching, between IPU model and IPU hardware implementations.
+ *
+ * Making it hopefully easier to maintain IPU hardware and model
+ * implementations, without #ifdef/#endif preprocessor spaghetti code.
+ */
+namespace ipu {
+/** IPU hardware tag. */
+struct HardwareTag {
+  static constexpr bool hardware = true;
+};
+/** IPU model tag. */
+struct ModelTag {
+    static constexpr bool model = true;
+};
+}  // namespace ipu
 
+// IPU dispatch tag preprocessor.
+#ifdef __IPU__
+#define IPU_TAG_TYPE ipu::HardwareTag
+#define IPU_DISPATCH_TAG (ipu::HardwareTag{})
+#else
+#define IPU_TAG_TYPE ipu::ModelTag
+#define IPU_DISPATCH_TAG (ipu::ModelTag{})
+#endif
+
+#ifdef __IPU__
 /**
  * @brief Efficient division by 6, on IPU hardware. Up to 98,304.
  */
@@ -43,7 +68,7 @@ ALWAYS_INLINE void __builtin_ipu_put_tas(float v) noexcept {
       R"l( uput $TAS, %[sv]
         )l"
       :
-      : [sv] "r"(v)
+      : [ sv ] "r"(v)
       :);
 }
 
@@ -55,7 +80,7 @@ ALWAYS_INLINE void __builtin_ipu_f32v2cmac(float2 x, float2 y) noexcept {
       R"l( f32v2mac %[x], %[y]
         )l"
       :
-      : [x] "r"(x), [y] "r"(y)
+      : [ x ] "r"(x), [ y ] "r"(y)
       :);
 }
 
@@ -66,8 +91,8 @@ ALWAYS_INLINE float ld32(const T* address, unsigned offset) {
   asm volatile(
       R"l(  ld32 %[result], %[address], %[offset]
       )l"
-      : [result] "=r"(result)
-      : [address] "r"(address), [offset] "r"(offset)
+      : [ result ] "=r"(result)
+      : [ address ] "r"(address), [ offset ] "r"(offset)
       :);
   return result;
 }
@@ -171,3 +196,11 @@ T __builtin_ipu_f32v2axpy(T const& x, T const& y) {
 // clang-format on
 
 #endif
+
+/**
+ * @brief Bitwise cast to a different type.
+ */
+template <class R, class T>
+R as(T x) {
+  return *reinterpret_cast<R*>(&x);
+}

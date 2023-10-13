@@ -1,6 +1,7 @@
 // Copyright (c) 2023 Graphcore Ltd. All rights reserved.
 #pragma once
 
+// Only defined on IPU model.
 #ifndef __IPU__
 #include <array>
 #include <cstddef>
@@ -76,5 +77,8 @@ using uint4 = IpuVector<unsigned int, 4>;
 
 using long2 = IpuVector<long, 2>;
 using long4 = IpuVector<long, 4>;
+
+// rptsize_t alias on IPU model.
+using rptsize_t = uint16_t;
 
 #endif
