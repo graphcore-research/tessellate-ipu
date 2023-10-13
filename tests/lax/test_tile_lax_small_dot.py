@@ -45,5 +45,5 @@ class IpuTileRotation2dHwTests(chex.TestCase):
         # Hardware cycle count bound.
         start, end = np.asarray(start)[0], np.asarray(end)[0]
         hw_cycle_count = end[0] - start[0]
-        # Observe on IPU Mk2 hw ~1916 cycles.
-        assert hw_cycle_count <= 2000
+        # Observe on IPU Mk2 hw ~1436 cycles.
+        assert hw_cycle_count <= 1500
