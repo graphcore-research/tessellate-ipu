@@ -15,9 +15,8 @@ vertex_filename = osp.join(osp.dirname(__file__), "../core", "vertex", "tile_tri
 tridiagonal_solver_p = create_ipu_tile_primitive(
     "tridiagonal_solver",
     "TridiagonalSolverVertex",
-    inputs=["ts", "tus", "tls", "b"],
-    outputs={"ts": 0},
-    tmp_space=3,
+    inputs=["d", "u", "l", "b"],
+    outputs={"d": 0, "u": 1, "l": 2, "b": 3},
     gp_filename=vertex_filename,
     perf_estimate=100,
 )
@@ -47,15 +46,15 @@ def ipu_tridiag_solve_shard_inputs(
     if n_on_last_tile:
         tiles += [required_tiles for _ in range(n_on_last_tile)]
 
-    ts = tile_put_sharded(diag, tiles=tiles)
+    d = tile_put_sharded(diag, tiles=tiles)
 
-    tls = tile_put_sharded(ldiag, tiles=tiles)
+    ell = tile_put_sharded(ldiag, tiles=tiles)  # Flake8 complains about 'l'
 
-    tus = tile_put_sharded(udiag, tiles=tiles)
+    u = tile_put_sharded(udiag, tiles=tiles)
 
     b = tile_put_sharded(rhs, tiles=tiles)
 
-    return ts, tus, tls, b
+    return d, u, ell, b
 
 
 def ipu_tridiag_solve(diag: Array, udiag: Array, ldiag: Array, rhs: Array):
@@ -69,7 +68,7 @@ def ipu_tridiag_solve(diag: Array, udiag: Array, ldiag: Array, rhs: Array):
 
     # TODO: check all inputs have same shape
 
-    ts, tus, tls, b = ipu_tridiag_solve_shard_inputs(diag, udiag, ldiag, rhs)
+    d, u, l, b = ipu_tridiag_solve_shard_inputs(diag, udiag, ldiag, rhs)
 
-    x_ = tile_map(tridiagonal_solver_p, ts, tus, tls, b)
-    return x_
+    x, _, _, _ = tile_map(tridiagonal_solver_p, d, u, l, b)  # type: ignore
+    return x
