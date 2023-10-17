@@ -71,4 +71,4 @@ def ipu_tridiag_solve(diag: Array, udiag: Array, ldiag: Array, rhs: Array):
     d, u, l, b = ipu_tridiag_solve_shard_inputs(diag, udiag, ldiag, rhs)
 
     x, _, _, _ = tile_map(tridiagonal_solver_p, d, u, l, b)  # type: ignore
-    return x
+    return x.array
