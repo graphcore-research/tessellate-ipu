@@ -177,8 +177,11 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         npt.assert_array_almost_equal(np.linalg.eigh(A)[0], np.linalg.eigh(x)[0], decimal=5)
 
     @unittest.skipUnless(ipu_num_tiles >= 16, "Requires IPU with 16 tiles")
-    def test__jacobi_eigh_raw__proper_eigh_result(self):
-        N = 12
+    @parameterized.parameters(
+        {"N": 10},  # testing Jacobi 2nd update where grain size=4
+        {"N": 12},
+    )
+    def test__jacobi_eigh_raw__proper_eigh_result(self, N):
         x = np.random.randn(N, N).astype(np.float32)
         x = (x + x.T) / 2.0
 

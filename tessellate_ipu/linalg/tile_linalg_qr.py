@@ -7,7 +7,7 @@ import numpy as np
 from jax.core import ShapedArray
 
 from tessellate_ipu import TileShardedArray, create_ipu_tile_primitive, tile_map, tile_put_replicated, tile_put_sharded
-from tessellate_ipu.core.tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
+from tessellate_ipu.core import make_ipu_vector1d_worker_offsets
 
 Array = Any
 

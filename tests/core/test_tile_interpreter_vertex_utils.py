@@ -7,6 +7,7 @@ from absl.testing import parameterized
 
 from tessellate_ipu.core.tile_interpreter_vertex_utils import (
     make_ipu_vector1d_worker_offsets,
+    make_ipu_vector1d_worker_offsets_and_sizes,
     make_num_elements_per_worker,
 )
 
@@ -45,3 +46,22 @@ class IpuTileVertexUtils(chex.TestCase, parameterized.TestCase):
         num_elements = make_num_elements_per_worker(N, num_workers)
         assert np.sum(num_elements) == N
         npt.assert_array_equal(num_elements, expected_num_elements)
+
+    @parameterized.parameters(
+        {"N": 4, "expected_offsets": [0, 2, 0, 0, 0, 0], "expected_sizes": [2, 0, 0, 0, 0, 0]},
+        {"N": 6, "expected_offsets": [0, 1, 0, 0, 0, 0], "expected_sizes": [2, 2, 0, 0, 0, 0]},
+        {"N": 24, "expected_offsets": [0, 2, 4, 6, 8, 10], "expected_sizes": [2, 2, 2, 2, 2, 2]},
+        {"N": 30, "expected_offsets": [0, 4, 8, 11, 0, 0], "expected_sizes": [4, 4, 4, 4, 0, 0]},
+        {"N": 128, "expected_offsets": [0, 12, 24, 36, 48, 60], "expected_sizes": [12, 12, 12, 12, 12, 4]},
+    )
+    def test__tile_vertex_utils__make_ipu_vector1d_worker_offsets_and_sizes(self, N, expected_offsets, expected_sizes):
+        vector_size = 2
+        grain_size = 4
+        num_workers = 6
+        woffsets_sizes = make_ipu_vector1d_worker_offsets_and_sizes(
+            N, vector_size, num_workers=num_workers, wdtype=np.int16, grain_size=grain_size, allow_overlap=True
+        )
+        assert woffsets_sizes.shape == (num_workers, 2)
+        assert woffsets_sizes.dtype == np.int16
+        npt.assert_array_equal(woffsets_sizes[:, 0], expected_offsets)
+        npt.assert_array_equal(woffsets_sizes[:, 1], expected_sizes)
