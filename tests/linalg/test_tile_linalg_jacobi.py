@@ -178,7 +178,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
 
     @unittest.skipUnless(ipu_num_tiles >= 16, "Requires IPU with 16 tiles")
     def test__jacobi_eigh_raw__proper_eigh_result(self):
-        N = 8
+        N = 12
         x = np.random.randn(N, N).astype(np.float32)
         x = (x + x.T) / 2.0
 
