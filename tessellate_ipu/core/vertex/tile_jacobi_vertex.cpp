@@ -363,35 +363,26 @@ class JacobiUpdateSecondStep : public MultiVertex {
   }
 };
 
-template <typename T>
+template <class IpuTag, typename T>
 void jacob_update_eigenvectors(const T* vpcol, const T* vqcol, T* vpcol_updated,
                                T* vqcol_updated, T c, T s,
                                unsigned short wstart,
                                unsigned short wend) noexcept {
-  using T2 = float2;
   // Using `uint16` seems to be generating more efficient loops?
   using IndexType = unsigned short;
-
-  const T2 cvec = T2{c, c};
-  const T2 svec = T2{s, s};
   const IndexType wsize = wend - wstart;
+
+  using T2 = float2;
+  const T2 cs_vec = T2{c, s};
 
   // pcol, qcol and results pointers.
   const T2* ptr_pcol = reinterpret_cast<const T2*>(vpcol) + wstart;
   const T2* ptr_qcol = reinterpret_cast<const T2*>(vqcol) + wstart;
   T2* ptr_pcol_updated = reinterpret_cast<T2*>(vpcol_updated) + wstart;
   T2* ptr_qcol_updated = reinterpret_cast<T2*>(vqcol_updated) + wstart;
-
-  for (IndexType idx = 0; idx != wsize; ++idx) {
-    const T2 vpvec = ipu::load_postinc(&ptr_pcol, 1);
-    const T2 vqvec = ipu::load_postinc(&ptr_qcol, 1);
-
-    const T2 vpvec_updated = cvec * vpvec - svec * vqvec;
-    const T2 vqvec_updated = svec * vpvec + cvec * vqvec;
-
-    ipu::store_postinc(&ptr_qcol_updated, vqvec_updated, 1);
-    ipu::store_postinc(&ptr_pcol_updated, vpvec_updated, 1);
-  }
+  // Apply Schur2 cs rotation to p/q columns (optimized kernel).
+  rotation2d_f32<IpuTag>(cs_vec, ptr_pcol, ptr_qcol, ptr_pcol_updated,
+                         ptr_qcol_updated, wsize);
 }
 
 /**
@@ -400,8 +391,9 @@ void jacob_update_eigenvectors(const T* vpcol, const T* vqcol, T* vpcol_updated,
  * See:  Gene H. Golub, Charles F. Van Loan, MATRIX COMPUTATIONS, 3rd edition,
  * Johns Hopkins Chapter 8.
  */
-class [[poplar::constraint(
-    "elem(*vpcol) != elem(*vqcol)")]] JacobiUpdateEigenvectors
+class  [[poplar::constraint(
+    "elem(*vpcol) != elem(*vpcol_out)",
+    "elem(*vqcol) != elem(*vqcol_out)")]] JacobiUpdateEigenvectors
     : public MultiVertex {
  public:
   using T = float;
@@ -439,12 +431,12 @@ class [[poplar::constraint(
     vqcol_out[0] = vqcol[0];
     // Swapping pointers if necessary.
     if (p <= q) {
-      jacob_update_eigenvectors(
+      jacob_update_eigenvectors<IPU_TAG_TYPE>(
           vpcol.data() + INDEX_PREFIX, vqcol.data() + INDEX_PREFIX,
           vpcol_out.data() + INDEX_PREFIX, vqcol_out.data() + INDEX_PREFIX, c,
           s, wstart, wend);
     } else {
-      jacob_update_eigenvectors(
+      jacob_update_eigenvectors<IPU_TAG_TYPE>(
           vqcol.data() + INDEX_PREFIX, vpcol.data() + INDEX_PREFIX,
           vqcol_out.data() + INDEX_PREFIX, vpcol_out.data() + INDEX_PREFIX, c,
           s, wstart, wend);

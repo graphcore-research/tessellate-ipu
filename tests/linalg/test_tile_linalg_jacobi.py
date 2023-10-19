@@ -128,7 +128,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # assert False
 
     def test__jacobi_update_eigenvectors_vertex__benchmark_performance(self):
-        N = 256
+        N = 512
         tiles = (0,)
         cs = np.array([0.2, 0.5], dtype=np.float32)
         pcol = np.random.randn(1, N).astype(np.float32)
@@ -158,7 +158,7 @@ class IpuTileLinalgJacobi(chex.TestCase, parameterized.TestCase):
         # Cycle count reference for scale_add: 64(375), 128(467), 256(665), 512(1043)
         start, end = np.asarray(start)[0], np.asarray(end)[0]
         qr_correction_cycle_count = end[0] - start[0]
-        assert qr_correction_cycle_count <= 2200
+        assert qr_correction_cycle_count <= 1550
         # print("CYCLE count:", qr_correction_cycle_count)
         # assert False
 
