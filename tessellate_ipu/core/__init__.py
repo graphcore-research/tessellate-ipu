@@ -45,6 +45,7 @@ from .tile_interpreter_primitives import (
     primitive_clone,
     primitive_num_inout_alias_args,
 )
+from .tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets, make_ipu_vector1d_worker_offsets_and_sizes
 
 
 def tessellate_ipu_cleanup():

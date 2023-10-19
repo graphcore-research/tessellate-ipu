@@ -18,7 +18,7 @@ from tessellate_ipu import (
     tile_put_replicated,
     tile_put_sharded,
 )
-from tessellate_ipu.core.tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
+from tessellate_ipu.core import make_ipu_vector1d_worker_offsets, make_ipu_vector1d_worker_offsets_and_sizes
 from tessellate_ipu.lax import tile_fill
 from tessellate_ipu.utils import NDArray
 
@@ -71,10 +71,11 @@ jacobi_update_second_step_p = create_ipu_tile_primitive(
     outputs={"cs_arr": 0, "pcol_updated": 3, "qcol_updated": 4},
     constants={
         # NOTE: using grain_size=4 because of partial loop unrolling
-        # TODO: support overlap properly.
-        "worker_offsets": lambda inavals, *_: make_ipu_vector1d_worker_offsets(
-            inavals[3].size - INDEX_PREFIX, vector_size=2, wdtype=np.uint16, allow_overlap=False, grain_size=4
+        # Rescale the size to be directly in grain size unit.
+        "worker_offsets_sizes": lambda inavals, *_: make_ipu_vector1d_worker_offsets_and_sizes(
+            inavals[3].size - INDEX_PREFIX, vector_size=2, grain_size=4, wdtype=np.uint16, allow_overlap=True
         )
+        // np.array([[1, 2]], dtype=np.uint16)
     },
     gp_filename=get_jacobi_vertex_gp_filename(),
     perf_estimate=200,

@@ -194,9 +194,8 @@ template <typename T>
 inline void jacobi_update_second_step(const unsigned* rotset_sorted_arr,
                                       const T* cs_arr, const T* pcol,
                                       const T* qcol, T* pcol_updated,
-                                      T* qcol_updated, unsigned wstart,
-                                      unsigned wend) noexcept {
-  const unsigned wsize = (wend - wstart) / 2;
+                                      T* qcol_updated, const unsigned wstart,
+                                      const unsigned wsize) noexcept {
   // Necessary for generating `rpt` loop.
   __builtin_assume(wsize < 4096);
   using T2 = float2;
@@ -324,7 +323,7 @@ class JacobiUpdateSecondStep : public MultiVertex {
       rotset_idx_ignored;  // (1,) index in rotset to ignore.
 
   Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
-      worker_offsets;  // (7,) threads work size + 1.
+      worker_offsets_sizes;  // (2, 6) worker offset + size
 
   Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> pcol;  // (N+2,) p column
   Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> qcol;  // (N+2,) q column
@@ -339,9 +338,9 @@ class JacobiUpdateSecondStep : public MultiVertex {
   bool compute(unsigned wid) {
     // Size of the index prefix in pcol and qcol.
     constexpr unsigned INDEX_PREFIX = 2;
-    // Worker load: start + end vectorized indexes.
-    const unsigned wstart = worker_offsets[wid];
-    const unsigned wend = worker_offsets[wid + 1];
+    // Worker load: start + size vectorized indexes.
+    const unsigned wstart = worker_offsets_sizes[2 * wid];
+    const unsigned wsize = worker_offsets_sizes[2 * wid + 1];
 
     // Forward pq indices.
     pcol_updated[0] = pcol[0];
@@ -359,7 +358,7 @@ class JacobiUpdateSecondStep : public MultiVertex {
 
     jacobi_update_second_step(rotset_sorted_arr.data(), cs_arr.data(), pcol_ptr,
                               qcol_ptr, pcol_updated_ptr, qcol_updated_ptr,
-                              wstart, wend);
+                              wstart, wsize);
     return true;
   }
 };
