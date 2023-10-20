@@ -3,6 +3,7 @@
 #include <poplar/Vertex.hpp>
 
 #include "intrinsics_utils.hpp"
+#include "ipu_amp.hpp"
 #include "tile_small_dot.hpp"
 
 using namespace poplar;
@@ -80,10 +81,11 @@ class JacobiSymSchur2 : public Vertex {
 };
 
 template <class IpuTag, typename T>
-void jacob_update_first_step(const T* pcol, const T* qcol, T* pcol_updated,
-                             T* qcol_updated, T* cs, unsigned p, unsigned q,
-                             unsigned short wstart,
-                             unsigned short wend) noexcept {
+inline void jacob_update_first_step(const T* pcol, const T* qcol,
+                                    T* pcol_updated, T* qcol_updated, T* cs,
+                                    unsigned p, unsigned q,
+                                    unsigned short wstart,
+                                    unsigned short wend) noexcept {
   using T2 = float2;
   using IndexType = unsigned short;
 
@@ -106,7 +108,7 @@ void jacob_update_first_step(const T* pcol, const T* qcol, T* pcol_updated,
   float2* ptr_qcol_updated = reinterpret_cast<float2*>(qcol_updated) + wstart;
   // Apply Schur2 cs rotation to p/q columns (optimized kernel).
   rotation2d_f32<IpuTag>(cs_vec, ptr_pcol, ptr_qcol, ptr_pcol_updated,
-                                ptr_qcol_updated, wsize);
+                         ptr_qcol_updated, wsize);
   // Update main values App, Apq, Aqq
   pcol_updated[p] = c * c * App - 2 * s * c * Apq + s * s * Aqq;
   qcol_updated[q] = s * s * App + 2 * s * c * Apq + c * c * Aqq;
@@ -184,6 +186,128 @@ class [[poplar::constraint(
   }
 };
 
+/**
+ * @brief Jacobi update second step, using Schur2 coefficient from
+ * other pairs of columns.
+ */
+template <typename T>
+inline void jacobi_update_second_step(const unsigned* rotset_sorted_arr,
+                                      const T* cs_arr, const T* pcol,
+                                      const T* qcol, T* pcol_updated,
+                                      T* qcol_updated, const unsigned wstart,
+                                      const unsigned wsize) noexcept {
+  // Necessary for generating `rpt` loop.
+  __builtin_assume(wsize < 4096);
+  using T2 = float2;
+  // Increment pointers. NOTE: unrolling creating "4x" factor.
+  rotset_sorted_arr += 2 * wstart;
+  const T2* cs_arr_ptr = reinterpret_cast<const T2*>(cs_arr) + wstart;
+
+  // Basic usage of AMP unit with `aop` outer-product :)
+  ipu::AMP<T> amp;
+  amp.aaccZero();
+
+  const T2 zeros{0, 0};
+  T2 res, cs0, cs1, Sp0, Sq0, Sp1, Sq1, tmp0, tmp1;
+  unsigned k0, l0, k1, l1;
+
+  // The loop body is roughly the following equations:
+  // const T Spk = pcol_ptr[k];
+  // const T Spl = pcol_ptr[l];
+  // const T Sqk = qcol_ptr[k];
+  // const T Sql = qcol_ptr[l];
+
+  // pcol_updated_ptr[k] = c * Spk - s * Spl;
+  // pcol_updated_ptr[l] = s * Spk + c * Spl;
+  // qcol_updated_ptr[k] = c * Sqk - s * Sql;
+  // qcol_updated_ptr[l] = s * Sqk + c * Sql;
+
+  // Problem: generate poor bundling of operations in the loop.
+  // Solution: unroll 2 steps + f32v2aop + manual re-ordering.
+  // NOTE: f32v2aop mostly useful for reducing register pressure,
+  // as results are stored in AACC registers (not AUX). Just saving 1 compute
+  // cycle.
+
+  // Pre-loading due to unrolling + reordering.
+  k0 = ipu::load_postinc(&rotset_sorted_arr, 1);
+  l0 = ipu::load_postinc(&rotset_sorted_arr, 1);
+  cs0 = ipu::load_postinc(&cs_arr_ptr, 1);
+  Sp0 = {pcol[k0], pcol[l0]};
+  for (unsigned half_idx = 0; half_idx < wsize; ++half_idx) {
+    // Pseudo bundling of instructions, to help popc.
+    {
+      Sq0[0] = qcol[k0];
+      amp.aop(cs0, Sp0);
+    }
+    {
+      k1 = ipu::load_postinc(&rotset_sorted_arr, 1);
+      tmp0 = amp.template gina<0>(zeros);
+    }
+    {
+      l1 = ipu::load_postinc(&rotset_sorted_arr, 1);
+      tmp1 = amp.template gina<0>(zeros);
+    }
+    {
+      Sq0[1] = qcol[l0];
+      pcol_updated[k0] = tmp0[0] - tmp1[1];
+    }
+    {
+      pcol_updated[l0] = tmp0[1] + tmp1[0];
+      amp.aop(cs0, Sq0);
+    }
+    {
+      cs1 = ipu::load_postinc(&cs_arr_ptr, 1);
+      tmp0 = amp.template gina<0>(zeros);
+    }
+    {
+      Sp1[0] = pcol[k1];
+      tmp1 = amp.template gina<0>(zeros);
+    }
+    {
+      Sp1[1] = pcol[l1];
+      qcol_updated[k0] = tmp0[0] - tmp1[1];
+    }
+    // Unrolling: second part.
+    // NOTE: inputs already (partially) loaded.
+    {
+      qcol_updated[l0] = tmp0[1] + tmp1[0];
+      amp.aop(cs1, Sp1);
+    }
+    {
+      Sq1[0] = qcol[k1];
+      tmp0 = amp.template gina<0>(zeros);
+    }
+    {
+      Sq1[1] = qcol[l1];
+      tmp1 = amp.template gina<0>(zeros);
+    }
+    {
+      k0 = ipu::load_postinc(&rotset_sorted_arr, 1);
+      pcol_updated[k1] = tmp0[0] - tmp1[1];
+    }
+    {
+      pcol_updated[l1] = tmp0[1] + tmp1[0];
+      amp.aop(cs1, Sq1);
+    }
+    {
+      l0 = ipu::load_postinc(&rotset_sorted_arr, 1);
+      tmp0 = amp.template gina<0>(zeros);
+    }
+    {
+      cs0 = ipu::load_postinc(&cs_arr_ptr, 1);
+      tmp1 = amp.template gina<0>(zeros);
+    }
+    {
+      Sp0[0] = pcol[k0];
+      qcol_updated[k1] = tmp0[0] - tmp1[1];
+    }
+    {
+      qcol_updated[l1] = tmp0[1] + tmp1[0];
+      Sp0[1] = pcol[l0];
+    }
+  }
+}
+
 class JacobiUpdateSecondStep : public MultiVertex {
  public:
   using T = float;
@@ -199,7 +323,7 @@ class JacobiUpdateSecondStep : public MultiVertex {
       rotset_idx_ignored;  // (1,) index in rotset to ignore.
 
   Input<Vector<IndexType, poplar::VectorLayout::ONE_PTR>>
-      worker_offsets;  // (7,) threads work size + 1.
+      worker_offsets_sizes;  // (2, 6) worker offset + size
 
   Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> pcol;  // (N+2,) p column
   Input<Vector<T, poplar::VectorLayout::ONE_PTR, 8>> qcol;  // (N+2,) q column
@@ -213,11 +337,14 @@ class JacobiUpdateSecondStep : public MultiVertex {
 
   bool compute(unsigned wid) {
     // Size of the index prefix in pcol and qcol.
-    constexpr int INDEX_PREFIX = 2;
-    // Worker load: start + end vectorized indexes.
-    const IndexType wstart = worker_offsets[wid];
-    const IndexType wend = worker_offsets[wid + 1];
-    const IndexType wsize = wend - wstart;
+    constexpr unsigned INDEX_PREFIX = 2;
+    // Worker load: start + size vectorized indexes.
+    const unsigned wstart = worker_offsets_sizes[2 * wid];
+    const unsigned wsize = worker_offsets_sizes[2 * wid + 1];
+
+    // Forward pq indices.
+    pcol_updated[0] = pcol[0];
+    qcol_updated[0] = qcol[0];
 
     // Use (p, q) = (1, 0) for ignore idx.
     const unsigned ignore_idx = 2 * rotset_idx_ignored[0];
@@ -229,66 +356,33 @@ class JacobiUpdateSecondStep : public MultiVertex {
     auto pcol_updated_ptr = pcol_updated.data() + INDEX_PREFIX;
     auto qcol_updated_ptr = qcol_updated.data() + INDEX_PREFIX;
 
-    // Forward pq indices.
-    pcol_updated[0] = pcol[0];
-    qcol_updated[0] = qcol[0];
-
-    // Parallized loop on update using other columns coefficients
-    for (IndexType half_idx = 0; half_idx != wsize; ++half_idx) {
-      // TODO: cleaning pq indices offset.
-      const unsigned k = rotset_sorted_arr[2 * half_idx + 2 * wstart];
-      const unsigned l = rotset_sorted_arr[2 * half_idx + 1 + 2 * wstart];
-
-      const T c = cs_arr[2 * half_idx + 2 * wstart];
-      const T s = cs_arr[2 * half_idx + 1 + 2 * wstart];
-
-      // 4 coefficients updates!
-      // TODO: vectorization?!
-      const T Spk = pcol_ptr[k];
-      const T Spl = pcol_ptr[l];
-
-      const T Sqk = qcol_ptr[k];
-      const T Sql = qcol_ptr[l];
-
-      pcol_updated_ptr[k] = c * Spk - s * Spl;
-      pcol_updated_ptr[l] = s * Spk + c * Spl;
-
-      qcol_updated_ptr[k] = c * Sqk - s * Sql;
-      qcol_updated_ptr[l] = s * Sqk + c * Sql;
-    }
+    jacobi_update_second_step(rotset_sorted_arr.data(), cs_arr.data(), pcol_ptr,
+                              qcol_ptr, pcol_updated_ptr, qcol_updated_ptr,
+                              wstart, wsize);
     return true;
   }
 };
 
-template <typename T>
+template <class IpuTag, typename T>
 void jacob_update_eigenvectors(const T* vpcol, const T* vqcol, T* vpcol_updated,
                                T* vqcol_updated, T c, T s,
                                unsigned short wstart,
                                unsigned short wend) noexcept {
-  using T2 = float2;
   // Using `uint16` seems to be generating more efficient loops?
   using IndexType = unsigned short;
-
-  const T2 cvec = T2{c, c};
-  const T2 svec = T2{s, s};
   const IndexType wsize = wend - wstart;
+
+  using T2 = float2;
+  const T2 cs_vec = T2{c, s};
 
   // pcol, qcol and results pointers.
   const T2* ptr_pcol = reinterpret_cast<const T2*>(vpcol) + wstart;
   const T2* ptr_qcol = reinterpret_cast<const T2*>(vqcol) + wstart;
   T2* ptr_pcol_updated = reinterpret_cast<T2*>(vpcol_updated) + wstart;
   T2* ptr_qcol_updated = reinterpret_cast<T2*>(vqcol_updated) + wstart;
-
-  for (IndexType idx = 0; idx != wsize; ++idx) {
-    const T2 vpvec = ipu::load_postinc(&ptr_pcol, 1);
-    const T2 vqvec = ipu::load_postinc(&ptr_qcol, 1);
-
-    const T2 vpvec_updated = cvec * vpvec - svec * vqvec;
-    const T2 vqvec_updated = svec * vpvec + cvec * vqvec;
-
-    ipu::store_postinc(&ptr_qcol_updated, vqvec_updated, 1);
-    ipu::store_postinc(&ptr_pcol_updated, vpvec_updated, 1);
-  }
+  // Apply Schur2 cs rotation to p/q columns (optimized kernel).
+  rotation2d_f32<IpuTag>(cs_vec, ptr_pcol, ptr_qcol, ptr_pcol_updated,
+                         ptr_qcol_updated, wsize);
 }
 
 /**
@@ -298,7 +392,8 @@ void jacob_update_eigenvectors(const T* vpcol, const T* vqcol, T* vpcol_updated,
  * Johns Hopkins Chapter 8.
  */
 class [[poplar::constraint(
-    "elem(*vpcol) != elem(*vqcol)")]] JacobiUpdateEigenvectors
+    "elem(*vpcol) != elem(*vpcol_out)",
+    "elem(*vqcol) != elem(*vqcol_out)")]] JacobiUpdateEigenvectors
     : public MultiVertex {
  public:
   using T = float;
@@ -336,12 +431,12 @@ class [[poplar::constraint(
     vqcol_out[0] = vqcol[0];
     // Swapping pointers if necessary.
     if (p <= q) {
-      jacob_update_eigenvectors(
+      jacob_update_eigenvectors<IPU_TAG_TYPE>(
           vpcol.data() + INDEX_PREFIX, vqcol.data() + INDEX_PREFIX,
           vpcol_out.data() + INDEX_PREFIX, vqcol_out.data() + INDEX_PREFIX, c,
           s, wstart, wend);
     } else {
-      jacob_update_eigenvectors(
+      jacob_update_eigenvectors<IPU_TAG_TYPE>(
           vqcol.data() + INDEX_PREFIX, vpcol.data() + INDEX_PREFIX,
           vqcol_out.data() + INDEX_PREFIX, vpcol_out.data() + INDEX_PREFIX, c,
           s, wstart, wend);

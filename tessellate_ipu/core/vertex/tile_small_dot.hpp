@@ -1,5 +1,6 @@
 // Copyright (c) 2023 Graphcore Ltd. All rights reserved.
 #include "intrinsics_utils.hpp"
+#include "ipu_amp.hpp"
 
 /**
  * @brief z = a*x + b*y float32 implementation.
@@ -35,9 +36,9 @@ inline void axplusby_f32(float a, float b, const float2 *x, const float2 *y,
   // __builtin_assume(nblocks < 4096);
   using T2 = float2;
   const T2 av = {a, a};
-  // Using TAS register for one of the scalar.
-  __ipu_and_ipumodel_tas tas;
-  tas.put(b);
+  // Basic AMP usage with TAS + axpy instruction.
+  ipu::AMP<float> amp;
+  amp.tas(b);
 
   T2 res, xv, yv, zv, tmp;
 
@@ -49,13 +50,11 @@ inline void axplusby_f32(float a, float b, const float2 *x, const float2 *y,
     // popc should be able to generate an optimal rpt loop.
     {
       xv = ipu::load_postinc(&x, 1);
-      // TODO: fix ordering of arguments in `f32v2axpy`.
-      tmp = tas.f32v2axpy(res, yv);
+      tmp = amp.axpy(yv, res);
     }
     {
       yv = ipu::load_postinc(&y, 1);
-      // TODO: fix ordering of arguments in `f32v2axpy`.
-      zv = tas.f32v2axpy(tmp, tmp);
+      zv = amp.axpy(tmp, tmp);
     }
     {
       ipu::store_postinc(&z, zv, 1);
@@ -73,9 +72,10 @@ inline void axplusby_f32(float a, float b, const float2 *x, const float2 *y,
   // Necessary if using unsigned `nblocks`.
   // __builtin_assume(nblocks < 4096);
   using T2 = float2;
-  // Using TAS register for the scalar `b`.
-  __ipu_and_ipumodel_tas tas;
-  tas.put(b);
+  // Basic AMP usage with TAS + axpy instruction.
+  ipu::AMP<float> amp;
+  amp.tas(b);
+
 
   T2 av = {a, a};
   // Explicit variables passed to inline assembly.
@@ -139,7 +139,8 @@ template <class IpuTag>
 inline void rotation2d_f32(float2 cs, const float2 *inrow0,
                            const float2 *inrow1, float2 *outrow0,
                            float2 *outrow1, rptsize_t nblocks) {
-  // TODO: investigate using IPU AMP unit?
+  // axplusby is using one AMP unit. TODO: investigate using more!
   axplusby_f32<IpuTag>(cs[0], -cs[1], inrow0, inrow1, outrow0, nblocks);
+  // NOTE: inrow1+0, outrow1 arguments order necessary due to bank constraints!
   axplusby_f32<IpuTag>(cs[0], cs[1], inrow1, inrow0, outrow1, nblocks);
 }

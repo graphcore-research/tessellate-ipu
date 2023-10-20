@@ -15,7 +15,7 @@ from tessellate_ipu import (
     tile_put_replicated,
     tile_put_sharded,
 )
-from tessellate_ipu.core.tile_interpreter_vertex_utils import make_ipu_vector1d_worker_offsets
+from tessellate_ipu.core import make_ipu_vector1d_worker_offsets
 
 from .tile_linalg_qr import dot_product1d_p
 
