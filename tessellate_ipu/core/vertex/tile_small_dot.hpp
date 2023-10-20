@@ -72,9 +72,10 @@ inline void axplusby_f32(float a, float b, const float2 *x, const float2 *y,
   // Necessary if using unsigned `nblocks`.
   // __builtin_assume(nblocks < 4096);
   using T2 = float2;
-  // Using TAS register for the scalar `b`.
-  __ipu_and_ipumodel_tas tas;
-  tas.put(b);
+  // Basic AMP usage with TAS + axpy instruction.
+  ipu::AMP<float> amp;
+  amp.tas(b);
+
 
   T2 av = {a, a};
   // Explicit variables passed to inline assembly.

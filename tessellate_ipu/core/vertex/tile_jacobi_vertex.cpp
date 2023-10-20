@@ -391,7 +391,7 @@ void jacob_update_eigenvectors(const T* vpcol, const T* vqcol, T* vpcol_updated,
  * See:  Gene H. Golub, Charles F. Van Loan, MATRIX COMPUTATIONS, 3rd edition,
  * Johns Hopkins Chapter 8.
  */
-class  [[poplar::constraint(
+class [[poplar::constraint(
     "elem(*vpcol) != elem(*vpcol_out)",
     "elem(*vqcol) != elem(*vqcol_out)")]] JacobiUpdateEigenvectors
     : public MultiVertex {

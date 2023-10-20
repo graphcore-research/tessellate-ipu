@@ -3,6 +3,7 @@
 #include <poplar/Vertex.hpp>
 
 #include "intrinsics_utils.hpp"
+#include "ipu_amp.hpp"
 
 using namespace poplar;
 
@@ -162,9 +163,10 @@ class [[poplar::constraint(
 
     // Set the $TAS register with the proper scale.
     const T s = -scale1[0] * scale2[0];
-    // __builtin_ipu_put_tas(s);
-    __ipu_and_ipumodel_tas tas;
-    tas.put(s);
+    // Basic AMP usage with TAS + axpy instruction.
+    // AMP code using this abstraction is compatible with IPU hw & model.
+    ipu::AMP<T> amp;
+    amp.tas(s);
 
     // Nothing to do in this worker thread.
     if (wstart == wend) {
@@ -183,20 +185,16 @@ class [[poplar::constraint(
     vin = ipu::load_postinc(&ptr_vdata_f2, ptr_step);
     // TODO: use ld2x64pace + tapack instructions.
     for (IndexType idx = 1; idx != wsize; ++idx) {
-      rtmp = tas.f32v2axpy(xin, vin);
-      // rtmp = __builtin_ipu_f32v2axpy(xin, vin);
+      rtmp = amp.axpy(vin, xin);
       // Grouping here seems to help the compiler optimising loads?
       xin = ipu::load_postinc(&ptr_inxdata_f2, ptr_step);
       vin = ipu::load_postinc(&ptr_vdata_f2, ptr_step);
-      rout = tas.f32v2axpy(rtmp, rtmp);
-      // rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
+      rout = amp.axpy(rtmp, rtmp);
       ipu::store_postinc(&ptr_outxdata_f2, rout, ptr_step);
     }
     // Finish the loop, getting the last computation.
-    // rtmp = __builtin_ipu_f32v2axpy(xin, vin);
-    // rout = __builtin_ipu_f32v2axpy(rtmp, rtmp);
-    rtmp = tas.f32v2axpy(xin, vin);
-    rout = tas.f32v2axpy(rtmp, rtmp);
+    rtmp = amp.axpy(vin, xin);
+    rout = amp.axpy(rtmp, rtmp);
     ipu::store_postinc(&ptr_outxdata_f2, rout, ptr_step);
 
     return true;
