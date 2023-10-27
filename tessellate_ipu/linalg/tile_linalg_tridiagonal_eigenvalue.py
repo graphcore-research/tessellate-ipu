@@ -9,6 +9,16 @@ from tessellate_ipu import create_ipu_tile_primitive, tile_map, tile_put_replica
 
 jax.config.FLAGS.jax_platform_name = "cpu"
 
+vertex_filename = osp.join(osp.dirname(__file__), "../core", "vertex", "tile_tridiagonal_eigh.cpp")
+grad = create_ipu_tile_primitive(
+    "Sturm",
+    "Sturm",
+    inputs=["alpha", "beta_sq", "pivmin", "alpha0_pertubation", "x", "id", "out_shape", "lower", "mid", "upper"],
+    outputs={"lower_out": 7, "mid_out": 8, "upper_out": 9},
+    gp_filename=vertex_filename,
+    perf_estimate=100,
+)
+
 
 def ipu_tridiagonal_eigenvalue(d, e, *, select="a", select_range=None, tol=None):
     alpha, beta = jnp.asarray(d), jnp.asarray(e)
@@ -64,16 +74,6 @@ def ipu_tridiagonal_eigenvalue(d, e, *, select="a", select_range=None, tol=None)
     pivmin = jnp.broadcast_to(pivmin, target_shape)
     alpha0_perturbation = jnp.broadcast_to(alpha0_perturbation, target_shape)
 
-    vertex_filename = osp.join(osp.dirname(__file__), "../core", "vertex", "tile_tridiagonal_eigh.cpp")
-    grad = create_ipu_tile_primitive(
-        "Sturm",
-        "Sturm",
-        inputs=["alpha", "beta_sq", "pivmin", "alpha0_pertubation", "x", "id", "out_shape", "lower", "mid", "upper"],
-        outputs={"lower_out": 7, "mid_out": 8, "upper_out": 9},
-        gp_filename=vertex_filename,
-        perf_estimate=100,
-    )
-
     x = mid
     n = x.shape[0]
     tiles = tuple(range(n))
@@ -106,7 +106,6 @@ if __name__ == "__main__":
     import jax
     import scipy
 
-    np.random.seed(42)
     jax.config.FLAGS.jax_platform_name = "cpu"
     np.random.seed(42)
 

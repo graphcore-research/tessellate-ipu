@@ -11,7 +11,7 @@ jax.config.FLAGS.jax_platform_name = "cpu"
 jax.config.update("jax_enable_x64", False)
 
 
-def ipu_tridiagonal_eigh(d, e, n_iter=2, seed=42):
+def ipu_tridiagonal_eigh(d, e, num_iters=2, seed=42):
 
     N = d.shape[0]
     eig = ipu_tridiagonal_eigenvalue(d, e)[:N]
@@ -33,19 +33,19 @@ def ipu_tridiagonal_eigh(d, e, n_iter=2, seed=42):
         x /= jnp.linalg.norm(x, axis=1)[:, jnp.newaxis]
         return x
 
-    x = jax.lax.fori_loop(0, n_iter, inverse_iteration, x)
+    x = jax.lax.fori_loop(0, num_iters, inverse_iteration, x)
 
     return x, eig
 
 
-def ipu_eigh_hess(M):
+def ipu_hess_eigh(M, num_iters=2):
 
     Q, M_tri_ = ipu_hessenberg(M)
     M_tri = M_tri_.array
     d, e = jnp.diag(M_tri), jnp.diag(M_tri, k=1)
 
-    x, eig = ipu_tridiagonal_eigh(d, e)
-    return x @ Q.array.T, eig
+    x, eig = ipu_tridiagonal_eigh(d, e, num_iters)
+    return eig, x @ Q.array.T
 
 
 if __name__ == "__main__":
@@ -96,7 +96,7 @@ if __name__ == "__main__":
         print("Specify one of the options -r or -f")
         sys.exit(1)
 
-    x, eig = jax.jit(ipu_eigh_hess, backend="ipu")(mat)
+    eig, x = jax.jit(ipu_hess_eigh, backend="ipu")(mat)
 
     x = np.array(x)
 
