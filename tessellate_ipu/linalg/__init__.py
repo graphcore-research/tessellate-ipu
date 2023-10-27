@@ -4,3 +4,5 @@ from . import tile_linalg_jacobi, tile_linalg_qr
 from .tile_linalg_hessenberg import ipu_hessenberg
 from .tile_linalg_jacobi import ipu_eigh
 from .tile_linalg_qr import ipu_qr
+from .tile_linalg_tridiagonal_eigh import ipu_hess_eigh, ipu_tridiagonal_eigh
+from .tile_linalg_tridiagonal_solver import ipu_tridiag_solve
